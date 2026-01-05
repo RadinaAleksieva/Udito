@@ -1,1 +1,239 @@
+:root {
+  --ink: #0a1e3f;
+  --blue: #1f5cff;
+  --blue-ink: #0f2c63;
+  --sand: #f6f2ee;
+  --sky: #e6f0ff;
+  --accent: #ffb347;
+  --soft: #f2f7ff;
+}
 
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+  font-family: "Fraunces", "Georgia", serif;
+  color: var(--ink);
+  background: radial-gradient(circle at top, #fdf9f4 0%, #edf2ff 55%, #e3f0ff 100%);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+main {
+  min-height: 100vh;
+}
+
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 56px 24px 80px;
+}
+
+.hero {
+  display: grid;
+  gap: 36px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  align-items: center;
+}
+
+.hero-card {
+  background: #ffffff;
+  border-radius: 24px;
+  padding: 32px;
+  box-shadow: 0 20px 60px rgba(31, 92, 255, 0.15);
+}
+
+.hero h1 {
+  font-size: clamp(32px, 4vw, 52px);
+  margin: 0 0 16px;
+}
+
+.hero p {
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+  font-size: 18px;
+  line-height: 1.6;
+  margin: 0 0 24px;
+}
+
+.status-grid {
+  display: grid;
+  gap: 16px;
+  margin-top: 28px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.status-card {
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 18px;
+  padding: 16px 18px;
+  display: grid;
+  gap: 8px;
+  border: 1px solid rgba(10, 30, 63, 0.08);
+}
+
+.status-card span {
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+  font-size: 14px;
+  color: #51607a;
+}
+
+.status-card strong {
+  font-size: 20px;
+}
+
+.status-link {
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+  font-weight: 600;
+  color: var(--blue);
+}
+
+.status-meta {
+  font-size: 13px;
+}
+
+.cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--blue);
+  color: #fff;
+  padding: 12px 20px;
+  border-radius: 999px;
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+  font-weight: 600;
+  box-shadow: 0 10px 20px rgba(31, 92, 255, 0.25);
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.badge {
+  background: var(--soft);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+  font-size: 14px;
+  color: var(--blue-ink);
+}
+
+.grid {
+  display: grid;
+  gap: 24px;
+  margin-top: 48px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.card {
+  background: #fff;
+  border-radius: 18px;
+  padding: 20px;
+  border: 1px solid rgba(10, 30, 63, 0.08);
+}
+
+.card h3 {
+  margin: 0 0 10px;
+  font-size: 20px;
+}
+
+.card p {
+  margin: 0;
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+  line-height: 1.6;
+}
+
+.nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  position: sticky;
+  top: 0;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(10, 30, 63, 0.08);
+}
+
+.nav span {
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.footer {
+  padding: 24px;
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+  text-align: center;
+  color: #51607a;
+}
+
+.orders {
+  margin-top: 60px;
+}
+
+.orders h2 {
+  margin: 0 0 16px;
+  font-size: 28px;
+}
+
+.orders p {
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+  margin: 0;
+}
+
+.orders-table {
+  display: grid;
+  gap: 10px;
+}
+
+.orders-head,
+.orders-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr 1.5fr;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 16px;
+}
+
+.orders-head {
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #51607a;
+}
+
+.orders-row {
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid rgba(10, 30, 63, 0.08);
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+}
+
+@media (max-width: 720px) {
+  .nav {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .orders-head,
+  .orders-row {
+    grid-template-columns: 1.5fr 1fr 1fr;
+  }
+
+  .orders-head span:nth-child(4),
+  .orders-head span:nth-child(5),
+  .orders-row span:nth-child(4),
+  .orders-row span:nth-child(5) {
+    display: none;
+  }
+}
