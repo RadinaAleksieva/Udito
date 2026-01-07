@@ -255,6 +255,7 @@ export async function queryOrders(options: {
     (data.order ? [data.order] : []);
 
   const cursor =
+    (data.metadata as any)?.cursors?.next ??
     data.metadata?.paging?.cursor ??
     data.metadata?.paging?.nextCursor ??
     data.metadata?.pagingMetadata?.cursor ??

@@ -16,7 +16,6 @@ export default function BackfillButton() {
     let totalSynced = 0;
     let totalPages = 0;
     let cursor: string | null = null;
-    let previousCursor: string | null = null;
     let isFirstRun = true;
     let consecutiveErrors = 0;
 
@@ -52,12 +51,11 @@ export default function BackfillButton() {
           const newCursor = data.cursor ?? null;
 
           // CRITICAL: Detect repeated cursor (Wix API returns same cursor when no more data)
-          if (newCursor && newCursor === previousCursor) {
+          if (newCursor && newCursor === cursor) {
             console.log("Detected repeated cursor - stopping sync");
             cursor = null;
             break;
           }
-          previousCursor = cursor;
           cursor = newCursor;
           consecutiveErrors = 0; // Reset error count on success
 

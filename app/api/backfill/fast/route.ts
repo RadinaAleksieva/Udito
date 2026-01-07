@@ -64,7 +64,6 @@ export async function POST(request: Request) {
     let total = 0;
     let pages = 0;
     let hasMore = true;
-    let previousCursor: string | null = null;
 
     // Fetch and store orders in bulk - NO individual enrichment calls
     while (hasMore && pages < maxPages) {
@@ -79,15 +78,14 @@ export async function POST(request: Request) {
 
       const orders = page.orders || [];
 
-      // CRITICAL: Detect if Wix returns the same cursor (indicates end of pagination)
+      // CRITICAL: Detect if Wix returns the same cursor we sent (indicates end of pagination)
       // Wix API sometimes returns the same cursor instead of null when there's no more data
-      if (page.cursor && page.cursor === previousCursor) {
+      if (page.cursor && page.cursor === cursor) {
         console.log("Detected repeated cursor - end of pagination");
         cursor = null;
         hasMore = false;
         break;
       }
-      previousCursor = cursor;
 
       for (const rawItem of orders) {
         const raw = rawItem as any;
