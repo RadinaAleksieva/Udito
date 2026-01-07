@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { buildAuditXml } from "@/lib/auditXml";
-import { initDb, listOrdersForPeriod } from "@/lib/db";
+import {
+  getCompanyBySite,
+  initDb,
+  listOrdersForPeriodForSite,
+} from "@/lib/db";
+import { getActiveWixToken } from "@/lib/wix-context";
 
 function resolveMonthRange(now = new Date()) {
   const start = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -36,13 +41,34 @@ export async function GET(request: Request) {
     endDate = range.end;
   }
 
+  const currentMonthStart = new Date(
+    new Date().getFullYear(),
+    new Date().getMonth(),
+    1
+  );
+  if (startDate >= currentMonthStart) {
+    return NextResponse.json(
+      { ok: false, error: "Audit file is available only for past months." },
+      { status: 400 }
+    );
+  }
+
   const startIso = startDate.toISOString();
   const endIso = endDate.toISOString();
 
   await initDb();
-  const rows = await listOrdersForPeriod(startIso, endIso);
+  const token = await getActiveWixToken();
+  const siteId = token?.site_id ?? null;
+  const company = siteId ? await getCompanyBySite(siteId) : null;
+  const rows = siteId
+    ? await listOrdersForPeriodForSite(startIso, endIso, siteId)
+    : [];
 
   const orders = rows
+    .filter((row: any) => {
+      const statusText = String(row?.status || "").toLowerCase();
+      return !statusText.includes("cancel") && !statusText.includes("archiv");
+    })
     .filter((row) => row?.id && row?.total != null && row?.currency)
     .map((row) => ({
       id: String(row.id),
@@ -58,9 +84,10 @@ export async function GET(request: Request) {
     }));
 
   const xml = buildAuditXml({
-    merchantId: process.env.MERCHANT_ID || "BG207357583",
-    merchantName: process.env.MERCHANT_NAME || "DESIGNS BY PO Ltd.",
-    vatNumber: process.env.MERCHANT_VAT || "BG207357583",
+    merchantId: company?.bulstat || process.env.MERCHANT_ID || "BG207357583",
+    merchantName:
+      company?.legal_name || process.env.MERCHANT_NAME || "DESIGNS BY PO Ltd.",
+    vatNumber: company?.vat_number || process.env.MERCHANT_VAT || "BG207357583",
     periodStart: startIso.slice(0, 10),
     periodEnd: endIso.slice(0, 10),
     orders,

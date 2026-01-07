@@ -1,117 +1,346 @@
 import TokenCapture from "./token-capture";
-import { getLatestWixToken, initDb, listRecentOrders } from "@/lib/db";
+import TopNav from "../components/top-nav";
+import MonthFilter from "../components/month-filter";
+import {
+  countOrdersForPeriodForSite,
+  countOrdersForSite,
+  getCompanyBySite,
+  initDb,
+  listRecentOrdersForPeriodForSite,
+} from "@/lib/db";
+import { getAccessToken } from "@/lib/wix";
+import { getActiveWixToken } from "@/lib/wix-context";
+import BackfillButton from "./backfill-button";
+import {
+  deriveOrderCreatedAt,
+  deriveOrderMoney,
+  deriveOrderNumber,
+  isArchivedOrder,
+} from "@/lib/order-display";
+import ConnectionCheck from "./connection-check";
+import AutoSync from "./auto-sync";
+
+export const dynamic = "force-dynamic";
+
+const WIX_API_BASE = process.env.WIX_API_BASE || "https://www.wixapis.com";
 
 function formatMoney(amount: number | null | undefined, currency: string | null) {
   if (amount == null || !currency) return "—";
+  const parsed = Number(amount);
+  if (!Number.isFinite(parsed)) return "—";
   return new Intl.NumberFormat("bg-BG", {
     style: "currency",
     currency,
     maximumFractionDigits: 2,
-  }).format(Number(amount));
+  }).format(parsed);
 }
 
-export default async function OverviewPage() {
+function formatPaymentStatus(status: string | null) {
+  if (!status) return "—";
+  if (status === "PAID") return "Платена";
+  if (status === "NOT_PAID") return "Неплатена";
+  if (status === "PARTIALLY_PAID") return "Частично платена";
+  return status;
+}
+
+async function fetchSiteLabel(siteId: string | null, instanceId: string | null) {
+  if (!siteId && !instanceId) return null;
+  try {
+    const accessToken = await getAccessToken({ siteId, instanceId });
+    const authHeader = accessToken.startsWith("Bearer ")
+      ? accessToken
+      : `Bearer ${accessToken}`;
+    const response = await fetch(`${WIX_API_BASE}/sites/v1/site`, {
+      method: "GET",
+      headers: {
+        Authorization: authHeader,
+        ...(siteId ? { "wix-site-id": siteId } : {}),
+      },
+      cache: "no-store",
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    const site = data?.site ?? data?.data ?? data ?? {};
+    return (
+      site?.displayUrl ??
+      site?.url ??
+      site?.siteDisplayUrl ??
+      site?.siteUrl ??
+      site?.domain ??
+      site?.name ??
+      null
+    );
+  } catch (error) {
+    console.warn("Site label fetch failed", error);
+    return null;
+  }
+}
+
+export default async function OverviewPage({
+  searchParams,
+}: {
+  searchParams?: { debug?: string; month?: string };
+}) {
   await initDb();
-  const [token, orders] = await Promise.all([
-    getLatestWixToken(),
-    listRecentOrders(8),
-  ]);
-  const hasToken = Boolean(token?.access_token);
+  const token = await getActiveWixToken();
+  const siteId = token?.site_id ?? null;
+  const instanceId = token?.instance_id ?? null;
+  const now = new Date();
+  const monthParam = searchParams?.month || "";
+  const showDebug = searchParams?.debug === "1";
+  const monthMatch = monthParam.match(/^(\d{4})-(\d{2})$/);
+  const selectedYear = monthMatch ? Number(monthMatch[1]) : now.getFullYear();
+  const selectedMonthIndex = monthMatch
+    ? Math.max(0, Math.min(11, Number(monthMatch[2]) - 1))
+    : now.getMonth();
+  const monthStart = new Date(selectedYear, selectedMonthIndex, 1, 0, 0, 0);
+  const monthEnd = new Date(
+    selectedYear,
+    selectedMonthIndex + 1,
+    0,
+    23,
+    59,
+    59,
+    999
+  );
+  const monthLabel = `${selectedYear}-${String(selectedMonthIndex + 1).padStart(
+    2,
+    "0"
+  )}`;
+  const monthOptions = Array.from({ length: 12 }, (_, idx) => {
+    const date = new Date(now.getFullYear(), now.getMonth() - idx, 1);
+    const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
+      2,
+      "0"
+    )}`;
+    return {
+      value,
+      label: date.toLocaleDateString("bg-BG", {
+        year: "numeric",
+        month: "long",
+      }),
+    };
+  });
+  const orders = siteId
+    ? await listRecentOrdersForPeriodForSite(
+        monthStart.toISOString(),
+        monthEnd.toISOString(),
+        siteId,
+        8
+      )
+    : [];
+  const company = siteId ? await getCompanyBySite(siteId) : null;
+  const siteLabel = await fetchSiteLabel(siteId, instanceId);
+  const totalOrdersCount = siteId ? await countOrdersForSite(siteId) : 0;
+  const monthOrdersCount = siteId
+    ? await countOrdersForPeriodForSite(
+        monthStart.toISOString(),
+        monthEnd.toISOString(),
+        siteId
+      )
+    : 0;
+  const monthLabelText = monthOptions.find((option) => option.value === monthLabel)
+    ?.label;
+  const hasConnection = Boolean(siteId);
+  const hasInstance = Boolean(token?.instance_id);
+  const domainLabel = siteLabel || company?.store_domain || null;
+  const activeStoreLabel = domainLabel || siteId || "Неизбран";
+  const displayOrders = orders.filter((order) => {
+    const raw = (order as any).raw ?? null;
+    return !isArchivedOrder(raw);
+  });
+  const lastClosedDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const lastClosedLabel = `${lastClosedDate.getFullYear()}-${String(
+    lastClosedDate.getMonth() + 1
+  ).padStart(2, "0")}`;
+  const lastClosedText = lastClosedDate.toLocaleDateString("bg-BG", {
+    year: "numeric",
+    month: "long",
+  });
 
   return (
     <main>
       <TokenCapture />
-      <nav className="nav">
-        <span>UDITO Dashboard</span>
-        <div className="badges">
-          <div className="badge">Wix Orders</div>
-          <div className="badge">Receipts</div>
-          <div className="badge">Audit XML</div>
-        </div>
-      </nav>
+      <AutoSync />
+      <TopNav title="UDITO Табло" />
       <div className="container">
         <section className="hero">
           <div>
-            <h1>Order activity, receipts, and audit exports.</h1>
+            <h1>Поръчки, касови бележки и месечни одиторски файлове.</h1>
             <p>
-              This dashboard will show synced orders, receipt previews, and the
-              monthly audit XML status.
+              Това табло показва синхронизирани поръчки, касови бележки и статуса
+              на месечния XML файл.
             </p>
             <div className="status-grid">
               <div className="status-card">
-                <span>Wix connection</span>
-                <strong>{hasToken ? "Connected" : "Not connected"}</strong>
-                <a className="status-link" href="/api/oauth/start">
-                  {hasToken ? "Reconnect" : "Connect Wix"}
-                </a>
+                <span>Връзка с Wix</span>
+                <strong>{hasConnection ? "Свързано" : "Няма връзка"}</strong>
+                <ConnectionCheck />
               </div>
               <div className="status-card">
-                <span>Orders stored</span>
-                <strong>{orders.length}</strong>
-                <span className="status-meta">Last 8 orders</span>
+                <span>Активен магазин</span>
+                {domainLabel ? (
+                  <a
+                    className="status-wrap status-link"
+                    href={
+                      domainLabel.startsWith("http")
+                        ? domainLabel
+                        : `https://${domainLabel}`
+                    }
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {activeStoreLabel}
+                  </a>
+                ) : (
+                  <strong className="status-wrap">{activeStoreLabel}</strong>
+                )}
+                <span className="status-meta">
+                  {siteId
+                    ? "Данните са за този сайт."
+                    : "Отворете приложението от Wix, за да се зареди сайтът."}
+                </span>
               </div>
               <div className="status-card">
-                <span>Audit export</span>
-                <strong>Ready</strong>
-                <a className="status-link" href="/api/audit/monthly">
-                  Download XML
+                <span>Записани поръчки</span>
+                <strong>{totalOrdersCount}</strong>
+                <span className="status-meta">
+                  {monthLabelText
+                    ? `За ${monthLabelText}: ${monthOrdersCount}`
+                    : `${monthOrdersCount} за месеца`}
+                </span>
+                <MonthFilter
+                  value={monthLabel}
+                  options={monthOptions}
+                  label="Месец"
+                />
+              </div>
+              <div className="status-card">
+                <span>Одиторски файл</span>
+                <strong>Готов</strong>
+                <a className="status-link" href={`/api/audit/monthly?month=${lastClosedLabel}`}>
+                  Изтегли XML за {lastClosedText}
                 </a>
               </div>
             </div>
+            {showDebug ? <BackfillButton /> : null}
           </div>
           <div className="hero-card">
-            <h2>Next steps</h2>
-            <p>
-              Connect your Wix store, select a receipt template, and export your
-              monthly audit file from here.
-            </p>
-            <div className="grid">
-              <div className="card">
-                <h3>Webhooks</h3>
-                <p>Waiting for orders from Wix.</p>
-              </div>
-              <div className="card">
-                <h3>Receipt layout</h3>
-                <p>Template file ready to wire up.</p>
-              </div>
-              <div className="card">
-                <h3>Audit export</h3>
-                <p>XML generator stubbed and ready for data.</p>
-              </div>
-            </div>
+            {hasConnection ? (
+              <>
+                <h2>Какво прави UDITO</h2>
+                <p>
+                  UDITO синхронизира поръчките от Wix, издава касови бележки при
+                  платени поръчки и генерира месечен одиторски XML файл.
+                </p>
+                <div className="grid">
+                  <div className="card">
+                    <h3>Поръчки</h3>
+                    <p>Получава и обновява поръчки в реално време.</p>
+                  </div>
+                  <div className="card">
+                    <h3>Касови бележки</h3>
+                    <p>Издава бележки при платени поръчки.</p>
+                  </div>
+                  <div className="card">
+                    <h3>Одиторски файл</h3>
+                    <p>Готов XML за приключени месеци.</p>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <h2>Следващи стъпки</h2>
+                <p>
+                  Свържете Wix магазина, изберете шаблон за бележки и
+                  експортирайте месечния XML файл оттук.
+                </p>
+                <div className="grid">
+                  <div className="card">
+                    <h3>Уебхукове</h3>
+                    <p>Очаква поръчки от Wix.</p>
+                  </div>
+                  <div className="card">
+                    <h3>Шаблон за бележки</h3>
+                    <p>Готов за свързване.</p>
+                  </div>
+                  <div className="card">
+                    <h3>Одиторски експорт</h3>
+                    <p>XML генераторът е готов за данни.</p>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </section>
+        {showDebug ? (
+          <section className="orders">
+            <h2>Диагностика</h2>
+            <div className="orders-table">
+              <div className="orders-head">
+                <span>Поле</span>
+                <span>Стойност</span>
+              </div>
+              <div className="orders-row">
+                <span>Активен siteId</span>
+                <span>{siteId || "—"}</span>
+              </div>
+              <div className="orders-row">
+                <span>Активен instanceId</span>
+                <span>{instanceId || "—"}</span>
+              </div>
+              <div className="orders-row">
+                <span>Wix token</span>
+                <span>{hasInstance ? "има" : "липсва"}</span>
+              </div>
+            </div>
+          </section>
+        ) : null}
         <section className="orders">
-          <h2>Latest orders</h2>
-          {orders.length === 0 ? (
-            <p>No orders stored yet. Webhooks or backfill will populate this list.</p>
+          <h2>Поръчки за {monthLabelText || monthLabel}</h2>
+          {displayOrders.length === 0 ? (
+            <p>Все още няма поръчки. Уебхуковете или бекфил ще ги добавят.</p>
           ) : (
             <div className="orders-table">
               <div className="orders-head">
-                <span>Order</span>
-                <span>Status</span>
-                <span>Total</span>
-                <span>Source</span>
-                <span>Created</span>
+                <span>Поръчка</span>
+                <span>Статус</span>
+                <span>Общо</span>
+                <span>Източник</span>
+                <span>Създадена</span>
               </div>
-              {orders.map((order) => (
-                <div className="orders-row" key={order.id}>
-                  <span>{order.number || order.id}</span>
-                  <span>{order.payment_status || "—"}</span>
-                  <span>{formatMoney(order.total, order.currency)}</span>
-                  <span>{order.source || "—"}</span>
-                  <span>
-                    {order.created_at
-                      ? new Date(order.created_at).toLocaleString("bg-BG")
-                      : "—"}
-                  </span>
-                </div>
-              ))}
+              {displayOrders.map((order) => {
+                const raw = (order as any).raw ?? null;
+                const { totalAmount, currency } = deriveOrderMoney(
+                  raw,
+                  order.total,
+                  order.currency ?? null
+                );
+                const number = deriveOrderNumber(raw, order.number);
+                const createdAt = deriveOrderCreatedAt(raw, order.created_at);
+                const sourceLabel =
+                  order.source === "backfill" || order.source === "webhook"
+                    ? "Wix"
+                    : order.source;
+                return (
+                  <div className="orders-row" key={order.id}>
+                    <span>{number || order.id}</span>
+                    <span>{formatPaymentStatus(order.payment_status || null)}</span>
+                    <span>{formatMoney(totalAmount, currency)}</span>
+                    <span>{sourceLabel || "—"}</span>
+                    <span>
+                      {createdAt
+                        ? new Date(createdAt).toLocaleString("bg-BG")
+                        : "—"}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           )}
         </section>
       </div>
-      <footer className="footer">UDITO by Designs by Po.</footer>
+      <footer className="footer">UDITO от Designs by Po.</footer>
     </main>
   );
 }

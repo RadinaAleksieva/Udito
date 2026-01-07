@@ -1,50 +1,58 @@
+import TokenCapture from "./overview/token-capture";
+
 export default function Home() {
   return (
     <main>
+      <TokenCapture />
       <nav className="nav">
         <span>UDITO</span>
         <div className="badges">
-          <div className="badge">Wix Stores</div>
-          <div className="badge">Fiscal Receipts</div>
-          <div className="badge">NAP Audit XML</div>
+          <div className="badge">Wix магазини</div>
+          <div className="badge">Касови бележки</div>
+          <div className="badge">НАП XML</div>
         </div>
       </nav>
       <div className="container">
         <section className="hero">
           <div>
-            <h1>Receipts and monthly audit export, built for Bulgarian ecommerce.</h1>
+            <h1>Касови бележки и месечен одит XML за български онлайн магазини.</h1>
             <p>
-              UDITO connects to Wix Stores, formats receipts the way you want, and
-              prepares audit XML files ready for submission to NAP.
+              UDITO се свързва с Wix Stores, оформя бележки по вашия шаблон и
+              подготвя XML файлове за НАП.
             </p>
-            <a className="cta" href="/overview">
-              Open dashboard
-            </a>
+            <div className="cta-row">
+              <a className="cta" href="/overview">
+                Отвори таблото
+              </a>
+              <a className="cta cta-secondary" href="/debug">
+                Провери връзката
+              </a>
+            </div>
           </div>
           <div className="hero-card">
-            <h2>What it does</h2>
+            <h2>Какво прави</h2>
             <p>
-              One place to manage receipts, templates, and monthly audit exports.
-              Keep compliance tasks simple even across multiple Wix sites.
+              Един екран за бележки, шаблони и месечни одит файлове. Лесно
+              управление дори с няколко Wix сайта.
             </p>
             <div className="grid">
               <div className="card">
-                <h3>Order sync</h3>
-                <p>Listens to Wix order events and stores snapshots.</p>
+                <h3>Синхрон на поръчки</h3>
+                <p>Слуша събитията от Wix и пази снимки на поръчките.</p>
               </div>
               <div className="card">
-                <h3>Receipt templates</h3>
-                <p>Injects your design and mandatory fiscal fields.</p>
+                <h3>Шаблони за бележки</h3>
+                <p>Вмъква вашия дизайн и задължителните данни.</p>
               </div>
               <div className="card">
-                <h3>Audit export</h3>
-                <p>Monthly XML structure aligned with N-18 Appendix 38.</p>
+                <h3>Одиторски експорт</h3>
+                <p>Месечен XML съгласно Н-18, Приложение 38.</p>
               </div>
             </div>
           </div>
         </section>
       </div>
-      <footer className="footer">UDITO by Designs by Po.</footer>
+      <footer className="footer">UDITO от Designs by Po.</footer>
     </main>
   );
 }
