@@ -254,6 +254,14 @@ export async function queryOrders(options: {
     data.items ??
     (data.order ? [data.order] : []);
 
+  // Debug: Log raw pagination data to understand cursor extraction
+  console.log("Wix API response metadata:", JSON.stringify({
+    metadata: (data as any).metadata,
+    paging: (data as any).paging,
+    pagingMetadata: (data as any).pagingMetadata,
+    ordersCount: orders.length,
+  }));
+
   const cursor =
     (data.metadata as any)?.cursors?.next ??
     data.metadata?.paging?.cursor ??
