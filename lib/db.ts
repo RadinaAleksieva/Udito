@@ -1350,3 +1350,25 @@ export async function getStoreConnectionsForBusiness(businessId: string) {
   `;
   return result.rows;
 }
+
+export async function getOrdersMissingTransactionRef(siteId: string | null, limit = 20) {
+  const result = await sql`
+    select id, number, payment_status, created_at
+    from orders
+    where (site_id = ${siteId} or ${siteId} is null)
+      and payment_status = 'PAID'
+      and (transaction_ref is null or transaction_ref = '')
+    order by created_at desc
+    limit ${limit};
+  `;
+  return result.rows as Array<{ id: string; number: string; payment_status: string; created_at: string }>;
+}
+
+export async function updateOrderTransactionRef(orderId: string, transactionRef: string) {
+  await sql`
+    update orders
+    set transaction_ref = ${transactionRef},
+        updated_at = now()
+    where id = ${orderId};
+  `;
+}
