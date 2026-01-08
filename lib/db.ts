@@ -1357,10 +1357,12 @@ export async function getStoreConnectionsForBusiness(businessId: string) {
 }
 
 export async function getOrdersMissingTransactionRef(siteId: string | null, limit = 20) {
+  // Use coalesce pattern to handle null siteId - when siteId is null, match all sites
+  const siteFilter = siteId ?? '';
   const result = await sql`
     select id, number, payment_status, created_at
     from orders
-    where (site_id = ${siteId} or ${siteId} is null)
+    where (${siteFilter} = '' or site_id = ${siteFilter})
       and payment_status = 'PAID'
       and (transaction_ref is null or transaction_ref = '')
     order by created_at desc
