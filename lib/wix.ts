@@ -233,7 +233,7 @@ export async function queryOrders(options: {
     body: JSON.stringify({
       query: {
         filter,
-        sort: [{ fieldName: "createdDate", order: "DESC" }],
+        sort: [{ fieldName: "createdDate", order: "ASC" }], // ASC required for cursor pagination to work
         paging: {
           limit,
           cursor: options.cursor ?? undefined,
