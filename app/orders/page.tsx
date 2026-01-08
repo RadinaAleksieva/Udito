@@ -13,7 +13,7 @@ import {
   deriveOrderNumber,
   isArchivedOrder,
 } from "@/lib/order-display";
-import { extractTransactionRef } from "@/lib/wix";
+import { extractTransactionRef, extractPaymentSummaryFromPayment } from "@/lib/wix";
 
 export const dynamic = "force-dynamic";
 
@@ -416,22 +416,34 @@ function extractTotals(order: OrderRow, raw: any) {
 function extractPayment(raw: any, order: OrderRow) {
   const payment = raw?.paymentMethod ?? raw?.paymentMethodSummary ?? {};
   const summary = raw?.udito?.paymentSummary ?? null;
+
+  // Pick the best payment from orderTransactions (prioritize APPROVED/COMPLETED/REFUNDED)
+  let bestPayment = null;
+  const orderTxPayments = raw?.orderTransactions?.payments;
+  if (Array.isArray(orderTxPayments) && orderTxPayments.length > 0) {
+    const validStatuses = ['APPROVED', 'COMPLETED', 'REFUNDED'];
+    bestPayment = orderTxPayments.find(
+      (p: any) => validStatuses.includes(p?.regularPaymentDetails?.status)
+    ) || orderTxPayments[0];
+  }
+
+  // Extract payment summary from the best payment
+  const paymentSummary = bestPayment ? extractPaymentSummaryFromPayment(bestPayment) : null;
+
   return {
     provider: payment?.name ?? payment?.methodType ?? "—",
     transactionId: extractTransactionRef(raw),
     cardProvider:
       payment?.cardProvider ??
       raw?.payment?.cardProvider ??
-      raw?.payments?.[0]?.card?.brand ??
-      raw?.payments?.[0]?.card?.type ??
+      paymentSummary?.cardBrand ??
       summary?.cardBrand ??
       null,
     cardLast4:
       payment?.cardLast4 ??
       payment?.last4 ??
       raw?.payment?.cardLast4 ??
-      raw?.payments?.[0]?.card?.last4 ??
-      raw?.payments?.[0]?.card?.lastFourDigits ??
+      paymentSummary?.cardLast4 ??
       summary?.cardLast4 ??
       null,
     paidAt: order.paid_at,
