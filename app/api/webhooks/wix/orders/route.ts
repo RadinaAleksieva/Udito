@@ -106,6 +106,24 @@ async function handleOrderEvent(event: any) {
     if (record.payment) {
       orderRaw = { ...orderRaw, payment: record.payment };
     }
+    // Fetch full orderTransactions for card details
+    if (!orderRaw?.orderTransactions) {
+      const orderTx = await fetchOrderTransactionsForOrder({
+        orderId,
+        siteId: base.siteId ?? raw?.siteId ?? rawOrder?.siteId ?? null,
+        instanceId:
+          event?.metadata?.instanceId ??
+          raw?.instanceId ??
+          rawOrder?.instanceId ??
+          null,
+      });
+      if (orderTx?.orderTransactions || orderTx?.payments) {
+        orderRaw = {
+          ...orderRaw,
+          orderTransactions: orderTx.orderTransactions ?? { payments: orderTx.payments },
+        };
+      }
+    }
     if (paymentRef && !transactionRef) {
       transactionRef = paymentRef;
     }
