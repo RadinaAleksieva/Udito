@@ -193,7 +193,7 @@ export default function CompanyForm() {
           <input
             value={form.fiscalStoreId}
             onChange={(event) => updateField("fiscalStoreId", event.target.value)}
-            placeholder="RF0000000"
+            placeholder="XXXXXXXXX"
             required
           />
           <span className="input-hint">

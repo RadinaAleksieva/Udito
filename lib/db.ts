@@ -145,6 +145,19 @@ export async function initDb() {
     );
   `;
 
+  // Add refund support columns
+  await sql`alter table receipts add column if not exists type text default 'sale';`;
+  await sql`alter table receipts add column if not exists reference_receipt_id bigint;`;
+  await sql`alter table receipts add column if not exists refund_amount numeric;`;
+
+  // Drop old unique constraint and create new one allowing one sale and one refund per order
+  // Note: We'll use a unique index instead to handle the type column
+  await sql`
+    create unique index if not exists receipts_order_type_idx
+    on receipts (order_id, type)
+    where type is not null;
+  `;
+
   await sql`
     create table if not exists companies (
       site_id text primary key,
@@ -368,7 +381,14 @@ export async function upsertOrder(order: StoredOrder) {
       payment_status = excluded.payment_status,
       created_at = excluded.created_at,
       updated_at = excluded.updated_at,
-      paid_at = excluded.paid_at,
+      paid_at = CASE
+        -- If payment just changed to PAID and we have a new paid_at, use it
+        WHEN excluded.payment_status = 'PAID' AND excluded.paid_at IS NOT NULL THEN excluded.paid_at
+        -- If payment just changed to PAID but no paid_at, use current time
+        WHEN excluded.payment_status = 'PAID' AND orders.paid_at IS NULL THEN NOW()
+        -- Otherwise keep existing paid_at
+        ELSE COALESCE(excluded.paid_at, orders.paid_at)
+      END,
       currency = excluded.currency,
       subtotal = excluded.subtotal,
       tax_total = excluded.tax_total,

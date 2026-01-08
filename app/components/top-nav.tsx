@@ -4,6 +4,7 @@ const links = [
   { href: "/overview", label: "Общ преглед" },
   { href: "/orders", label: "Поръчки" },
   { href: "/receipts", label: "Електронни бележки" },
+  { href: "/audit", label: "Одиторски файл" },
   { href: "/settings", label: "Настройки" },
   { href: "/help", label: "Помощ" },
 ];

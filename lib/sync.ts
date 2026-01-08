@@ -214,7 +214,20 @@ export async function syncOrdersForSite(params: SyncParams) {
         !statusText.includes("cancel")
       ) {
         const receiptTxRef = extractTransactionRef(orderRaw);
-        if (hasFiscalCode && receiptTxRef) {
+
+        // Only issue receipts for orders paid on or after the receipts start date
+        // Default: 2026-01-01 (when app was "installed")
+        const receiptsStartDate = company?.receipts_start_date
+          ? new Date(company.receipts_start_date)
+          : new Date("2026-01-01T00:00:00Z");
+        const orderPaidAt = mapped.paidAt ? new Date(mapped.paidAt) : null;
+        const isAfterStartDate = orderPaidAt && orderPaidAt >= receiptsStartDate;
+
+        // Skip zero-value orders
+        const orderTotal = Number(mapped.total) || 0;
+        const hasValue = orderTotal > 0;
+
+        if (hasFiscalCode && receiptTxRef && isAfterStartDate && hasValue) {
           await issueReceipt({
             orderId: mapped.id,
             payload: mapped,

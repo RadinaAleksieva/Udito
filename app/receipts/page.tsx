@@ -20,6 +20,9 @@ type ReceiptRow = {
   customer_name?: string | null;
   total?: string | null;
   currency?: string | null;
+  receipt_type?: string | null;
+  reference_receipt_id?: number | null;
+  refund_amount?: string | number | null;
 };
 
 function extractCustomerName(raw: any, fallback: string | null | undefined) {
@@ -65,6 +68,17 @@ function formatReceiptStatus(status: string | null) {
   if (!status) return "—";
   if (status === "issued") return "Издадена";
   return status;
+}
+
+function formatReceiptType(type: string | null | undefined): string {
+  if (!type || type === "sale") return "Продажба";
+  if (type === "refund") return "Сторно (възстановени суми)";
+  return type;
+}
+
+function getReceiptTypeClass(type: string | null | undefined): string {
+  if (type === "refund") return "receipt-refund";
+  return "";
 }
 
 export default async function ReceiptsPage({
@@ -163,43 +177,65 @@ export default async function ReceiptsPage({
             <div className="orders-table">
               <div className="orders-head orders-head--receipts">
                 <span>Бележка</span>
+                <span>Тип</span>
                 <span>Поръчка</span>
                 <span>Клиент</span>
-                <span>Статус</span>
+                <span>Сума</span>
                 <span>Издадена</span>
                 <span>Преглед</span>
                 <span>Изтегляне</span>
               </div>
-              {displayReceipts.map((receipt) => (
-                <div className="orders-row orders-row--receipts" key={receipt.order_id}>
-                  <span>
-                    {receipt.receipt_id != null
-                      ? String(receipt.receipt_id).padStart(10, "0")
-                      : "—"}
-                  </span>
-                  <span>{receipt.order_number || receipt.order_id}</span>
-                  <span>{receipt.customer_name || "—"}</span>
-                  <span>{formatReceiptStatus(receipt.status)}</span>
-                  <span>
-                    {receipt.issued_at
-                      ? new Date(receipt.issued_at).toLocaleString("bg-BG")
-                      : "—"}
-                  </span>
-                  <span>
-                    <a className="status-link" href={`/receipts/${receipt.order_id}`}>
-                      Преглед
-                    </a>
-                  </span>
-                  <span>
-                    <a
-                      className="status-link"
-                      href={`/receipts/${receipt.order_id}?print=1`}
-                    >
-                      Изтегли
-                    </a>
-                  </span>
-                </div>
-              ))}
+              {displayReceipts.map((receipt) => {
+                const isRefund = receipt.receipt_type === "refund";
+                const displayAmount = isRefund
+                  ? `-${Math.abs(Number(receipt.refund_amount || receipt.total || 0)).toFixed(2)}`
+                  : Number(receipt.total || 0).toFixed(2);
+                const currency = receipt.currency || "BGN";
+                return (
+                  <div
+                    className={`orders-row orders-row--receipts ${getReceiptTypeClass(receipt.receipt_type)}`}
+                    key={`${receipt.order_id}-${receipt.receipt_type || "sale"}`}
+                  >
+                    <span>
+                      {receipt.receipt_id != null
+                        ? String(receipt.receipt_id).padStart(10, "0")
+                        : "—"}
+                    </span>
+                    <span className={isRefund ? "receipt-type-refund" : ""}>
+                      {formatReceiptType(receipt.receipt_type)}
+                      {isRefund && receipt.reference_receipt_id && (
+                        <small className="refund-ref">
+                          {" "}
+                          (към #{receipt.reference_receipt_id})
+                        </small>
+                      )}
+                    </span>
+                    <span>{receipt.order_number || receipt.order_id}</span>
+                    <span>{receipt.customer_name || "—"}</span>
+                    <span className={isRefund ? "receipt-amount-negative" : ""}>
+                      {displayAmount} {currency}
+                    </span>
+                    <span>
+                      {receipt.issued_at
+                        ? new Date(receipt.issued_at).toLocaleString("bg-BG")
+                        : "—"}
+                    </span>
+                    <span>
+                      <a className="status-link" href={`/receipts/${receipt.order_id}?type=${receipt.receipt_type || "sale"}`}>
+                        Преглед
+                      </a>
+                    </span>
+                    <span>
+                      <a
+                        className="status-link"
+                        href={`/receipts/${receipt.order_id}?type=${receipt.receipt_type || "sale"}&print=1`}
+                      >
+                        Изтегли
+                      </a>
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           )}
         </section>

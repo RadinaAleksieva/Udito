@@ -1019,6 +1019,34 @@ main {
   margin-bottom: 24px;
 }
 
+/* Refund receipt styles */
+.orders-row.receipt-refund {
+  background: #fff6f6;
+  border-left: 3px solid #d32f2f;
+}
+
+.receipt-type-refund {
+  color: #d32f2f;
+  font-weight: 600;
+}
+
+.receipt-amount-negative {
+  color: #d32f2f;
+  font-weight: 600;
+}
+
+.refund-ref {
+  display: block;
+  font-size: 11px;
+  color: #777;
+  font-weight: normal;
+}
+
+.orders-head--receipts,
+.orders-row--receipts {
+  grid-template-columns: 0.8fr 1fr 0.8fr 1fr 0.8fr 1.2fr 0.6fr 0.6fr;
+}
+
 @media (max-width: 720px) {
   .nav {
     flex-direction: column;

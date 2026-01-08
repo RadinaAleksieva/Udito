@@ -1,9 +1,7 @@
 import TopNav from "../components/top-nav";
 import MonthFilter from "../components/month-filter";
-import {
-  initDb,
-  listOrdersForPeriodForSite,
-} from "@/lib/db";
+import { initDb } from "@/lib/db";
+import { listOrdersWithReceiptsForAudit } from "@/lib/receipts";
 import { getActiveWixToken } from "@/lib/wix-context";
 
 export const dynamic = "force-dynamic";
@@ -42,16 +40,20 @@ export default async function AuditPage({
     59,
     999
   );
+  // Get sale receipts for audit file
+  // NOTE: Refunded orders in the same month are automatically excluded
+  // Refund receipts never appear in the audit file (they're bank transfers)
   const monthlyOrders = siteId
-    ? await listOrdersForPeriodForSite(
+    ? await listOrdersWithReceiptsForAudit(
         monthStart.toISOString(),
         monthEnd.toISOString(),
         siteId
       )
     : [];
+  // Filter out zero-value orders
   const displayOrders = monthlyOrders.filter((order: any) => {
-    const statusText = String(order?.status || "").toLowerCase();
-    return !statusText.includes("cancel") && !statusText.includes("archiv");
+    const total = Number(order?.total) || 0;
+    return total > 0;
   });
   const monthLabel = `${selectedYear}-${String(selectedMonthIndex + 1).padStart(
     2,
@@ -99,7 +101,7 @@ export default async function AuditPage({
               <div className="status-card">
                 <span>Поръчки в отчета</span>
                 <strong>{displayOrders.length}</strong>
-                <span className="status-meta">Платени и създадени</span>
+                <span className="status-meta">Платени в този месец с бележка</span>
               </div>
               <div className="status-card">
                 <span>Файл за изтегляне</span>
@@ -120,10 +122,11 @@ export default async function AuditPage({
             </div>
           </div>
           <div className="hero-card">
-            <h2>Проверка на одиторски файл</h2>
+            <h2>Какво влиза в одиторския файл</h2>
             <p>
-              Поръчките се включват, когато са създадени или платени в рамките
-              на избрания период. Електронни бележки се издават само при плащане.
+              Само платени поръчки с издадена електронна бележка и стойност над нула.
+              Поръчки със сторно (възстановени суми) в същия месец не влизат в отчета.
+              Сторно бележките не влизат в одиторския файл — те са за вътрешно счетоводство.
             </p>
             <div className="grid">
               <div className="card">
@@ -149,22 +152,20 @@ export default async function AuditPage({
             <div className="orders-table">
               <div className="orders-head">
                 <span>Поръчка</span>
-                <span>Създадена</span>
+                <span>Платена на</span>
                 <span>Общо</span>
                 <span>Валута</span>
-                <span>Статус</span>
               </div>
               {displayOrders.map((order) => (
                 <div className="orders-row" key={order.id}>
                   <span>{order.number || order.id}</span>
                   <span>
-                    {order.created_at
-                      ? new Date(order.created_at).toLocaleString("bg-BG")
+                    {order.paid_at
+                      ? new Date(order.paid_at).toLocaleString("bg-BG")
                       : "—"}
                   </span>
                   <span>{formatMoney(order.total, order.currency)}</span>
                   <span>{order.currency || "—"}</span>
-                  <span>{order.paid_at ? "Платена" : "Очаква"}</span>
                 </div>
               ))}
             </div>

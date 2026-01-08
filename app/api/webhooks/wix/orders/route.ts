@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { AppStrategy, createClient } from "@wix/sdk";
 import { orders } from "@wix/ecom";
 import { getCompanyBySite, initDb, saveWixTokens, upsertOrder } from "@/lib/db";
-import { issueReceipt } from "@/lib/receipts";
+import { issueReceipt, issueRefundReceipt, getSaleReceiptByOrderId } from "@/lib/receipts";
 import {
   extractTransactionRef,
   extractPaymentId,
@@ -38,6 +38,14 @@ async function handleOrderEvent(event: any) {
   const raw = event?.data ?? {};
   const rawOrder = raw?.order ?? raw;
   const paymentStatus = raw?.paymentStatus ?? rawOrder?.paymentStatus ?? null;
+
+  // Get event timestamp - this is when the payment status actually changed
+  const eventTimestamp = event?.metadata?.eventTime ??
+    event?.metadata?.dateTime ??
+    event?.createdDate ??
+    event?.timestamp ??
+    null;
+
   const baseOrder = { ...rawOrder, paymentStatus };
   const base = pickOrderFields(baseOrder, "webhook");
   const orderId = base.id;
@@ -156,23 +164,104 @@ async function handleOrderEvent(event: any) {
       expiresAt: null,
     });
   }
-  await upsertOrder({ ...mapped, businessId: null, raw: orderRaw });
+  // Use event timestamp as paidAt when order is marked as PAID
+  // This is more accurate than the payment record's createdDate
+  const isPaid = (mapped.paymentStatus || "").toUpperCase() === "PAID";
+  const effectivePaidAt = isPaid && eventTimestamp
+    ? eventTimestamp
+    : mapped.paidAt;
+
+  await upsertOrder({
+    ...mapped,
+    paidAt: effectivePaidAt,
+    businessId: null,
+    raw: orderRaw,
+  });
   const statusText = (mapped.status || "").toLowerCase();
+  const company = mapped.siteId ? await getCompanyBySite(mapped.siteId) : null;
+  const receiptTxRef = extractTransactionRef(orderRaw);
+
+  // Only issue receipts for orders paid on or after the receipts start date
+  // Default: 2026-01-01 (when app was "installed")
+  const receiptsStartDate = company?.receipts_start_date
+    ? new Date(company.receipts_start_date)
+    : new Date("2026-01-01T00:00:00Z");
+  const orderPaidAt = effectivePaidAt ? new Date(effectivePaidAt) : null;
+  const isAfterStartDate = orderPaidAt && orderPaidAt >= receiptsStartDate;
+
+  // Check for refund scenarios
+  const paymentStatusUpper = (mapped.paymentStatus || "").toUpperCase();
+  const isRefunded = paymentStatusUpper === "REFUNDED" ||
+                     paymentStatusUpper === "PARTIALLY_REFUNDED" ||
+                     statusText.includes("refund");
+
+  // Check for refund in activities
+  const activities = Array.isArray(orderRaw?.activities) ? orderRaw.activities : [];
+  const refundActivity = activities.find(
+    (a: any) => a?.type === "ORDER_REFUNDED" ||
+                a?.type === "REFUND" ||
+                (a?.type || "").toString().includes("REFUND")
+  );
+  const hasRefundActivity = Boolean(refundActivity);
+
+  // Get refund timestamp
+  const refundTimestamp = refundActivity?.createdDate ?? eventTimestamp ?? null;
+
   if (
-    (mapped.paymentStatus || "").toUpperCase() === "PAID" &&
+    isPaid &&
     !statusText.includes("cancel")
   ) {
-    const company = mapped.siteId ? await getCompanyBySite(mapped.siteId) : null;
-    const receiptTxRef = extractTransactionRef(orderRaw);
-    if (company?.fiscal_store_id && receiptTxRef) {
+    // Skip zero-value orders
+    const orderTotal = Number(mapped.total) || 0;
+    const hasValue = orderTotal > 0;
+
+    if (company?.fiscal_store_id && receiptTxRef && isAfterStartDate && hasValue) {
       await issueReceipt({
         orderId: mapped.id,
         payload: mapped,
         businessId: null,
-        issuedAt: mapped.paidAt ?? mapped.createdAt ?? null,
+        issuedAt: effectivePaidAt ?? mapped.createdAt ?? null,
       });
+    } else if (!hasValue) {
+      console.warn("Skipping receipt: zero value order", mapped.total);
+    } else if (!isAfterStartDate) {
+      console.warn("Skipping receipt: order paid before receipts start date", effectivePaidAt);
     } else {
-      console.warn("Skipping receipt: missing fiscal store id for site.");
+      console.warn("Skipping receipt: missing fiscal store id or transaction ref.");
+    }
+  }
+
+  // Handle refunds - create сторно бележка (refund receipt)
+  if ((isRefunded || hasRefundActivity) && company?.fiscal_store_id) {
+    // Check if we have an original sale receipt for this order
+    const originalReceipt = await getSaleReceiptByOrderId(mapped.id);
+
+    if (originalReceipt) {
+      // Calculate refund amount - use the original total since Wix typically does full refunds
+      // For partial refunds, we'd need to extract the actual refund amount from the event
+      const refundAmount = Number(mapped.total) || 0;
+
+      if (refundAmount > 0) {
+        const result = await issueRefundReceipt({
+          orderId: mapped.id,
+          payload: {
+            ...mapped,
+            originalReceiptId: originalReceipt.id,
+            refundReason: statusText.includes("cancel") ? "cancelled" : "refunded",
+          },
+          businessId: null,
+          issuedAt: refundTimestamp ?? new Date().toISOString(),
+          refundAmount,
+        });
+
+        if (result.created) {
+          console.log("Refund receipt created for order", mapped.number, "receipt ID:", result.receiptId);
+        } else {
+          console.log("Refund receipt already exists for order", mapped.number);
+        }
+      }
+    } else {
+      console.warn("No original sale receipt found for refund, order:", mapped.number);
     }
   }
 }
