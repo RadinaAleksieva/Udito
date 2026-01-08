@@ -82,7 +82,7 @@ export default function ReceiptSettingsForm() {
     <form className="form-card" onSubmit={handleSubmit}>
       <div className="form-header">
         <div>
-          <h2>Настройки на касовите бележки</h2>
+          <h2>Настройки на електронните бележки</h2>
           <p>Задайте начален номер и други опции за издаване на бележки.</p>
         </div>
         <button className="btn-primary" type="submit" disabled={loading}>
@@ -154,7 +154,7 @@ export default function ReceiptSettingsForm() {
         <div className="settings-section__header">
           <h3>Нужда от помощ?</h3>
           <p>
-            За подробна информация как работят касовите бележки, вижте страницата{" "}
+            За подробна информация как работят електронните бележки, вижте страницата{" "}
             <a href="/help#receipts">Как работи UDITO</a>.
           </p>
         </div>

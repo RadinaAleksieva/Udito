@@ -144,7 +144,7 @@ export default function CompanyForm() {
       <div className="form-header">
         <div>
           <h2>Фирмени данни</h2>
-          <p>Настройте данните, които ще се отпечатват върху касовите бележки.</p>
+          <p>Настройте данните, които ще се отпечатват върху електронните бележки.</p>
         </div>
         <button className="btn-primary" type="submit" disabled={loading}>
           {loading ? "Запис..." : "Запази"}
@@ -155,7 +155,7 @@ export default function CompanyForm() {
 
       <div className="form-grid">
         <label>
-          Име на магазина (за касовите бележки)
+          Име на магазина (за електронните бележки)
           <input
             value={form.storeName}
             onChange={(event) => updateField("storeName", event.target.value)}
@@ -277,7 +277,7 @@ export default function CompanyForm() {
 
       <section className="logo-upload">
         <div>
-          <h3>Лого за касови бележки</h3>
+          <h3>Лого за електронни бележки</h3>
           <p>По подразбиране бележките са без лого. Добавете ваше лого при нужда.</p>
         </div>
         <div className="logo-upload__controls">
@@ -317,7 +317,7 @@ export default function CompanyForm() {
       <section className="template-grid">
         <div className="template-header">
           <h3>Шаблон за бележка</h3>
-          <p>Изберете как да изглеждат касовите бележки.</p>
+          <p>Изберете как да изглеждат електронните бележки.</p>
         </div>
         <div className="template-cards">
           {templateOptions.map((template) => (

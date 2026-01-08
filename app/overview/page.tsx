@@ -166,9 +166,9 @@ export default async function OverviewPage({
       <div className="container">
         <section className="hero">
           <div>
-            <h1>Поръчки, касови бележки и месечни одиторски файлове.</h1>
+            <h1>Поръчки, електронни бележки и месечни одиторски файлове.</h1>
             <p>
-              Това табло показва синхронизирани поръчки, касови бележки и статуса
+              Това табло показва синхронизирани поръчки, електронни бележки и статуса
               на месечния XML файл.
             </p>
             <div className="status-grid">
@@ -230,7 +230,7 @@ export default async function OverviewPage({
               <>
                 <h2>Какво прави UDITO</h2>
                 <p>
-                  UDITO синхронизира поръчките от Wix, издава касови бележки при
+                  UDITO синхронизира поръчките от Wix, издава електронни бележки при
                   платени поръчки и генерира месечен одиторски XML файл.
                 </p>
                 <div className="grid">
@@ -239,7 +239,7 @@ export default async function OverviewPage({
                     <p>Получава и обновява поръчки в реално време.</p>
                   </div>
                   <div className="card">
-                    <h3>Касови бележки</h3>
+                    <h3>Електронни бележки</h3>
                     <p>Издава бележки при платени поръчки.</p>
                   </div>
                   <div className="card">

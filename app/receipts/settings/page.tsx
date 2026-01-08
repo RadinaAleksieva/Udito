@@ -16,7 +16,7 @@ export default async function ReceiptSettingsPage() {
       <div className="container">
         <section className="hero">
           <div>
-            <h1>Настройки на касовите бележки</h1>
+            <h1>Настройки на електронните бележки</h1>
             <p>
               Задайте начален номер на бележките и други настройки за издаване.
             </p>
@@ -32,7 +32,7 @@ export default async function ReceiptSettingsPage() {
               </p>
             )}
             <a href="/receipts" className="status-link">
-              Назад към касови бележки
+              Назад към електронни бележки
             </a>
           </div>
         </section>

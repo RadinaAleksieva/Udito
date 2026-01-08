@@ -10,16 +10,21 @@ import { getActiveWixContext } from "@/lib/wix-context";
 export async function POST(request: Request) {
   try {
     await initDb();
-    const { siteId, instanceId } = getActiveWixContext();
+    const url = new URL(request.url);
+
+    // Allow siteId from query param for CLI usage, fallback to context
+    const querySiteId = url.searchParams.get("siteId");
+    const context = getActiveWixContext();
+    const siteId = querySiteId || context.siteId;
+    const instanceId = context.instanceId;
 
     if (!siteId && !instanceId) {
       return NextResponse.json(
-        { ok: false, error: "Missing Wix context." },
+        { ok: false, error: "Missing Wix context. Pass ?siteId=xxx or access from app." },
         { status: 400 }
       );
     }
 
-    const url = new URL(request.url);
     const limit = Math.min(Number(url.searchParams.get("limit") || 20), 100);
 
     // Get paid orders missing transaction refs

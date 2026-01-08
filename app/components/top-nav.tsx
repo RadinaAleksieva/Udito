@@ -3,7 +3,7 @@ import { cookies, headers } from "next/headers";
 const links = [
   { href: "/overview", label: "Общ преглед" },
   { href: "/orders", label: "Поръчки" },
-  { href: "/receipts", label: "Касови бележки" },
+  { href: "/receipts", label: "Електронни бележки" },
   { href: "/settings", label: "Настройки" },
   { href: "/help", label: "Помощ" },
 ];

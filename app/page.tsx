@@ -8,14 +8,14 @@ export default function Home() {
         <span>UDITO</span>
         <div className="badges">
           <div className="badge">Wix магазини</div>
-          <div className="badge">Касови бележки</div>
+          <div className="badge">Електронни бележки</div>
           <div className="badge">НАП XML</div>
         </div>
       </nav>
       <div className="container">
         <section className="hero">
           <div>
-            <h1>Касови бележки и месечен одит XML за български онлайн магазини.</h1>
+            <h1>Електронни бележки и месечен одит XML за български онлайн магазини.</h1>
             <p>
               UDITO се свързва с Wix Stores, оформя бележки по вашия шаблон и
               подготвя XML файлове за НАП.

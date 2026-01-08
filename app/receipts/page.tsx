@@ -143,11 +143,11 @@ export default async function ReceiptsPage({
 
   return (
     <main>
-      <TopNav title="Касови бележки" />
+      <TopNav title="Електронни бележки" />
       <div className="container">
         <section className="orders">
           <div className="section-header">
-            <h2>Касови бележки</h2>
+            <h2>Електронни бележки</h2>
             <a href="/receipts/settings" className="btn-secondary">
               Настройки
             </a>
