@@ -123,9 +123,9 @@ Vercel project: `udito` (linked to this repo)
 
 ## 6) Known Issues / TODO
 
-### 6.1 Transaction ID
-- Offline плащания показват грешен transaction ID
-- `extractTransactionRef()` в `lib/wix.ts` трябва да се подобри
+### 6.1 Transaction ID - FIXED
+- ~~Offline плащания показват грешен transaction ID~~ **ПОПРАВЕНО**
+- `extractTransactionRef()` и `pickPaymentFromOrderTransactions()` в `lib/wix.ts` вече избират плащане със статус APPROVED/COMPLETED/REFUNDED вместо първото (което може да е PENDING_MERCHANT)
 
 ### 6.2 QR код
 - Трябва верификация на формата спрямо изискванията на НАП
@@ -158,9 +158,9 @@ node scripts/reset-receipts.mjs
 1. **Receipts work** - electronic receipts are issued on payment via webhook
 2. **Refunds work** - refund receipts (сторно) are created with negative amounts
 3. **Audit file** - excludes refunded orders in same month, never includes refund receipts
+4. **Transaction ID** - correctly picks APPROVED/COMPLETED/REFUNDED payment (not PENDING_MERCHANT)
 
 Remaining issues:
-- Transaction ID extraction for offline payments is incorrect (see extractTransactionRef in lib/wix.ts)
 - QR code format needs verification against NAP requirements
 - Partial refunds not supported (only full refunds)
 
@@ -181,6 +181,7 @@ Production: https://udito.vercel.app"
 8. Only issue receipts for orders paid >= 2026-01-01
 9. **Fixed unique constraint** - now allows both sale and refund receipt per order
 10. Database migration drops old `order_id` unique constraint, adds `(order_id, type)` unique index
+11. **Fixed transaction ID extraction** - now picks APPROVED/COMPLETED/REFUNDED payment instead of first (PENDING_MERCHANT)
 
 ---
 

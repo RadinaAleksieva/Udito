@@ -358,10 +358,42 @@ function findStripeId(value: any): string | null {
   return null;
 }
 
+/**
+ * Helper to pick the best payment from a payments array.
+ * Prioritizes APPROVED/COMPLETED/REFUNDED over PENDING_MERCHANT.
+ */
+function pickBestPaymentFromArray(payments: any[]): any | null {
+  if (!Array.isArray(payments) || payments.length === 0) return null;
+  const validStatuses = ["APPROVED", "COMPLETED", "REFUNDED"];
+  const validPayment = payments.find(
+    (p: any) => validStatuses.includes(p?.regularPaymentDetails?.status)
+  );
+  return validPayment ?? payments[0] ?? null;
+}
+
 export function extractTransactionRef(raw: any): string | null {
   const explicit = raw?.udito?.transactionRef ?? null;
   const stripeFromRaw = findStripeId(raw);
   const stripeFromExplicit = findStripeId(explicit);
+
+  // Pick best payment from orderTransactions.payments array
+  const orderTxPayments = raw?.orderTransactions?.payments;
+  const bestOrderTxPayment = Array.isArray(orderTxPayments)
+    ? pickBestPaymentFromArray(orderTxPayments)
+    : null;
+
+  // Pick best payment from payments array
+  const paymentsArray = raw?.payments;
+  const bestPayment = Array.isArray(paymentsArray)
+    ? pickBestPaymentFromArray(paymentsArray)
+    : null;
+
+  // Pick best from transactions array
+  const txArray = raw?.transactions;
+  const bestTx = Array.isArray(txArray)
+    ? pickBestPaymentFromArray(txArray)
+    : null;
+
   return (
     stripeFromExplicit ??
     stripeFromRaw ??
@@ -383,26 +415,26 @@ export function extractTransactionRef(raw: any): string | null {
     raw?.payment?.id ??
     raw?.payment?.chargeId ??
     raw?.payment?.paymentId ??
-    raw?.orderTransactions?.payments?.[0]?.regularPaymentDetails?.providerTransactionId ??
-    raw?.orderTransactions?.payments?.[0]?.regularPaymentDetails?.gatewayTransactionId ??
-    raw?.orderTransactions?.payments?.[0]?.regularPaymentDetails?.paymentOrderId ??
-    raw?.orderTransactions?.payments?.[0]?.id ??
+    bestOrderTxPayment?.regularPaymentDetails?.providerTransactionId ??
+    bestOrderTxPayment?.regularPaymentDetails?.gatewayTransactionId ??
+    bestOrderTxPayment?.regularPaymentDetails?.paymentOrderId ??
+    bestOrderTxPayment?.id ??
     raw?.payment?.providerTransactionId ??
     raw?.payment?.gatewayTransactionId ??
     raw?.payment?.acquirerReferenceNumber ??
     raw?.payment?.referenceId ??
     raw?.payment?.providerReferenceId ??
-    raw?.payments?.[0]?.paymentId ??
-    raw?.payments?.[0]?.transactionId ??
-    raw?.payments?.[0]?.id ??
-    raw?.payments?.[0]?.chargeId ??
-    raw?.payments?.[0]?.providerTransactionId ??
-    raw?.payments?.[0]?.gatewayTransactionId ??
-    raw?.transactions?.[0]?.transactionId ??
-    raw?.transactions?.[0]?.id ??
-    raw?.transactions?.[0]?.paymentId ??
-    raw?.transactions?.[0]?.providerTransactionId ??
-    raw?.transactions?.[0]?.providerPaymentId ??
+    bestPayment?.paymentId ??
+    bestPayment?.transactionId ??
+    bestPayment?.id ??
+    bestPayment?.chargeId ??
+    bestPayment?.providerTransactionId ??
+    bestPayment?.gatewayTransactionId ??
+    bestTx?.transactionId ??
+    bestTx?.id ??
+    bestTx?.paymentId ??
+    bestTx?.providerTransactionId ??
+    bestTx?.providerPaymentId ??
     null
   );
 }
@@ -717,7 +749,13 @@ function pickPaymentFromOrderTransactions(orderTx: any) {
     orderTransactions?.payment ??
     null;
   if (Array.isArray(paymentsCandidate)) {
-    return paymentsCandidate[0] ?? null;
+    // Prioritize payments with valid status (APPROVED, COMPLETED, REFUNDED)
+    // over pending ones (PENDING_MERCHANT)
+    const validStatuses = ["APPROVED", "COMPLETED", "REFUNDED"];
+    const validPayment = paymentsCandidate.find(
+      (p: any) => validStatuses.includes(p?.regularPaymentDetails?.status)
+    );
+    return validPayment ?? paymentsCandidate[0] ?? null;
   }
   return paymentsCandidate;
 }
