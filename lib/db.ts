@@ -525,6 +525,73 @@ export async function listRecentOrdersForPeriodForSite(
   return result.rows;
 }
 
+export async function listPaginatedOrdersForSite(
+  siteId: string,
+  limit = 20,
+  offset = 0,
+  startIso: string | null = null,
+  endIso: string | null = null
+) {
+  // Count total
+  const countResult = startIso && endIso
+    ? await sql`
+        select count(*) as total
+        from orders
+        where site_id = ${siteId}
+          and (status is null or lower(status) not like 'archiv%')
+          and coalesce(raw->>'archived', 'false') <> 'true'
+          and coalesce(raw->>'isArchived', 'false') <> 'true'
+          and raw->>'archivedAt' is null
+          and raw->>'archivedDate' is null
+          and raw->>'archiveDate' is null
+          and created_at between ${startIso} and ${endIso};
+      `
+    : await sql`
+        select count(*) as total
+        from orders
+        where site_id = ${siteId}
+          and (status is null or lower(status) not like 'archiv%')
+          and coalesce(raw->>'archived', 'false') <> 'true'
+          and coalesce(raw->>'isArchived', 'false') <> 'true'
+          and raw->>'archivedAt' is null
+          and raw->>'archivedDate' is null
+          and raw->>'archiveDate' is null;
+      `;
+  const total = Number(countResult.rows[0]?.total || 0);
+
+  // Get paginated results
+  const ordersResult = startIso && endIso
+    ? await sql`
+        select id, number, payment_status, status, created_at, paid_at, total, currency, customer_name, customer_email, raw, source
+        from orders
+        where site_id = ${siteId}
+          and (status is null or lower(status) not like 'archiv%')
+          and coalesce(raw->>'archived', 'false') <> 'true'
+          and coalesce(raw->>'isArchived', 'false') <> 'true'
+          and raw->>'archivedAt' is null
+          and raw->>'archivedDate' is null
+          and raw->>'archiveDate' is null
+          and created_at between ${startIso} and ${endIso}
+        order by created_at desc nulls last
+        limit ${limit} offset ${offset};
+      `
+    : await sql`
+        select id, number, payment_status, status, created_at, paid_at, total, currency, customer_name, customer_email, raw, source
+        from orders
+        where site_id = ${siteId}
+          and (status is null or lower(status) not like 'archiv%')
+          and coalesce(raw->>'archived', 'false') <> 'true'
+          and coalesce(raw->>'isArchived', 'false') <> 'true'
+          and raw->>'archivedAt' is null
+          and raw->>'archivedDate' is null
+          and raw->>'archiveDate' is null
+        order by created_at desc nulls last
+        limit ${limit} offset ${offset};
+      `;
+
+  return { orders: ordersResult.rows, total };
+}
+
 export async function countOrdersForSite(siteId: string) {
   const result = await sql`
     select count(*) as total

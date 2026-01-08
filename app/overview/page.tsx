@@ -126,7 +126,7 @@ export default async function OverviewPage({
         monthStart.toISOString(),
         monthEnd.toISOString(),
         siteId,
-        8
+        50 // Show more orders (up to 50)
       )
     : [];
   const company = siteId ? await getCompanyBySite(siteId) : null;
@@ -330,12 +330,25 @@ export default async function OverviewPage({
                     <span>{sourceLabel || "—"}</span>
                     <span>
                       {createdAt
-                        ? new Date(createdAt).toLocaleString("bg-BG")
+                        ? new Date(createdAt).toLocaleString("bg-BG", {
+                            timeZone: "Europe/Sofia",
+                          })
                         : "—"}
                     </span>
                   </div>
                 );
               })}
+            </div>
+          )}
+          {displayOrders.length > 0 && (
+            <div style={{ marginTop: "16px", textAlign: "center" }}>
+              <a
+                href={`/orders?month=${monthLabel}`}
+                className="btn-secondary"
+                style={{ display: "inline-block" }}
+              >
+                Виж всички поръчки за {monthLabelText || monthLabel}
+              </a>
             </div>
           )}
         </section>

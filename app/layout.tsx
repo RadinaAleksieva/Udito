@@ -15,6 +15,10 @@ const sourceSans = Source_Sans_3({
 export const metadata: Metadata = {
   title: "UDITO",
   description: "Fiscal receipts and audit export for Wix Stores.",
+  icons: {
+    icon: "/brand/udito-logo.png",
+    apple: "/brand/udito-logo.png",
+  },
 };
 
 export default function RootLayout({
