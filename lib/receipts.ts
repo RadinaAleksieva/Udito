@@ -211,3 +211,41 @@ export async function listReceiptsWithOrdersForPeriodForBusiness(
   `;
   return result.rows;
 }
+
+/**
+ * Get orders with receipts for audit file generation.
+ * IMPORTANT: Only returns orders that have receipts AND were paid in the given period.
+ * The audit file should ONLY contain orders with issued receipts.
+ */
+export async function listOrdersWithReceiptsForAudit(
+  startIso: string,
+  endIso: string,
+  siteId: string
+) {
+  const result = await sql`
+    select
+      orders.id,
+      orders.number,
+      orders.created_at,
+      orders.paid_at,
+      orders.total,
+      orders.currency,
+      orders.customer_name,
+      orders.customer_email,
+      orders.status,
+      orders.payment_status,
+      receipts.id as receipt_id,
+      receipts.issued_at as receipt_issued_at
+    from orders
+    inner join receipts on receipts.order_id = orders.id
+    where orders.site_id = ${siteId}
+      and orders.paid_at between ${startIso} and ${endIso}
+      and orders.payment_status = 'PAID'
+      and (orders.status is null
+        or lower(orders.status) not like 'cancel%')
+      and (orders.status is null
+        or lower(orders.status) not like 'archiv%')
+    order by orders.paid_at asc nulls last;
+  `;
+  return result.rows;
+}

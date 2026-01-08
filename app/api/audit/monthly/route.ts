@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server";
 import { buildAuditXml } from "@/lib/auditXml";
-import {
-  getCompanyBySite,
-  initDb,
-  listOrdersForPeriodForSite,
-} from "@/lib/db";
+import { getCompanyBySite, initDb } from "@/lib/db";
+import { listOrdersWithReceiptsForAudit } from "@/lib/receipts";
 import { getActiveWixToken } from "@/lib/wix-context";
 
 function resolveMonthRange(now = new Date()) {
@@ -60,23 +57,26 @@ export async function GET(request: Request) {
   const token = await getActiveWixToken();
   const siteId = token?.site_id ?? null;
   const company = siteId ? await getCompanyBySite(siteId) : null;
+
+  // IMPORTANT: Audit file ONLY includes orders that have receipts issued
+  // and filters by paid_at date (when payment was received), not created_at
   const rows = siteId
-    ? await listOrdersForPeriodForSite(startIso, endIso, siteId)
+    ? await listOrdersWithReceiptsForAudit(startIso, endIso, siteId)
     : [];
 
   const orders = rows
-    .filter((row: any) => {
-      const statusText = String(row?.status || "").toLowerCase();
-      return !statusText.includes("cancel") && !statusText.includes("archiv");
-    })
     .filter((row) => row?.id && row?.total != null && row?.currency)
     .map((row) => ({
       id: String(row.id),
       number: row.number ? String(row.number) : String(row.id),
-      createdAt: row.created_at
-        ? new Date(row.created_at).toISOString()
-        : startIso,
+      // Use paid_at as the primary date for audit (when payment was received)
+      createdAt: row.paid_at
+        ? new Date(row.paid_at).toISOString()
+        : row.created_at
+          ? new Date(row.created_at).toISOString()
+          : startIso,
       paidAt: row.paid_at ? new Date(row.paid_at).toISOString() : undefined,
+      receiptId: row.receipt_id ? String(row.receipt_id) : undefined,
       totalAmount: Number(row.total) || 0,
       currency: String(row.currency),
       customerName: row.customer_name ? String(row.customer_name) : undefined,

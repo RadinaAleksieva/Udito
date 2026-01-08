@@ -152,22 +152,12 @@ export default function ReceiptSettingsForm() {
 
       <section className="settings-section settings-section--info">
         <div className="settings-section__header">
-          <h3>Важни правила</h3>
+          <h3>Нужда от помощ?</h3>
+          <p>
+            За подробна информация как работят касовите бележки, вижте страницата{" "}
+            <a href="/help#receipts">Как работи UDITO</a>.
+          </p>
         </div>
-        <ul className="info-list">
-          <li>
-            <strong>Продукти с нулева стойност</strong> — не се издава бележка,
-            дори ако поръчката е маркирана като платена.
-          </li>
-          <li>
-            <strong>Връщания и рефънди</strong> — при връщане на продукт се издава
-            отрицателна (сторнираща) бележка автоматично.
-          </li>
-          <li>
-            <strong>Стари поръчки</strong> — не може да се издават бележки за
-            поръчки, направени преди регистрацията на магазина в системата.
-          </li>
-        </ul>
       </section>
     </form>
   );

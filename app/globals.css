@@ -889,6 +889,136 @@ main {
   color: var(--ink);
 }
 
+.help-nav {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.help-nav a {
+  color: var(--blue);
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+  font-weight: 600;
+}
+
+.help-section {
+  margin-top: 48px;
+  padding: 28px;
+  background: #fff;
+  border-radius: 20px;
+  border: 1px solid rgba(10, 30, 63, 0.08);
+}
+
+.help-section h2 {
+  margin: 0 0 20px;
+  font-size: 26px;
+}
+
+.help-section h3 {
+  margin: 24px 0 12px;
+  font-size: 18px;
+}
+
+.help-section h3:first-of-type {
+  margin-top: 16px;
+}
+
+.help-content {
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+  line-height: 1.7;
+}
+
+.help-content p {
+  margin: 0 0 16px;
+}
+
+.help-content ul {
+  margin: 0 0 16px;
+  padding-left: 24px;
+}
+
+.help-content li {
+  margin-bottom: 8px;
+}
+
+.help-content a {
+  color: var(--blue);
+  font-weight: 600;
+}
+
+.help-note {
+  background: rgba(230, 240, 255, 0.6);
+  border-left: 4px solid var(--blue);
+  padding: 16px;
+  border-radius: 8px;
+  margin: 20px 0;
+}
+
+.help-example {
+  background: rgba(255, 243, 224, 0.6);
+  border-left: 4px solid var(--accent);
+  padding: 16px;
+  border-radius: 8px;
+  margin: 20px 0;
+}
+
+.help-faq {
+  margin-bottom: 24px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid rgba(10, 30, 63, 0.08);
+}
+
+.help-faq:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.help-faq h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.help-faq p {
+  margin: 0;
+  color: #3a4a62;
+}
+
+.policy-content {
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+  line-height: 1.7;
+}
+
+.policy-content h2 {
+  margin: 32px 0 16px;
+  font-size: 22px;
+}
+
+.policy-content h2:first-of-type {
+  margin-top: 0;
+}
+
+.policy-content p {
+  margin: 0 0 16px;
+}
+
+.policy-content ul {
+  margin: 0 0 16px;
+  padding-left: 24px;
+}
+
+.policy-content li {
+  margin-bottom: 8px;
+}
+
+.policy-meta {
+  font-size: 14px;
+  color: #51607a;
+  margin-bottom: 24px;
+}
+
 @media (max-width: 720px) {
   .nav {
     flex-direction: column;
@@ -916,5 +1046,9 @@ main {
   .section-header {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .help-section {
+    padding: 20px;
   }
 }

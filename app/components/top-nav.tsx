@@ -4,8 +4,8 @@ const links = [
   { href: "/overview", label: "Общ преглед" },
   { href: "/orders", label: "Поръчки" },
   { href: "/receipts", label: "Касови бележки" },
-  { href: "/audit", label: "Одиторски файл" },
   { href: "/settings", label: "Настройки" },
+  { href: "/help", label: "Помощ" },
 ];
 
 export default async function TopNav({ title }: { title: string }) {
