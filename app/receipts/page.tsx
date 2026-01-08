@@ -146,7 +146,12 @@ export default async function ReceiptsPage({
       <TopNav title="Касови бележки" />
       <div className="container">
         <section className="orders">
-          <h2>Касови бележки</h2>
+          <div className="section-header">
+            <h2>Касови бележки</h2>
+            <a href="/receipts/settings" className="btn-secondary">
+              Настройки
+            </a>
+          </div>
           <MonthFilter
             value={monthValue}
             options={monthOptions}

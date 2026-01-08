@@ -65,6 +65,8 @@ export type CompanyProfile = {
   bankName: string | null;
   mol: string | null;
   receiptTemplate: string | null;
+  receiptNumberStart?: number | null;
+  codReceiptsEnabled?: boolean | null;
 };
 
 export async function initDb() {
@@ -280,6 +282,10 @@ export async function initDb() {
     on companies (business_id)
     where business_id is not null;
   `;
+
+  // Receipt settings migrations
+  await sql`alter table companies add column if not exists receipt_number_start bigint;`;
+  await sql`alter table companies add column if not exists cod_receipts_enabled boolean default false;`;
 
   await sql`
     create unique index if not exists store_connections_site_id_key
@@ -997,6 +1003,8 @@ export async function getCompanyBySite(siteId: string) {
       bank_name,
       mol,
       receipt_template,
+      receipt_number_start,
+      cod_receipts_enabled,
       updated_at
     from companies
     where site_id = ${siteId}
@@ -1445,4 +1453,27 @@ export async function updateOrderTransactionRef(orderId: string, transactionRef:
         updated_at = now()
     where id = ${orderId};
   `;
+}
+
+export async function updateReceiptSettings(
+  siteId: string,
+  settings: { receiptNumberStart?: number | null; codReceiptsEnabled?: boolean | null }
+) {
+  await sql`
+    update companies
+    set receipt_number_start = ${settings.receiptNumberStart ?? null},
+        cod_receipts_enabled = ${settings.codReceiptsEnabled ?? false},
+        updated_at = now()
+    where site_id = ${siteId};
+  `;
+}
+
+export async function getReceiptSettings(siteId: string) {
+  const result = await sql`
+    select receipt_number_start, cod_receipts_enabled
+    from companies
+    where site_id = ${siteId}
+    limit 1;
+  `;
+  return result.rows[0] ?? null;
 }

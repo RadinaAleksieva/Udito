@@ -806,6 +806,89 @@ main {
   grid-template-columns: 1.2fr 1.4fr 1.4fr 1fr 1.3fr 1fr 1fr;
 }
 
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.section-header h2 {
+  margin: 0;
+}
+
+.settings-section {
+  padding: 20px;
+  border-radius: 16px;
+  border: 1px solid rgba(10, 30, 63, 0.08);
+  background: rgba(255, 255, 255, 0.9);
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+}
+
+.settings-section--info {
+  background: rgba(230, 240, 255, 0.5);
+  border-color: rgba(31, 92, 255, 0.15);
+}
+
+.settings-section__header {
+  margin-bottom: 16px;
+}
+
+.settings-section__header h3 {
+  margin: 0 0 6px;
+  font-size: 18px;
+  font-family: "Fraunces", "Georgia", serif;
+}
+
+.settings-section__header p {
+  margin: 0;
+  color: #51607a;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.toggle-option {
+  display: grid;
+  gap: 8px;
+}
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.toggle-label input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--blue);
+  cursor: pointer;
+}
+
+.toggle-text {
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.info-list {
+  margin: 0;
+  padding: 0 0 0 20px;
+  display: grid;
+  gap: 10px;
+}
+
+.info-list li {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #3a4a62;
+}
+
+.info-list li strong {
+  color: var(--ink);
+}
+
 @media (max-width: 720px) {
   .nav {
     flex-direction: column;
@@ -828,5 +911,10 @@ main {
   .orders-row span:nth-child(5),
   .orders-row span:nth-child(6) {
     display: none;
+  }
+
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
