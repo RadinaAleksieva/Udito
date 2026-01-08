@@ -107,11 +107,17 @@ raw jsonb                          -- пълни данни от Wix
 vercel --prod
 ```
 
+**Note:** Free tier има лимит 100 deployments/day. Ако получиш грешка "Resource is limited", изчакай посочените минути.
+
 ### Environment Variables (Vercel)
 - `POSTGRES_URL` - Vercel Postgres connection string
 - `WIX_APP_ID` - Wix app ID
 - `WIX_APP_SECRET` - Wix app secret
 - `WIX_APP_PUBLIC_KEY` - за webhook verification
+
+### GitHub → Vercel
+GitHub repo: https://github.com/RadinaAleksieva/Udito
+Vercel project: `udito` (linked to this repo)
 
 ---
 
@@ -173,6 +179,8 @@ Production: https://udito.vercel.app"
 6. Renamed "касови бележки" to "електронни бележки" everywhere
 7. Added payment date (paidAt) capture from webhook event timestamp
 8. Only issue receipts for orders paid >= 2026-01-01
+9. **Fixed unique constraint** - now allows both sale and refund receipt per order
+10. Database migration drops old `order_id` unique constraint, adds `(order_id, type)` unique index
 
 ---
 
