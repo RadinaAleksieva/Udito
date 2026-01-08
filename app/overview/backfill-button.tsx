@@ -15,13 +15,14 @@ export default function BackfillButton() {
     setState({ status: "loading", total: 0, pages: 0 });
     let totalSynced = 0;
     let totalPages = 0;
-    let cursor: string | null = null;
+    let currentOffset = 0;
+    let hasMoreData = true;
     let isFirstRun = true;
     let consecutiveErrors = 0;
 
     try {
-      // Keep syncing until no more cursor (all orders synced)
-      do {
+      // Keep syncing until no more data (all orders synced)
+      while (hasMoreData) {
         const params = new URLSearchParams({
           limit: "50", // Larger batch - fast sync doesn't do per-order API calls
           maxPages: "5", // Multiple pages per request
@@ -30,9 +31,8 @@ export default function BackfillButton() {
         if (isFirstRun) {
           params.set("reset", "1"); // Reset on first run
           isFirstRun = false;
-        }
-        if (cursor) {
-          params.set("cursor", cursor);
+        } else {
+          params.set("offset", String(currentOffset));
         }
 
         try {
@@ -48,15 +48,8 @@ export default function BackfillButton() {
 
           totalSynced += Number(data.total || 0);
           totalPages += Number(data.pages || 0);
-          const newCursor = data.cursor ?? null;
-
-          // CRITICAL: Detect repeated cursor (Wix API returns same cursor when no more data)
-          if (newCursor && newCursor === cursor) {
-            console.log("Detected repeated cursor - stopping sync");
-            cursor = null;
-            break;
-          }
-          cursor = newCursor;
+          currentOffset = Number(data.offset || currentOffset);
+          hasMoreData = Boolean(data.hasMore);
           consecutiveErrors = 0; // Reset error count on success
 
           setState({ status: "loading", total: totalSynced, pages: totalPages });
@@ -65,16 +58,16 @@ export default function BackfillButton() {
           if (consecutiveErrors >= 3) {
             throw error; // Give up after 3 consecutive errors
           }
-          // Retry with same cursor after a short delay
+          // Retry after a short delay
           await new Promise((resolve) => setTimeout(resolve, 1000));
           continue;
         }
 
         // Small delay between requests to be kind to the server
-        if (cursor) {
+        if (hasMoreData) {
           await new Promise((resolve) => setTimeout(resolve, 200));
         }
-      } while (cursor);
+      }
 
       setState({ status: "ok", total: totalSynced, pages: totalPages });
     } catch (error) {

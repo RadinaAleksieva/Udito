@@ -187,6 +187,7 @@ export async function queryPaidOrders(options: {
 export async function queryOrders(options: {
   startDateIso: string;
   cursor?: string | null;
+  offset?: number | null;
   limit?: number;
   siteId?: string | null;
   instanceId?: string | null;
@@ -236,7 +237,8 @@ export async function queryOrders(options: {
         sort: [{ fieldName: "createdDate", order: "ASC" }], // ASC required for cursor pagination to work
         paging: {
           limit,
-          cursor: options.cursor ?? undefined,
+          // Use offset pagination - cursor pagination doesn't work reliably with Wix API
+          ...(options.offset != null ? { offset: options.offset } : {}),
         },
       },
     }),
@@ -262,6 +264,17 @@ export async function queryOrders(options: {
     ordersCount: orders.length,
   }));
 
+  // Extract pagination metadata
+  const metadata = (data as any).metadata ?? {};
+  const total = metadata.total ?? null;
+  const currentOffset = metadata.offset ?? options.offset ?? 0;
+  const count = metadata.count ?? orders.length;
+
+  // Calculate next offset for pagination
+  const nextOffset = currentOffset + count;
+  const hasMore = total != null ? nextOffset < total : count === options.limit;
+
+  // Keep cursor extraction for backward compatibility (though it doesn't work reliably)
   const cursor =
     (data.metadata as any)?.cursors?.next ??
     data.metadata?.paging?.cursor ??
@@ -276,7 +289,7 @@ export async function queryOrders(options: {
     data.cursor ??
     null;
 
-  return { orders, cursor };
+  return { orders, cursor, total, offset: currentOffset, nextOffset, hasMore };
 }
 
 export async function getAppInstanceDetails(params: {

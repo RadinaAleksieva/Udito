@@ -50,12 +50,16 @@ export async function POST(request: Request) {
 
     // Get existing sync state
     const syncState = siteId ? await getSyncState(siteId) : null;
-    let cursor: string | null = cursorParam ?? (reset ? null : syncState?.cursor ?? null);
+    // Use offset-based pagination (cursor doesn't work reliably with Wix API)
+    const offsetParam = url.searchParams.get("offset");
+    let currentOffset: number = offsetParam != null
+      ? Number(offsetParam)
+      : (reset ? 0 : (syncState?.cursor ? Number(syncState.cursor) : 0) || 0);
 
     if (siteId) {
       await upsertSyncState({
         siteId,
-        cursor: reset ? null : cursor,
+        cursor: reset ? null : String(currentOffset),
         status: "running",
         lastError: null,
       });
@@ -63,13 +67,14 @@ export async function POST(request: Request) {
 
     let total = 0;
     let pages = 0;
-    let hasMore = true;
+    let moreDataAvailable = true;
+    let wixTotal: number | null = null;
 
     // Fetch and store orders in bulk - NO individual enrichment calls
-    while (hasMore && pages < maxPages) {
+    while (moreDataAvailable && pages < maxPages) {
       const page = await queryOrders({
         startDateIso,
-        cursor,
+        offset: currentOffset,
         limit,
         siteId,
         instanceId,
@@ -77,13 +82,11 @@ export async function POST(request: Request) {
       });
 
       const orders = page.orders || [];
+      wixTotal = page.total;
 
-      // CRITICAL: Detect if Wix returns the same cursor we sent (indicates end of pagination)
-      // Wix API sometimes returns the same cursor instead of null when there's no more data
-      if (page.cursor && page.cursor === cursor) {
-        console.log("Detected repeated cursor - end of pagination");
-        cursor = null;
-        hasMore = false;
+      // No more data if we got fewer orders than requested
+      if (orders.length === 0) {
+        moreDataAvailable = false;
         break;
       }
 
@@ -126,17 +129,23 @@ export async function POST(request: Request) {
         total += 1;
       }
 
-      cursor = page.cursor ?? null;
+      // Update offset for next page
+      currentOffset += orders.length;
       pages += 1;
-      hasMore = Boolean(cursor) && orders.length > 0;
+
+      // Check if there's more data
+      moreDataAvailable = page.hasMore && orders.length === limit;
     }
+
+    // Determine if sync is complete
+    const syncComplete = wixTotal != null ? currentOffset >= wixTotal : !moreDataAvailable;
 
     // Update sync state
     if (siteId) {
       await upsertSyncState({
         siteId,
-        cursor,
-        status: cursor ? "partial" : "done",
+        cursor: syncComplete ? null : String(currentOffset),
+        status: syncComplete ? "done" : "partial",
         lastError: null,
       });
     }
@@ -145,9 +154,10 @@ export async function POST(request: Request) {
       ok: true,
       total,
       pages,
-      cursor,
+      offset: currentOffset,
+      wixTotal,
       startDateIso,
-      hasMore: Boolean(cursor),
+      hasMore: !syncComplete,
     });
   } catch (error) {
     console.error("Fast sync failed", error);
