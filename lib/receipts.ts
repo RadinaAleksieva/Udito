@@ -10,6 +10,20 @@ export async function issueReceipt(params: {
     params.businessId ??
     null;
   const issuedAt = params.issuedAt ? new Date(params.issuedAt).toISOString() : null;
+
+  // Check if sale receipt already exists for this order
+  const existing = await sql`
+    select id from receipts
+    where order_id = ${params.orderId}
+      and type = 'sale'
+    limit 1;
+  `;
+
+  if (existing.rows.length > 0) {
+    // Sale receipt already exists, don't create duplicate
+    return;
+  }
+
   await sql`
     insert into receipts (order_id, business_id, issued_at, status, payload, type)
     values (
@@ -19,8 +33,7 @@ export async function issueReceipt(params: {
       ${"issued"},
       ${JSON.stringify(params.payload)},
       ${"sale"}
-    )
-    on conflict (order_id) do nothing;
+    );
   `;
 }
 

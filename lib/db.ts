@@ -138,7 +138,7 @@ export async function initDb() {
     create table if not exists receipts (
       id bigserial primary key,
       business_id text,
-      order_id text unique,
+      order_id text,
       issued_at timestamptz default now(),
       status text,
       payload jsonb
@@ -150,8 +150,12 @@ export async function initDb() {
   await sql`alter table receipts add column if not exists reference_receipt_id bigint;`;
   await sql`alter table receipts add column if not exists refund_amount numeric;`;
 
-  // Drop old unique constraint and create new one allowing one sale and one refund per order
-  // Note: We'll use a unique index instead to handle the type column
+  // Drop old unique constraint on order_id (if exists) to allow both sale and refund for same order
+  await sql`
+    alter table receipts drop constraint if exists receipts_order_id_key;
+  `;
+
+  // Create unique index on (order_id, type) to allow one sale and one refund per order
   await sql`
     create unique index if not exists receipts_order_type_idx
     on receipts (order_id, type)
