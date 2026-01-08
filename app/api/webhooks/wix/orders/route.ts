@@ -125,6 +125,18 @@ async function handleOrderEvent(event: any) {
         };
       }
     }
+    // Extract paymentSummary from orderTransactions if we have them but no paymentSummary
+    if (orderRaw?.orderTransactions?.payments && !paymentSummary) {
+      const payments = orderRaw.orderTransactions.payments;
+      if (Array.isArray(payments) && payments.length > 0) {
+        const validStatuses = ['APPROVED', 'COMPLETED', 'REFUNDED'];
+        const bestPayment = payments.find(
+          (p: any) => validStatuses.includes(p?.regularPaymentDetails?.status)
+        ) || payments[0];
+        const summary = extractPaymentSummaryFromPayment(bestPayment);
+        if (summary) paymentSummary = summary;
+      }
+    }
     if (paymentRef && !transactionRef) {
       transactionRef = paymentRef;
     }
