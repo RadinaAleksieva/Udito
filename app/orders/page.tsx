@@ -13,6 +13,7 @@ import {
   deriveOrderNumber,
   isArchivedOrder,
 } from "@/lib/order-display";
+import { extractTransactionRef } from "@/lib/wix";
 
 export const dynamic = "force-dynamic";
 
@@ -417,13 +418,7 @@ function extractPayment(raw: any, order: OrderRow) {
   const summary = raw?.udito?.paymentSummary ?? null;
   return {
     provider: payment?.name ?? payment?.methodType ?? "—",
-    transactionId:
-      raw?.udito?.transactionRef ??
-      payment?.transactionId ??
-      raw?.payment?.transactionId ??
-      raw?.payment?.id ??
-      raw?.payments?.[0]?.id ??
-      null,
+    transactionId: extractTransactionRef(raw),
     cardProvider:
       payment?.cardProvider ??
       raw?.payment?.cardProvider ??
