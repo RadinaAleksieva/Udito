@@ -15,6 +15,7 @@ import {
   fetchPaymentRecordForOrder,
   fetchOrderDetails,
   fetchTransactionRefForOrder,
+  fetchOrderTransactionsForOrder,
   needsOrderEnrichment,
   pickOrderFields,
 } from "@/lib/wix";
