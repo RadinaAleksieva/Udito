@@ -93,6 +93,11 @@ export async function initDb() {
     );
   `;
 
+  // Add transaction_ref column if it doesn't exist (migration)
+  await sql`
+    alter table orders add column if not exists transaction_ref text;
+  `;
+
   await sql`
     create table if not exists backfill_runs (
       id bigserial primary key,
