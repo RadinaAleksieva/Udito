@@ -1027,12 +1027,10 @@ main {
 
 .receipt-type-refund {
   color: #d32f2f;
-  font-weight: 600;
 }
 
 .receipt-amount-negative {
   color: #d32f2f;
-  font-weight: 600;
 }
 
 .refund-ref {
