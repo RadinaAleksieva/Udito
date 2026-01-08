@@ -189,15 +189,15 @@ export default function CompanyForm() {
           />
         </label>
         <label>
-          Уникален код на магазина
+          Уникален код на магазина (в НАП)
           <input
             value={form.fiscalStoreId}
             onChange={(event) => updateField("fiscalStoreId", event.target.value)}
-            placeholder="XXXXXXXX"
+            placeholder="RF0000000"
             required
           />
           <span className="input-hint">
-            Задължително за издаване на касови бележки.
+            Задължително за издаване на електронни бележки.
           </span>
         </label>
         <label>
@@ -213,7 +213,7 @@ export default function CompanyForm() {
           <input
             value={form.addressLine1}
             onChange={(event) => updateField("addressLine1", event.target.value)}
-            placeholder="в НАП: адрес - ул. Примерна 10"
+            placeholder="ул. Примерна 10"
           />
         </label>
         <label>
