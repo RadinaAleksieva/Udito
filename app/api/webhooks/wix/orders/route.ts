@@ -367,6 +367,8 @@ export async function POST(request: NextRequest) {
   await initDb();
 
   // Try to parse the body to see what type of event this is
+  // And manually handle events if SDK doesn't trigger handlers properly
+  let shouldManuallyHandle = false;
   try {
     const parsed = JSON.parse(rawBody);
     const eventType = parsed?.metadata?.eventType ?? parsed?.type ?? "unknown";
@@ -377,12 +379,20 @@ export async function POST(request: NextRequest) {
     // Check if this is an order created event
     if (eventType.includes("created") || eventType.includes("CREATE")) {
       console.log("🆕 This is an ORDER CREATED event!");
+      shouldManuallyHandle = true;
+
+      // Manually call handleOrderEvent for order created events
+      // because Wix SDK may not trigger onOrderCreated properly
+      console.log("⚠️ Manually handling Order Created event...");
+      await handleOrderEvent(parsed);
+      console.log("✅ Manual handling complete");
     }
     if (eventType.includes("payment") || eventType.includes("PAYMENT")) {
       console.log("💳 This is a PAYMENT event!");
     }
   } catch (e) {
     console.log("⚠️ Could not parse webhook body as JSON");
+    console.error("Parse error:", e);
   }
 
   try {
