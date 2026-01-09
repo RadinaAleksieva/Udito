@@ -36,6 +36,11 @@ const wixClient =
     : null;
 
 async function handleOrderEvent(event: any) {
+  console.log("🎯 handleOrderEvent called!");
+  console.log("Event type:", event?.metadata?.eventType ?? event?.type ?? "unknown");
+  console.log("Event data keys:", Object.keys(event?.data ?? {}));
+  console.log("Event metadata:", JSON.stringify(event?.metadata ?? {}, null, 2));
+
   const raw = event?.data ?? {};
   const rawOrder = raw?.order ?? raw;
   const paymentStatus = raw?.paymentStatus ?? rawOrder?.paymentStatus ?? null;
@@ -308,8 +313,12 @@ async function handleOrderEvent(event: any) {
 }
 
 if (wixClient) {
+  console.log("🔧 Registering webhook handlers...");
   wixClient.orders.onOrderCreated(handleOrderEvent);
   wixClient.orders.onOrderPaymentStatusUpdated(handleOrderEvent);
+  console.log("✅ Webhook handlers registered");
+} else {
+  console.error("❌ wixClient not initialized - webhooks will not work!");
 }
 
 export async function POST(request: NextRequest) {
@@ -330,6 +339,16 @@ export async function POST(request: NextRequest) {
   }
 
   await initDb();
+
+  // Try to parse the body to see what type of event this is
+  try {
+    const parsed = JSON.parse(rawBody);
+    console.log("📦 Webhook event type:", parsed?.metadata?.eventType ?? parsed?.type ?? "unknown");
+    console.log("📦 Webhook entity:", parsed?.metadata?.entityId ?? parsed?.entityId ?? "unknown");
+  } catch (e) {
+    console.log("⚠️ Could not parse webhook body as JSON");
+  }
+
   try {
     console.log("Processing webhook with Wix SDK...");
     console.log("APP_ID length:", APP_ID.length);
