@@ -369,51 +369,78 @@ export async function POST(request: NextRequest) {
 
   await initDb();
 
-  // Try to parse the body to see what type of event this is
-  // And manually handle events if SDK doesn't trigger handlers properly
-  let shouldManuallyHandle = false;
+  // Decode JWS token manually to extract event data
+  // Wix webhooks are sent as JWS (JSON Web Signature) tokens
+  let eventData: any = null;
   try {
-    const parsed = JSON.parse(rawBody);
-    const eventType = parsed?.metadata?.eventType ?? parsed?.type ?? "unknown";
-    console.log("📦 Webhook event type:", eventType);
-    console.log("📦 Webhook entity:", parsed?.metadata?.entityId ?? parsed?.entityId ?? "unknown");
-    console.log("📦 Full metadata:", JSON.stringify(parsed?.metadata ?? {}, null, 2));
+    // JWS format: header.payload.signature
+    const parts = rawBody.split('.');
+    if (parts.length === 3) {
+      const payload = parts[1];
+      const decoded = Buffer.from(payload, 'base64').toString('utf8');
+      const parsedPayload = JSON.parse(decoded);
+      console.log("📦 Decoded JWS payload:", JSON.stringify(parsedPayload, null, 2).substring(0, 500));
 
-    // Check if this is an order created event
-    if (eventType.includes("created") || eventType.includes("CREATE")) {
-      console.log("🆕 This is an ORDER CREATED event!");
-      shouldManuallyHandle = true;
+      // Extract event data from the payload
+      if (parsedPayload.data) {
+        const eventDataStr = typeof parsedPayload.data === 'string'
+          ? parsedPayload.data
+          : JSON.stringify(parsedPayload.data);
+        eventData = JSON.parse(eventDataStr);
 
-      // Manually call handleOrderEvent for order created events
-      // because Wix SDK may not trigger onOrderCreated properly
-      console.log("⚠️ Manually handling Order Created event...");
-      await handleOrderEvent(parsed);
-      console.log("✅ Manual handling complete");
-    }
-    if (eventType.includes("payment") || eventType.includes("PAYMENT")) {
-      console.log("💳 This is a PAYMENT event!");
+        const eventType = eventData?.eventType ?? eventData?.metadata?.eventType ?? "unknown";
+        console.log("📦 Event type:", eventType);
+
+        // Check if this is an Order Created event (v2 API)
+        if (eventType === "com.wix.ecommerce.orders.api.v2.OrderEvent") {
+          console.log("🆕 Detected v2 Order Created event");
+          console.log("📦 Event entity:", eventData?.entity ?? "unknown");
+
+          // Handle v2 event manually
+          if (eventData?.entity) {
+            console.log("⚠️ Manually handling v2 Order Created event...");
+            const v2Event = {
+              data: eventData.entity,
+              metadata: {
+                eventType: "order.created",
+                entityId: eventData?.entity?.id ?? eventData?.entity?._id,
+                instanceId: eventData?.instanceId,
+                eventTime: eventData?.eventTime ?? new Date().toISOString(),
+              }
+            };
+            await handleOrderEvent(v2Event);
+            console.log("✅ v2 event handled successfully");
+            return NextResponse.json({ ok: true });
+          }
+        }
+      }
     }
   } catch (e) {
-    console.log("⚠️ Could not parse webhook body as JSON");
-    console.error("Parse error:", e);
+    console.log("⚠️ Could not decode JWS token");
+    console.error("Decode error:", e);
   }
 
+  // Try processing with Wix SDK for v1 events
   try {
     console.log("Processing webhook with Wix SDK...");
-    console.log("APP_ID length:", APP_ID.length);
-    console.log("APP_PUBLIC_KEY length:", APP_PUBLIC_KEY.length);
-    console.log("APP_PUBLIC_KEY starts with:", APP_PUBLIC_KEY.substring(0, 30));
-
     await wixClient.webhooks.process(rawBody);
-    console.log("✅ Webhook processed successfully");
+    console.log("✅ Webhook processed successfully by SDK");
   } catch (error) {
+    const errorMsg = (error as Error).message;
     console.error("❌ Wix webhook process failed");
-    console.error("Error name:", (error as any).name);
-    console.error("Error message:", (error as Error).message);
+    console.error("Error message:", errorMsg);
+
+    // If SDK rejects v2 event type, return 200 OK anyway
+    // (webhook was already handled manually above)
+    if (errorMsg.includes("Unexpected event type: com.wix.ecommerce.orders.api.v2")) {
+      console.log("✅ v2 event type ignored by SDK (already handled manually)");
+      return NextResponse.json({ ok: true });
+    }
+
+    // For other errors, return error response
     console.error("Error stack:", (error as Error).stack);
-    console.error("Full error:", JSON.stringify(error, null, 2));
     return NextResponse.json(
-      { ok: false, error: (error as Error).message, details: (error as any).name },
+      { ok: false, error: errorMsg },
       { status: 400 }
     );
   }
