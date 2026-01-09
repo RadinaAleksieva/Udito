@@ -36,14 +36,15 @@ const wixClient =
     : null;
 
 async function handleOrderEvent(event: any) {
-  console.log("🎯 handleOrderEvent called!");
-  console.log("Event type:", event?.metadata?.eventType ?? event?.type ?? "unknown");
-  console.log("Event data keys:", Object.keys(event?.data ?? {}));
-  console.log("Event metadata:", JSON.stringify(event?.metadata ?? {}, null, 2));
+  try {
+    console.log("🎯 handleOrderEvent called!");
+    console.log("Event type:", event?.metadata?.eventType ?? event?.type ?? "unknown");
+    console.log("Event data keys:", Object.keys(event?.data ?? {}));
+    console.log("Event metadata:", JSON.stringify(event?.metadata ?? {}, null, 2));
 
-  const raw = event?.data ?? {};
-  const rawOrder = raw?.order ?? raw;
-  const paymentStatus = raw?.paymentStatus ?? rawOrder?.paymentStatus ?? null;
+    const raw = event?.data ?? {};
+    const rawOrder = raw?.order ?? raw;
+    const paymentStatus = raw?.paymentStatus ?? rawOrder?.paymentStatus ?? null;
 
   // Get event timestamp - this is when the payment status actually changed
   const eventTimestamp = event?.metadata?.eventTime ??
@@ -309,6 +310,13 @@ async function handleOrderEvent(event: any) {
     } else {
       console.warn("No original sale receipt found for refund, order:", mapped.number);
     }
+  }
+  } catch (error) {
+    console.error("❌ Error in handleOrderEvent:");
+    console.error("Error message:", (error as Error).message);
+    console.error("Error stack:", (error as Error).stack);
+    console.error("Full error:", JSON.stringify(error, null, 2));
+    throw error; // Re-throw to let webhook handler know it failed
   }
 }
 
