@@ -22,9 +22,7 @@ import {
 import { getAppInstanceDetails } from "@/lib/wix";
 
 const APP_ID = process.env.WIX_APP_ID || "";
-const APP_PUBLIC_KEY_RAW = process.env.WIX_APP_PUBLIC_KEY || "";
-// Replace literal \n with actual newlines for PEM format
-const APP_PUBLIC_KEY = APP_PUBLIC_KEY_RAW.replace(/\\n/g, '\n');
+const APP_PUBLIC_KEY = process.env.WIX_APP_PUBLIC_KEY || "";
 
 const wixClient =
   APP_ID && APP_PUBLIC_KEY

@@ -8,23 +8,24 @@ envContent.split('\n').forEach(line => {
   if (match) process.env[match[1]] = match[2];
 });
 
-const SITE_ID = '6240f8a5-7af4-4fdf-96c1-d1f22b205408';
-
-async function checkOrders() {
-  console.log('Latest 10 orders in database:');
+async function checkOrder() {
   const result = await sql`
-    SELECT number, status, payment_status, created_at, updated_at
+    SELECT id, number, status, payment_status, created_at, updated_at
     FROM orders
-    WHERE site_id = ${SITE_ID}
-    ORDER BY created_at DESC
-    LIMIT 10
+    WHERE number = '10223'
+    LIMIT 1
   `;
   
-  console.table(result.rows);
+  if (result.rows.length === 0) {
+    console.log('Order 10223 NOT FOUND in database');
+  } else {
+    console.log('Order 10223 found in database:');
+    console.log(JSON.stringify(result.rows[0], null, 2));
+  }
   process.exit(0);
 }
 
-checkOrders().catch(err => {
+checkOrder().catch(err => {
   console.error('Error:', err);
   process.exit(1);
 });
