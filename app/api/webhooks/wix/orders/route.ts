@@ -175,7 +175,9 @@ async function handleOrderEvent(event: any) {
       };
     }
   }
+  console.log("🔄 About to map order...");
   const mapped = orderRaw === baseOrder ? base : pickOrderFields(orderRaw, "webhook");
+  console.log("✅ Order mapped successfully");
 
   console.log("📋 Mapped order:", {
     id: mapped.id,
@@ -186,9 +188,10 @@ async function handleOrderEvent(event: any) {
   });
 
   if (!mapped.id) {
-    console.warn("⚠️ Order has no ID, skipping");
+    console.warn("⚠️ Order has no ID, skipping. Raw order:", JSON.stringify(baseOrder).substring(0, 200));
     return;
   }
+  console.log("✅ Order has ID, continuing...");
 
   if (!mapped.siteId) {
     console.log("🔍 Looking for siteId in event metadata...");
