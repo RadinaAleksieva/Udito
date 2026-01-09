@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { initDb, getWixTokensBySite, upsertOrder } from "@/lib/db";
+import { initDb, getLatestWixTokenForSite, upsertOrder } from "@/lib/db";
 import { pickOrderFields, extractTransactionRef, extractDeliveryMethodFromOrder, fetchTransactionRefForOrder, fetchPaymentRecordForOrder, fetchOrderTransactionsForOrder, extractPaymentSummaryFromPayment } from "@/lib/wix";
 
 export const maxDuration = 300; // 5 minutes for long-running sync
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
 
   try {
     // Get access token for this site
-    const tokens = await getWixTokensBySite(siteId);
+    const tokens = await getLatestWixTokenForSite({ siteId });
 
     if (!tokens || !tokens.access_token) {
       return NextResponse.json(
