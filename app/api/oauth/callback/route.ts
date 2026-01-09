@@ -141,6 +141,18 @@ export async function GET(request: Request) {
     expiresAt,
   });
 
+  // Trigger initial sync of all orders in background
+  if (resolvedSiteId && data.access_token) {
+    console.log("Triggering initial sync for site", resolvedSiteId);
+    fetch(`${appBaseUrl}/api/sync/initial`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ siteId: resolvedSiteId }),
+    }).catch((error) => {
+      console.error("Failed to trigger initial sync:", error);
+    });
+  }
+
   const responseRedirect = data.access_token
     ? NextResponse.redirect(
         `https://www.wix.com/installer/close-window?access_token=${encodeURIComponent(
