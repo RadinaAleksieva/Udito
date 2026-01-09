@@ -97,106 +97,29 @@ export async function POST(request: NextRequest) {
     let synced = 0;
     let errors = 0;
 
-    // Process each order
+    // Process each order - simplified for speed
+    // Note: Only extracting data already in the order object
+    // Payment details enrichment will happen via webhooks or on-demand
     for (const rawOrder of orders) {
       try {
-        const base = pickOrderFields(rawOrder, "webhook");
         let orderRaw: any = rawOrder;
 
-        // Extract transaction ref
-        let transactionRef = extractTransactionRef(orderRaw);
+        // Extract transaction ref from existing data (no API call)
+        const transactionRef = extractTransactionRef(orderRaw);
 
-        // Extract delivery method
-        let deliveryMethod = extractDeliveryMethodFromOrder(orderRaw);
-        if (deliveryMethod) {
+        // Extract delivery method from existing data (no API call)
+        const deliveryMethod = extractDeliveryMethodFromOrder(orderRaw);
+
+        // Add extracted data to udito object if present
+        if (transactionRef || deliveryMethod) {
           orderRaw = {
             ...orderRaw,
             udito: {
               ...(orderRaw.udito ?? {}),
-              deliveryMethod,
+              ...(transactionRef ? { transactionRef } : {}),
+              ...(deliveryMethod ? { deliveryMethod } : {}),
             },
           };
-        }
-
-        // Fetch transaction ref if missing
-        if (base.id && !transactionRef) {
-          transactionRef = await fetchTransactionRefForOrder({
-            orderId: base.id,
-            siteId: base.siteId ?? siteId,
-            instanceId: null,
-          });
-          if (transactionRef) {
-            orderRaw = {
-              ...orderRaw,
-              udito: { ...(orderRaw.udito ?? {}), transactionRef },
-            };
-          }
-        }
-
-        // Fetch payment details
-        if (base.id) {
-          let paymentRef: string | null = null;
-          let paidAt: string | null = null;
-          let paymentSummary = orderRaw?.udito?.paymentSummary ?? null;
-
-          const record = await fetchPaymentRecordForOrder({
-            orderId: base.id,
-            orderNumber: base.number ?? null,
-            siteId: base.siteId ?? siteId,
-            instanceId: null,
-          });
-
-          paymentRef = paymentRef ?? record.transactionRef ?? null;
-          paidAt = paidAt ?? record.paidAt ?? null;
-          paymentSummary = paymentSummary ?? record.paymentSummary ?? null;
-
-          if (record.payment) {
-            orderRaw = { ...orderRaw, payment: record.payment };
-          }
-
-          // Fetch orderTransactions for card details
-          if (!orderRaw?.orderTransactions) {
-            const orderTx = await fetchOrderTransactionsForOrder({
-              orderId: base.id,
-              siteId: base.siteId ?? siteId,
-              instanceId: null,
-            });
-            if (orderTx?.orderTransactions || orderTx?.payments) {
-              orderRaw = {
-                ...orderRaw,
-                orderTransactions: orderTx.orderTransactions ?? { payments: orderTx.payments },
-              };
-            }
-          }
-
-          // Extract paymentSummary from orderTransactions if we have them but no paymentSummary
-          if (orderRaw?.orderTransactions?.payments && !paymentSummary) {
-            const payments = orderRaw.orderTransactions.payments;
-            if (Array.isArray(payments) && payments.length > 0) {
-              const validStatuses = ['APPROVED', 'COMPLETED', 'REFUNDED'];
-              const bestPayment = payments.find(
-                (p: any) => validStatuses.includes(p?.regularPaymentDetails?.status)
-              ) || payments[0];
-              const summary = extractPaymentSummaryFromPayment(bestPayment);
-              if (summary) paymentSummary = summary;
-            }
-          }
-
-          if (paymentRef && !transactionRef) {
-            transactionRef = paymentRef;
-          }
-
-          if (transactionRef || paidAt || paymentSummary) {
-            orderRaw = {
-              ...orderRaw,
-              udito: {
-                ...(orderRaw.udito ?? {}),
-                ...(transactionRef ? { transactionRef } : {}),
-                ...(paidAt ? { paidAt } : {}),
-                ...(paymentSummary ? { paymentSummary } : {}),
-              },
-            };
-          }
         }
 
         const mapped = pickOrderFields(orderRaw, "webhook");
