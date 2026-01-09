@@ -6,26 +6,31 @@ export const maxDuration = 300; // 5 minutes for long-running sync
 
 async function fetchAllOrdersFromWix(accessToken: string, siteId: string) {
   const orders: any[] = [];
-  let cursor: string | undefined;
+  let offset = 0;
   const limit = 100;
 
   while (true) {
-    const queryParams = new URLSearchParams({
-      limit: limit.toString(),
-      ...(cursor ? { cursor } : {}),
-    });
-
     const authHeader = accessToken.startsWith('Bearer ')
       ? accessToken
       : `Bearer ${accessToken}`;
 
     const response = await fetch(
-      `https://www.wixapis.com/ecom/v1/orders?${queryParams.toString()}`,
+      `https://www.wixapis.com/ecom/v1/orders/query`,
       {
+        method: 'POST',
         headers: {
           Authorization: authHeader,
+          "Content-Type": "application/json",
           "wix-site-id": siteId,
         },
+        body: JSON.stringify({
+          query: {
+            paging: {
+              limit,
+              offset,
+            },
+          },
+        }),
       }
     );
 
@@ -49,9 +54,11 @@ async function fetchAllOrdersFromWix(accessToken: string, siteId: string) {
     orders.push(...fetchedOrders);
 
     // Check if there are more pages
-    if (data?.metadata?.cursors?.next) {
-      cursor = data.metadata.cursors.next;
-    } else {
+    offset += fetchedOrders.length;
+
+    // If we got less than the limit, we've reached the end
+    if (fetchedOrders.length < limit) {
+      console.log('Reached end of orders');
       break;
     }
 
