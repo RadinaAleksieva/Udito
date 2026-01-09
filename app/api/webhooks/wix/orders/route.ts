@@ -381,21 +381,31 @@ export async function POST(request: NextRequest) {
       const parsedPayload = JSON.parse(decoded);
       console.log("📦 Decoded JWS payload:", JSON.stringify(parsedPayload, null, 2).substring(0, 500));
 
-      // Extract event data from the payload
+      // Extract event data from the payload (handle triple-nested structure)
       if (parsedPayload.data) {
-        const eventDataStr = typeof parsedPayload.data === 'string'
-          ? parsedPayload.data
-          : JSON.stringify(parsedPayload.data);
-        eventData = JSON.parse(eventDataStr);
+        // First level: parsedPayload.data is a stringified JSON
+        const firstParse = typeof parsedPayload.data === 'string'
+          ? JSON.parse(parsedPayload.data)
+          : parsedPayload.data;
 
+        // Second level: firstParse.data might also be a stringified JSON
+        if (firstParse.data && typeof firstParse.data === 'string') {
+          eventData = JSON.parse(firstParse.data);
+        } else {
+          eventData = firstParse;
+        }
+
+        console.log("📦 Parsed event data keys:", Object.keys(eventData || {}));
         const eventType = eventData?.eventType ?? eventData?.metadata?.eventType ?? "unknown";
+        const entityFqdn = eventData?.entityFqdn ?? "unknown";
+        const slug = eventData?.slug ?? "unknown";
         console.log("📦 Event type:", eventType);
+        console.log("📦 Entity FQDN:", entityFqdn);
+        console.log("📦 Slug:", slug);
 
-        // Check if this is an Order Created event (v2 API)
+        // Check if this is a v2 Order event
         if (eventType === "com.wix.ecommerce.orders.api.v2.OrderEvent") {
           console.log("🆕 Detected v2 Order Created event");
-          console.log("📦 Event entity:", eventData?.entity ?? "unknown");
-
           // Handle v2 event manually
           if (eventData?.entity) {
             console.log("⚠️ Manually handling v2 Order Created event...");
@@ -411,6 +421,48 @@ export async function POST(request: NextRequest) {
             await handleOrderEvent(v2Event);
             console.log("✅ v2 event handled successfully");
             return NextResponse.json({ ok: true });
+          }
+        }
+
+        // Check if this is a v1 Order event (wix.ecom.v1.order)
+        if (entityFqdn === "wix.ecom.v1.order") {
+          console.log("🆕 Detected v1 Order event");
+
+          let orderData = null;
+
+          // For order.created events, data is in .entity
+          if (slug === "created" && eventData.entity) {
+            orderData = eventData.entity;
+            console.log("📦 Extracted order from entity (created)");
+          }
+          // For order.updated events, data is in .updatedEvent.currentEntity
+          else if (slug === "updated" && eventData.updatedEvent?.currentEntity) {
+            orderData = eventData.updatedEvent.currentEntity;
+            console.log("📦 Extracted order from updatedEvent.currentEntity");
+          }
+          // For order.canceled events, data is likely in .entity or similar
+          else if (slug === "canceled" && eventData.entity) {
+            orderData = eventData.entity;
+            console.log("📦 Extracted order from entity (canceled)");
+          }
+
+          if (orderData) {
+            console.log("✅ Found order data, ID:", orderData.id);
+            const v1Event = {
+              data: orderData,
+              metadata: {
+                eventType: `order.${slug}`,
+                entityId: orderData.id ?? eventData.entityId,
+                instanceId: parsedPayload.instanceId ?? eventData.instanceId,
+                eventTime: eventData.eventTime ?? new Date().toISOString(),
+              }
+            };
+            await handleOrderEvent(v1Event);
+            console.log("✅ v1 event handled successfully");
+            return NextResponse.json({ ok: true });
+          } else {
+            console.log("⚠️ Could not extract order data from v1 event");
+            console.log("Event data structure:", JSON.stringify(eventData, null, 2).substring(0, 1000));
           }
         }
       }
