@@ -124,6 +124,11 @@ export async function POST(request: NextRequest) {
 
         const mapped = pickOrderFields(orderRaw, "webhook");
 
+        // Ensure siteId is set (Wix API doesn't include it in order objects)
+        if (!mapped.siteId) {
+          mapped.siteId = siteId;
+        }
+
         // Upsert to database
         await upsertOrder({
           ...mapped,
