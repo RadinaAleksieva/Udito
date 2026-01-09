@@ -26,7 +26,8 @@ async function fetchAllOrdersFromWix(accessToken: string, siteId: string) {
     );
 
     if (!response.ok) {
-      console.error("Failed to fetch orders:", response.status);
+      const errorText = await response.text();
+      console.error("Failed to fetch orders:", response.status, errorText);
       break;
     }
 
@@ -75,6 +76,7 @@ export async function POST(request: NextRequest) {
     }
 
     console.log("Starting initial sync for site", siteId);
+    console.log("Access token format:", tokens.access_token?.substring(0, 20) + "...");
 
     // Fetch all orders from Wix
     const orders = await fetchAllOrdersFromWix(tokens.access_token, siteId);
