@@ -15,11 +15,15 @@ async function fetchAllOrdersFromWix(accessToken: string, siteId: string) {
       ...(cursor ? { cursor } : {}),
     });
 
+    const authHeader = accessToken.startsWith('Bearer ')
+      ? accessToken
+      : `Bearer ${accessToken}`;
+
     const response = await fetch(
       `https://www.wixapis.com/ecom/v1/orders?${queryParams.toString()}`,
       {
         headers: {
-          Authorization: accessToken,
+          Authorization: authHeader,
           "wix-site-id": siteId,
         },
       }
