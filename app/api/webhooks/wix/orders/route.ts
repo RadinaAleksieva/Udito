@@ -322,12 +322,20 @@ export async function POST(request: NextRequest) {
   await initDb();
   try {
     console.log("Processing webhook with Wix SDK...");
+    console.log("APP_ID length:", APP_ID.length);
+    console.log("APP_PUBLIC_KEY length:", APP_PUBLIC_KEY.length);
+    console.log("APP_PUBLIC_KEY starts with:", APP_PUBLIC_KEY.substring(0, 30));
+
     await wixClient.webhooks.process(rawBody);
     console.log("✅ Webhook processed successfully");
   } catch (error) {
-    console.error("❌ Wix webhook process failed", error);
+    console.error("❌ Wix webhook process failed");
+    console.error("Error name:", (error as any).name);
+    console.error("Error message:", (error as Error).message);
+    console.error("Error stack:", (error as Error).stack);
+    console.error("Full error:", JSON.stringify(error, null, 2));
     return NextResponse.json(
-      { ok: false, error: (error as Error).message },
+      { ok: false, error: (error as Error).message, details: (error as any).name },
       { status: 400 }
     );
   }
