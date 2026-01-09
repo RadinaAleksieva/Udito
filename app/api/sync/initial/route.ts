@@ -38,7 +38,13 @@ async function fetchAllOrdersFromWix(accessToken: string, siteId: string) {
     const data = await response.json();
     const fetchedOrders = data?.orders || [];
 
-    if (fetchedOrders.length === 0) break;
+    console.log(`Fetched ${fetchedOrders.length} orders in this batch`);
+    console.log('Response metadata:', JSON.stringify(data?.metadata || data?.paging || {}));
+
+    if (fetchedOrders.length === 0) {
+      console.log('No more orders to fetch');
+      break;
+    }
 
     orders.push(...fetchedOrders);
 
