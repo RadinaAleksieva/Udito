@@ -141,7 +141,6 @@ export async function POST(request: NextRequest) {
         number: mapped.number,
         status: mapped.status,
         paymentStatus: mapped.paymentStatus,
-        transactionRef: mapped.transactionRef,
       }
     });
 
