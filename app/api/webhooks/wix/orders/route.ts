@@ -176,10 +176,25 @@ async function handleOrderEvent(event: any) {
     }
   }
   const mapped = orderRaw === baseOrder ? base : pickOrderFields(orderRaw, "webhook");
-  if (!mapped.id) return;
+
+  console.log("📋 Mapped order:", {
+    id: mapped.id,
+    number: mapped.number,
+    siteId: mapped.siteId,
+    status: mapped.status,
+    paymentStatus: mapped.paymentStatus,
+  });
+
+  if (!mapped.id) {
+    console.warn("⚠️ Order has no ID, skipping");
+    return;
+  }
+
   if (!mapped.siteId) {
+    console.log("🔍 Looking for siteId in event metadata...");
     mapped.siteId =
       event?.metadata?.siteId ?? raw?.siteId ?? rawOrder?.siteId ?? null;
+    console.log("Found siteId:", mapped.siteId);
   }
   const instanceId =
     event?.metadata?.instanceId ?? raw?.instanceId ?? rawOrder?.instanceId ?? null;
