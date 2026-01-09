@@ -202,12 +202,22 @@ async function handleOrderEvent(event: any) {
     ? eventTimestamp
     : mapped.paidAt;
 
+  console.log("💾 Saving order to database:", {
+    id: mapped.id,
+    number: mapped.number,
+    siteId: mapped.siteId,
+    status: mapped.status,
+    paymentStatus: mapped.paymentStatus,
+  });
+
   await upsertOrder({
     ...mapped,
     paidAt: effectivePaidAt,
     businessId: null,
     raw: orderRaw,
   });
+
+  console.log("✅ Order saved successfully:", mapped.number);
   const statusText = (mapped.status || "").toLowerCase();
   const company = mapped.siteId ? await getCompanyBySite(mapped.siteId) : null;
   const receiptTxRef = extractTransactionRef(orderRaw);
