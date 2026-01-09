@@ -304,7 +304,15 @@ if (wixClient) {
 
 export async function POST(request: NextRequest) {
   const rawBody = await request.text().catch(() => "");
+
+  // Log all incoming webhooks
+  console.log("=== WEBHOOK RECEIVED ===");
+  console.log("Timestamp:", new Date().toISOString());
+  console.log("Body length:", rawBody.length);
+  console.log("Body preview:", rawBody.substring(0, 200));
+
   if (!wixClient) {
+    console.error("Missing Wix app credentials");
     return NextResponse.json(
       { ok: false, error: "Missing Wix app credentials." },
       { status: 500 }
@@ -313,9 +321,11 @@ export async function POST(request: NextRequest) {
 
   await initDb();
   try {
+    console.log("Processing webhook with Wix SDK...");
     await wixClient.webhooks.process(rawBody);
+    console.log("✅ Webhook processed successfully");
   } catch (error) {
-    console.error("Wix webhook process failed", error);
+    console.error("❌ Wix webhook process failed", error);
     return NextResponse.json(
       { ok: false, error: (error as Error).message },
       { status: 400 }
