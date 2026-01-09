@@ -366,8 +366,18 @@ export async function POST(request: NextRequest) {
   // Try to parse the body to see what type of event this is
   try {
     const parsed = JSON.parse(rawBody);
-    console.log("📦 Webhook event type:", parsed?.metadata?.eventType ?? parsed?.type ?? "unknown");
+    const eventType = parsed?.metadata?.eventType ?? parsed?.type ?? "unknown";
+    console.log("📦 Webhook event type:", eventType);
     console.log("📦 Webhook entity:", parsed?.metadata?.entityId ?? parsed?.entityId ?? "unknown");
+    console.log("📦 Full metadata:", JSON.stringify(parsed?.metadata ?? {}, null, 2));
+
+    // Check if this is an order created event
+    if (eventType.includes("created") || eventType.includes("CREATE")) {
+      console.log("🆕 This is an ORDER CREATED event!");
+    }
+    if (eventType.includes("payment") || eventType.includes("PAYMENT")) {
+      console.log("💳 This is a PAYMENT event!");
+    }
   } catch (e) {
     console.log("⚠️ Could not parse webhook body as JSON");
   }
