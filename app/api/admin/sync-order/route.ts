@@ -3,7 +3,7 @@ import { fetchOrderDetails, pickOrderFields, needsOrderEnrichment, extractTransa
 import { initDb, upsertOrder } from "@/lib/db";
 
 export async function POST(request: NextRequest) {
-  const { orderId, adminSecret } = await request.json();
+  const { orderId, adminSecret, siteId } = await request.json();
 
   // Verify admin secret
   if (adminSecret !== process.env.ADMIN_SECRET) {
@@ -14,13 +14,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Missing orderId" }, { status: 400 });
   }
 
+  // Use provided siteId or fallback to default
+  const targetSiteId = siteId || process.env.WIX_SITE_ID || null;
+
   await initDb();
 
   try {
-    console.log("Syncing order", orderId);
+    console.log("Syncing order", orderId, "for site", targetSiteId);
 
     // Fetch order from Wix
-    const rawOrder = await fetchOrderDetails({ orderId, siteId: null, instanceId: null });
+    const rawOrder = await fetchOrderDetails({ orderId, siteId: targetSiteId, instanceId: null });
 
     if (!rawOrder) {
       return NextResponse.json({ error: "Order not found in Wix" }, { status: 404 });
@@ -126,6 +129,11 @@ export async function POST(request: NextRequest) {
     }
 
     const mapped = pickOrderFields(orderRaw, "webhook");
+
+    // Ensure siteId is set
+    if (!mapped.siteId && targetSiteId) {
+      mapped.siteId = targetSiteId;
+    }
 
     // Upsert to database
     await upsertOrder({
