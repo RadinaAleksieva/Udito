@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { initDb, getLatestWixTokenForSite, upsertOrder } from "@/lib/db";
-import { pickOrderFields, extractTransactionRef, extractDeliveryMethodFromOrder, fetchTransactionRefForOrder, fetchPaymentRecordForOrder, fetchOrderTransactionsForOrder, extractPaymentSummaryFromPayment } from "@/lib/wix";
+import { initDb, upsertOrder } from "@/lib/db";
+import { getAccessToken, pickOrderFields, extractTransactionRef, extractDeliveryMethodFromOrder, fetchTransactionRefForOrder, fetchPaymentRecordForOrder, fetchOrderTransactionsForOrder, extractPaymentSummaryFromPayment } from "@/lib/wix";
 
 export const maxDuration = 300; // 5 minutes for long-running sync
 
@@ -69,21 +69,15 @@ export async function POST(request: NextRequest) {
   await initDb();
 
   try {
-    // Get access token for this site
-    const tokens = await getLatestWixTokenForSite({ siteId });
-
-    if (!tokens || !tokens.access_token) {
-      return NextResponse.json(
-        { error: "No access token found for this site" },
-        { status: 401 }
-      );
-    }
+    // Get fresh access token (auto-refreshes if needed)
+    console.log("Getting access token for site", siteId);
+    const accessToken = await getAccessToken({ siteId });
 
     console.log("Starting initial sync for site", siteId);
-    console.log("Access token format:", tokens.access_token?.substring(0, 20) + "...");
+    console.log("Access token format:", accessToken.substring(0, 20) + "...");
 
     // Fetch all orders from Wix
-    const orders = await fetchAllOrdersFromWix(tokens.access_token, siteId);
+    const orders = await fetchAllOrdersFromWix(accessToken, siteId);
 
     console.log(`Fetched ${orders.length} orders from Wix`);
 
