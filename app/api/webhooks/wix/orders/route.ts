@@ -338,8 +338,11 @@ async function handleOrderEvent(event: any) {
 if (wixClient) {
   console.log("🔧 Registering webhook handlers...");
   wixClient.orders.onOrderCreated(handleOrderEvent);
+  wixClient.orders.onOrderUpdated(handleOrderEvent);
   wixClient.orders.onOrderPaymentStatusUpdated(handleOrderEvent);
-  console.log("✅ Webhook handlers registered");
+  wixClient.orders.onOrderApproved?.(handleOrderEvent);
+  wixClient.orders.onOrderCanceled?.(handleOrderEvent);
+  console.log("✅ Webhook handlers registered: onOrderCreated, onOrderUpdated, onOrderPaymentStatusUpdated, onOrderApproved, onOrderCanceled");
 } else {
   console.error("❌ wixClient not initialized - webhooks will not work!");
 }
