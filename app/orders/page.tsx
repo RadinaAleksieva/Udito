@@ -516,8 +516,16 @@ export default async function OrdersPage({
   const dbOrders = orders as OrderRow[];
   const displayOrders = dbOrders.filter((order) => {
     const raw = order.raw as any;
-    return !isArchivedOrder(raw);
+    const isArchived = isArchivedOrder(raw);
+    if (order.number === "10232") {
+      console.log("📋 Order 10232 - isArchived:", isArchived);
+      console.log("📋 Order 10232 - raw status:", (raw as any)?.status);
+    }
+    return !isArchived;
   });
+
+  console.log("📋 Orders page - displayOrders count:", displayOrders.length);
+  console.log("📋 Orders page - displayOrders numbers:", displayOrders.map((o: any) => o.number).slice(0, 20).join(", "));
   const sortedOrders = [...displayOrders].sort((a, b) => {
     const numA = Number(deriveOrderNumber(a.raw as any, a.number));
     const numB = Number(deriveOrderNumber(b.raw as any, b.number));
