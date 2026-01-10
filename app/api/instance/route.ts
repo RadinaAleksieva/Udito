@@ -1,7 +1,52 @@
 import { NextResponse } from "next/server";
 import { getLatestWixTokenForSite, initDb, saveWixTokens } from "@/lib/db";
 import { decodeWixInstanceToken } from "@/lib/wix-instance";
-import { getAppInstanceDetails, getTokenInfo } from "@/lib/wix";
+import { getAppInstanceDetails, getTokenInfo, getAccessToken } from "@/lib/wix";
+
+const WIX_API_BASE = process.env.WIX_API_BASE || "https://www.wixapis.com";
+
+async function registerWebhooks(instanceId: string, siteId: string | null) {
+  try {
+    const accessToken = await getAccessToken({ instanceId, siteId });
+    const authHeader = accessToken.startsWith("Bearer ")
+      ? accessToken
+      : `Bearer ${accessToken}`;
+
+    // Register webhook for order events
+    const webhookUrl = `${process.env.NEXT_PUBLIC_APP_URL || "https://udito.vercel.app"}/api/webhooks/wix/orders`;
+
+    const response = await fetch(`${WIX_API_BASE}/webhooks/v1/webhooks`, {
+      method: "POST",
+      headers: {
+        Authorization: authHeader,
+        "Content-Type": "application/json",
+        ...(siteId ? { "wix-site-id": siteId } : {}),
+      },
+      body: JSON.stringify({
+        webhook: {
+          url: webhookUrl,
+          eventTypes: [
+            "wix.ecom.v1.order.created",
+            "wix.ecom.v1.order.updated",
+            "wix.ecom.v1.order.canceled",
+          ],
+        },
+      }),
+    });
+
+    if (response.ok) {
+      console.log("✅ Webhooks registered successfully");
+      return true;
+    } else {
+      const error = await response.text();
+      console.warn("⚠️ Webhook registration failed:", error);
+      return false;
+    }
+  } catch (error) {
+    console.error("❌ Webhook registration error:", error);
+    return false;
+  }
+}
 
 export async function POST(request: Request) {
   try {
@@ -79,6 +124,11 @@ export async function POST(request: Request) {
       refreshToken: null,
       expiresAt: null,
     });
+
+    // Register webhooks automatically
+    if (resolvedSiteId) {
+      await registerWebhooks(instanceId, resolvedSiteId);
+    }
 
     const hasSite = Boolean(resolvedSiteId);
     const response = NextResponse.json(
