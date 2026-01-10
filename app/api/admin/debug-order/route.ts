@@ -41,7 +41,7 @@ export async function GET(request: Request) {
       firstPayment: raw?.orderTransactions?.payments?.[0] || null,
       uditoData: raw?.udito || null,
       rawKeys: Object.keys(raw || {}),
-    }, null, 2);
+    });
 
   } catch (error) {
     console.error("Debug order error:", error);
