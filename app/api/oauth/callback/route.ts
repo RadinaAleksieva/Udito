@@ -2,6 +2,49 @@ import { NextResponse } from "next/server";
 import { initDb, saveWixTokens } from "@/lib/db";
 import { getAppInstanceDetails } from "@/lib/wix";
 
+const WIX_API_BASE = process.env.WIX_API_BASE || "https://www.wixapis.com";
+
+async function registerWebhooks(accessToken: string, siteId: string, appBaseUrl: string) {
+  try {
+    const authHeader = accessToken.startsWith("Bearer ")
+      ? accessToken
+      : `Bearer ${accessToken}`;
+
+    const webhookUrl = `${appBaseUrl}/api/webhooks/wix/orders`;
+
+    const response = await fetch(`${WIX_API_BASE}/webhooks/v1/webhooks`, {
+      method: "POST",
+      headers: {
+        Authorization: authHeader,
+        "Content-Type": "application/json",
+        "wix-site-id": siteId,
+      },
+      body: JSON.stringify({
+        webhook: {
+          url: webhookUrl,
+          eventTypes: [
+            "wix.ecom.v1.order.created",
+            "wix.ecom.v1.order.updated",
+            "wix.ecom.v1.order.canceled",
+          ],
+        },
+      }),
+    });
+
+    if (response.ok) {
+      console.log("✅ Webhooks registered successfully for site", siteId);
+      return true;
+    } else {
+      const error = await response.text();
+      console.warn("⚠️ Webhook registration failed:", error);
+      return false;
+    }
+  } catch (error) {
+    console.error("❌ Webhook registration error:", error);
+    return false;
+  }
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
@@ -140,6 +183,11 @@ export async function GET(request: Request) {
     refreshToken: data.refresh_token ?? null,
     expiresAt,
   });
+
+  // Register webhooks automatically after successful OAuth
+  if (resolvedSiteId && data.access_token) {
+    await registerWebhooks(data.access_token, resolvedSiteId, appBaseUrl);
+  }
 
   // Trigger initial sync of all orders in background
   if (resolvedSiteId && data.access_token) {
