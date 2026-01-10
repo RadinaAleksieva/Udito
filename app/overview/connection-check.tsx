@@ -21,6 +21,9 @@ export default function ConnectionCheck() {
         setStatus("Липсва код за достъп. Влезте през Wix или въведете код.");
         return;
       }
+
+      // Step 1: Check connection
+      setStatus("Проверка на връзката...");
       const response = await fetch("/api/instance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -32,8 +35,52 @@ export default function ConnectionCheck() {
           data?.error || "Не е намерен сайт за този код. Отворете приложението от Wix."
         );
       }
-      setStatus("Връзката е активна. Презареждане...");
-      window.location.reload();
+
+      // Step 2: Run backfill
+      setStatus("Връзката е активна. Синхронизация на поръчки...");
+      let totalSynced = 0;
+      let currentOffset = 0;
+      let hasMoreData = true;
+      let isFirstRun = true;
+
+      while (hasMoreData) {
+        const params = new URLSearchParams({
+          limit: "50",
+          maxPages: "5",
+          start: "2000-01-01T00:00:00Z",
+        });
+        if (isFirstRun) {
+          params.set("reset", "1");
+          isFirstRun = false;
+        } else {
+          params.set("offset", String(currentOffset));
+        }
+
+        const backfillResponse = await fetch(`/api/backfill/fast?${params.toString()}`, {
+          method: "POST",
+          credentials: "include",
+        });
+        const backfillData = await backfillResponse.json();
+
+        if (!backfillResponse.ok || !backfillData?.ok) {
+          // If backfill fails, still consider it success (connection works)
+          console.warn("Backfill failed:", backfillData?.error);
+          break;
+        }
+
+        totalSynced += Number(backfillData.total || 0);
+        currentOffset = Number(backfillData.offset || currentOffset);
+        hasMoreData = Boolean(backfillData.hasMore);
+
+        setStatus(`Синхронизирани ${totalSynced} поръчки...`);
+
+        if (hasMoreData) {
+          await new Promise((resolve) => setTimeout(resolve, 200));
+        }
+      }
+
+      setStatus(`Готово! Синхронизирани ${totalSynced} поръчки. Презареждане...`);
+      setTimeout(() => window.location.reload(), 1500);
     } catch (error) {
       setStatus(
         error instanceof Error ? error.message : "Грешка при проверка на връзката."
