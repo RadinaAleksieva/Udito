@@ -448,6 +448,7 @@ export async function POST(request: NextRequest) {
           else if (slug === "canceled" && eventData.entity) {
             orderData = eventData.entity;
             console.log("📦 Extracted order from entity (canceled)");
+            console.log("📦 Canceled order data:", JSON.stringify(orderData, null, 2).substring(0, 1000));
           }
 
           if (orderData) {
