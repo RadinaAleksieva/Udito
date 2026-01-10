@@ -541,7 +541,7 @@ export async function listRecentOrdersForPeriodForSite(
   const result = await sql`
     select id, number, payment_status, created_at, total, currency, source, raw
     from orders
-    where site_id = ${siteId}
+    where (site_id = ${siteId} OR site_id IS NULL)
       and (status is null or lower(status) not like 'archiv%')
       and coalesce(raw->>'archived', 'false') <> 'true'
       and coalesce(raw->>'isArchived', 'false') <> 'true'
@@ -645,7 +645,7 @@ export async function countOrdersForPeriodForSite(
   const result = await sql`
     select count(*) as total
     from orders
-    where site_id = ${siteId}
+    where (site_id = ${siteId} OR site_id IS NULL)
       and (status is null or lower(status) not like 'archiv%')
       and coalesce(raw->>'archived', 'false') <> 'true'
       and coalesce(raw->>'isArchived', 'false') <> 'true'

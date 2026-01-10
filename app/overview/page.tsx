@@ -121,11 +121,12 @@ export default async function OverviewPage({
       }),
     };
   });
-  const orders = siteId
+  const effectiveSiteId = siteId ?? instanceId ?? null;
+  const orders = effectiveSiteId
     ? await listRecentOrdersForPeriodForSite(
         monthStart.toISOString(),
         monthEnd.toISOString(),
-        siteId,
+        effectiveSiteId,
         50 // Show more orders (up to 50)
       )
     : [];
