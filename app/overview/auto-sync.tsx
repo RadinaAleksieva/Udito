@@ -6,6 +6,8 @@ const AUTO_SYNC_KEY = "udito_auto_sync_at";
 const AUTO_SYNC_WINDOW_MS = 2 * 60 * 1000; // 2 minutes window
 const AUTO_SYNC_MAX_RUNS = 30; // Allow more runs to sync all orders
 const AUTO_SYNC_DELAY_MS = 500; // Faster retries
+const FIX_PAYMENTS_KEY = "udito_fix_payments_at";
+const FIX_PAYMENTS_WINDOW_MS = 5 * 60 * 1000; // 5 minutes window
 
 export default function AutoSync() {
   useEffect(() => {
@@ -40,6 +42,31 @@ export default function AutoSync() {
         setTimeout(() => {
           void runSync(data.cursor ?? null, run + 1);
         }, AUTO_SYNC_DELAY_MS);
+      } else {
+        // Backfill completed, now fix missing payment data
+        runFixPayments();
+      }
+    };
+
+    const runFixPayments = async () => {
+      try {
+        // Check if we already ran fix payments recently
+        const lastFixRun = Number(localStorage.getItem(FIX_PAYMENTS_KEY) || 0);
+        if (lastFixRun && now - lastFixRun < FIX_PAYMENTS_WINDOW_MS) {
+          return;
+        }
+
+        // Run fix payments endpoint
+        const response = await fetch("/api/admin/fix-payments?limit=50", {
+          method: "POST",
+          credentials: "include",
+        });
+
+        if (response.ok) {
+          localStorage.setItem(FIX_PAYMENTS_KEY, String(Date.now()));
+        }
+      } catch {
+        // Background fix is best-effort
       }
     };
 
