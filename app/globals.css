@@ -762,6 +762,15 @@ main {
   color: #6b6f75;
 }
 
+.order-card--paid {
+  border-color: rgba(74, 204, 129, 0.35);
+  background: #f0fdf4;
+}
+
+.order-card--paid .order-card__status span {
+  color: #16a34a;
+}
+
 .order-card__items {
   list-style: none;
   padding: 0;
@@ -799,6 +808,22 @@ main {
   border-radius: 16px;
   border: 1px solid rgba(10, 30, 63, 0.08);
   font-family: "Source Sans 3", "Segoe UI", sans-serif;
+}
+
+.orders-row--paid {
+  background: #f0fdf4;
+  border-color: rgba(74, 204, 129, 0.35);
+}
+
+.orders-row--unpaid {
+  background: #fff6f6;
+  border-color: rgba(204, 74, 74, 0.35);
+}
+
+.orders-row--cancelled {
+  background: #f5f6f7;
+  border-color: rgba(120, 120, 120, 0.25);
+  color: #6b6f75;
 }
 
 .orders-head--receipts,

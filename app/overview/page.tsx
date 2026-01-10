@@ -35,12 +35,17 @@ function formatMoney(amount: number | null | undefined, currency: string | null)
   }).format(parsed);
 }
 
-function formatPaymentStatus(status: string | null) {
-  if (!status) return "—";
-  if (status === "PAID") return "Платена";
-  if (status === "NOT_PAID") return "Неплатена";
-  if (status === "PARTIALLY_PAID") return "Частично платена";
-  return status;
+function formatPaymentStatus(paymentStatus: string | null, orderStatus?: string | null) {
+  // Check if order is canceled first
+  const statusText = String(orderStatus ?? "").toLowerCase();
+  if (statusText.includes("cancel")) return "Отказана";
+
+  // Otherwise show payment status
+  if (!paymentStatus) return "—";
+  if (paymentStatus === "PAID") return "Платена";
+  if (paymentStatus === "NOT_PAID") return "Неплатена";
+  if (paymentStatus === "PARTIALLY_PAID") return "Частично платена";
+  return paymentStatus;
 }
 
 async function fetchSiteLabel(siteId: string | null, instanceId: string | null) {
@@ -323,10 +328,24 @@ export default async function OverviewPage({
                   order.source === "backfill" || order.source === "webhook"
                     ? "Wix"
                     : order.source;
+
+                // Determine row class based on status
+                const statusText = String(order.status ?? "").toLowerCase();
+                const isCancelled = statusText.includes("cancel");
+                const isPaid = order.payment_status === "PAID";
+                const isUnpaid = order.payment_status === "NOT_PAID" || order.payment_status === "UNPAID";
+
+                const rowClass = [
+                  "orders-row",
+                  isCancelled ? "orders-row--cancelled" : "",
+                  isPaid && !isCancelled ? "orders-row--paid" : "",
+                  isUnpaid && !isCancelled ? "orders-row--unpaid" : "",
+                ].filter(Boolean).join(" ");
+
                 return (
-                  <div className="orders-row" key={order.id}>
+                  <div className={rowClass} key={order.id}>
                     <span>{number || order.id}</span>
-                    <span>{formatPaymentStatus(order.payment_status || null)}</span>
+                    <span>{formatPaymentStatus(order.payment_status || null, order.status)}</span>
                     <span>{formatMoney(totalAmount, currency)}</span>
                     <span>{sourceLabel || "—"}</span>
                     <span>

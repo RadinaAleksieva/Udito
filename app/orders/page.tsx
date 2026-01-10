@@ -367,7 +367,7 @@ function extractPaymentLabel(raw: any, status: string | null) {
 
 function formatOrderStatusLabel(order: OrderRow, raw: any) {
   const statusText = String(order.status ?? raw?.status ?? "").toLowerCase();
-  if (statusText.includes("cancel")) return "Cancelled";
+  if (statusText.includes("cancel")) return "Отказана";
   const paymentStatus = (order.payment_status || "").toUpperCase();
   if (paymentStatus === "PAID") return "Платена";
   if (paymentStatus === "PARTIALLY_PAID") return "Частично платена";
