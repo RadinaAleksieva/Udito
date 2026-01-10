@@ -395,6 +395,7 @@ export function extractTransactionRef(raw: any): string | null {
     : null;
 
   return (
+    explicit ??
     stripeFromExplicit ??
     stripeFromRaw ??
     raw?.providerTransactionId ??
