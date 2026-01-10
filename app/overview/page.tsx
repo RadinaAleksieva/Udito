@@ -11,6 +11,7 @@ import {
 import { getAccessToken } from "@/lib/wix";
 import { getActiveWixToken } from "@/lib/wix-context";
 import BackfillButton from "./backfill-button";
+import EnrichButton from "./enrich-button";
 import {
   deriveOrderCreatedAt,
   deriveOrderMoney,
@@ -229,7 +230,12 @@ export default async function OverviewPage({
                 </a>
               </div>
             </div>
-            {showDebug ? <BackfillButton /> : null}
+            {showDebug ? (
+              <>
+                <BackfillButton />
+                <EnrichButton />
+              </>
+            ) : null}
           </div>
           <div className="hero-card">
             {hasConnection ? (
