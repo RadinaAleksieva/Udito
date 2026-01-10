@@ -217,7 +217,9 @@ export default async function ReceiptsPage({
                     </span>
                     <span>
                       {receipt.issued_at
-                        ? new Date(receipt.issued_at).toLocaleString("bg-BG")
+                        ? new Date(receipt.issued_at).toLocaleString("bg-BG", {
+                            timeZone: "Europe/Sofia",
+                          })
                         : "—"}
                     </span>
                     <span>

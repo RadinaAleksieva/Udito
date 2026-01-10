@@ -161,7 +161,9 @@ export default async function AuditPage({
                   <span>{order.number || order.id}</span>
                   <span>
                     {order.paid_at
-                      ? new Date(order.paid_at).toLocaleString("bg-BG")
+                      ? new Date(order.paid_at).toLocaleString("bg-BG", {
+                          timeZone: "Europe/Sofia",
+                        })
                       : "—"}
                   </span>
                   <span>{formatMoney(order.total, order.currency)}</span>

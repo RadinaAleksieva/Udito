@@ -496,7 +496,9 @@ export default async function ReceiptPage({
   const phone = extractPhone(orderRaw);
   const paidAt = resolvePaidAt(record, orderRaw) ?? record.created_at ?? null;
   const issuedDate = paidAt
-    ? new Date(paidAt).toLocaleString("bg-BG")
+    ? new Date(paidAt).toLocaleString("bg-BG", {
+        timeZone: "Europe/Sofia",
+      })
     : "";
   const receiptNumber = receiptRecord?.id
     ? String(receiptRecord.id).padStart(10, "0")
