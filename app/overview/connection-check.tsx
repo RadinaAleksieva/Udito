@@ -79,7 +79,26 @@ export default function ConnectionCheck() {
         }
       }
 
-      setStatus(`Готово! Синхронизирани ${totalSynced} поръчки. Презареждане...`);
+      // Step 3: Enrich old orders with payment data
+      setStatus(`Готово! Синхронизирани ${totalSynced} поръчки. Обогатяване с payment данни...`);
+      try {
+        const enrichResponse = await fetch("/api/admin/enrich-old-orders?limit=100", {
+          method: "POST",
+          credentials: "include",
+        });
+        if (enrichResponse.ok) {
+          const enrichData = await enrichResponse.json();
+          if (enrichData.enriched > 0) {
+            setStatus(`Готово! Синхронизирани ${totalSynced} поръчки, обогатени ${enrichData.enriched} с payment данни. Презареждане...`);
+          } else {
+            setStatus(`Готово! Синхронизирани ${totalSynced} поръчки. Презареждане...`);
+          }
+        }
+      } catch (enrichError) {
+        console.warn("Payment enrichment failed:", enrichError);
+        // Continue even if enrichment fails
+        setStatus(`Готово! Синхронизирани ${totalSynced} поръчки. Презареждане...`);
+      }
       setTimeout(() => window.location.reload(), 1500);
     } catch (error) {
       setStatus(
