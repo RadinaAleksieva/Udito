@@ -466,6 +466,14 @@ export async function POST(request: NextRequest) {
             orderData = eventData.updatedEvent.currentEntity;
             console.log("📦 Extracted order from updatedEvent.currentEntity");
           }
+          // For payment_status_updated events, data is in .actionEvent.body.order or .order
+          else if (slug === "payment_status_updated") {
+            orderData = eventData.actionEvent?.body?.order ?? eventData.order ?? null;
+            console.log("💳 Extracted order from payment_status_updated event");
+            if (orderData) {
+              console.log("💳 Order #" + orderData.number + " payment status changed");
+            }
+          }
           // For order.canceled events, data is likely in .entity or similar
           else if (slug === "canceled" && eventData.entity) {
             orderData = eventData.entity;
