@@ -529,7 +529,7 @@ export default async function OrdersPage({
       <TopNav title="Поръчки" />
       <div className="container">
         <section className="orders">
-          <h2>Поръчки (Fetched: {orders.length}, Showing: {displayOrders.length})</h2>
+          <h2>Поръчки</h2>
           <MonthFilter
             value={monthValue}
             options={monthOptions}
