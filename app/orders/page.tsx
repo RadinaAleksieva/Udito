@@ -459,9 +459,6 @@ export default async function OrdersPage({
   await initDb();
   const token = await getActiveWixToken();
   const siteId = token?.site_id ?? token?.instance_id ?? null;
-  console.log("📋 Orders page - siteId:", siteId);
-  console.log("📋 Orders page - token.site_id:", token?.site_id);
-  console.log("📋 Orders page - token.instance_id:", token?.instance_id);
   const now = new Date();
   const monthParam = searchParams?.month || "all";
   const monthMatch = monthParam.match(/^(\d{4})-(\d{2})$/);
@@ -510,22 +507,11 @@ export default async function OrdersPage({
         ? await listAllDetailedOrdersForSite(siteId)
         : await listAllDetailedOrders();
 
-  console.log("📋 Orders page - fetched orders count:", orders.length);
-  console.log("📋 Orders page - order numbers:", orders.map((o: any) => o.number).join(", "));
-
   const dbOrders = orders as OrderRow[];
   const displayOrders = dbOrders.filter((order) => {
     const raw = order.raw as any;
-    const isArchived = isArchivedOrder(raw);
-    if (order.number === "10232") {
-      console.log("📋 Order 10232 - isArchived:", isArchived);
-      console.log("📋 Order 10232 - raw status:", (raw as any)?.status);
-    }
-    return !isArchived;
+    return !isArchivedOrder(raw);
   });
-
-  console.log("📋 Orders page - displayOrders count:", displayOrders.length);
-  console.log("📋 Orders page - displayOrders numbers:", displayOrders.map((o: any) => o.number).slice(0, 20).join(", "));
   const sortedOrders = [...displayOrders].sort((a, b) => {
     const numA = Number(deriveOrderNumber(a.raw as any, a.number));
     const numB = Number(deriveOrderNumber(b.raw as any, b.number));
@@ -543,7 +529,7 @@ export default async function OrdersPage({
       <TopNav title="Поръчки" />
       <div className="container">
         <section className="orders">
-          <h2>Поръчки</h2>
+          <h2>Поръчки (Fetched: {orders.length}, Showing: {displayOrders.length})</h2>
           <MonthFilter
             value={monthValue}
             options={monthOptions}
