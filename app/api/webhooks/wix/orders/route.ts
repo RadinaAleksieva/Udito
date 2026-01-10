@@ -262,13 +262,8 @@ async function handleOrderEvent(event: any) {
                 paymentMethodText.includes("cod") ||
                 paymentMethodText.includes("наложен");
 
-  // For COD orders, use order number as transaction ref
-  // For card payments, use the actual transaction ID
-  let receiptTxRef = extractTransactionRef(orderRaw);
-  if (isCOD && !receiptTxRef) {
-    receiptTxRef = mapped.number || mapped.id;
-    console.log("Using order number as transaction ref for COD payment:", receiptTxRef);
-  }
+  // Extract transaction ref (same for both COD and card payments)
+  const receiptTxRef = extractTransactionRef(orderRaw);
 
   // Only issue receipts for orders paid on or after the receipts start date
   // Default: 2026-01-01 (when app was "installed")

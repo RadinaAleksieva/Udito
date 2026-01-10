@@ -490,32 +490,6 @@ export default async function ReceiptPage({
     });
   }
 
-  // Check if this is a COD payment - if so, use order number as transaction ref
-  const paymentMethod = orderRaw?.paymentMethod ?? orderRaw?.paymentMethodSummary ?? {};
-  const orderTxPayments = orderRaw?.orderTransactions?.payments;
-  let bestPayment = null;
-  if (Array.isArray(orderTxPayments) && orderTxPayments.length > 0) {
-    const validStatuses = ['APPROVED', 'COMPLETED', 'REFUNDED'];
-    bestPayment = orderTxPayments.find(
-      (p: any) => validStatuses.includes(p?.regularPaymentDetails?.status)
-    ) || orderTxPayments[0];
-  }
-
-  const paymentMethodText = String(
-    paymentMethod?.type ?? paymentMethod?.name ?? bestPayment?.regularPaymentDetails?.paymentMethod ?? ""
-  ).toLowerCase();
-  const isCOD = paymentMethodText.includes("offline") ||
-                paymentMethodText.includes("cash") ||
-                paymentMethodText.includes("cod") ||
-                paymentMethodText.includes("наложен") ||
-                paymentMethodText.includes("in person") ||
-                paymentMethodText.includes("manual");
-
-  // For COD orders, always use order number as transaction ref
-  if (isCOD && orderNumber) {
-    transactionRef = orderNumber;
-  }
-
   const items = extractLineItems(orderRaw);
   const shipping = extractShipping(orderRaw);
   const shippingLines = resolveShippingLines(shipping);
