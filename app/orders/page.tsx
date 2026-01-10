@@ -432,9 +432,25 @@ function extractPayment(raw: any, order: OrderRow) {
   // Extract payment summary from the best payment
   const paymentSummary = bestPayment ? extractPaymentSummaryFromPayment(bestPayment) : null;
 
+  // Check if this is a COD payment
+  const paymentMethodText = String(
+    payment?.type ?? payment?.name ?? bestPayment?.regularPaymentDetails?.paymentMethod ?? ""
+  ).toLowerCase();
+  const isCOD = paymentMethodText.includes("offline") ||
+                paymentMethodText.includes("cash") ||
+                paymentMethodText.includes("cod") ||
+                paymentMethodText.includes("наложен") ||
+                paymentMethodText.includes("in person") ||
+                paymentMethodText.includes("manual");
+
+  // For COD orders, always use order number as transaction ref
+  const transactionId = isCOD
+    ? (order.number || order.id)
+    : extractTransactionRef(raw);
+
   return {
     provider: payment?.name ?? payment?.methodType ?? "—",
-    transactionId: extractTransactionRef(raw),
+    transactionId,
     cardProvider:
       payment?.cardProvider ??
       raw?.payment?.cardProvider ??
