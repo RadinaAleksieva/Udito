@@ -248,7 +248,27 @@ async function handleOrderEvent(event: any) {
   console.log("✅ Order saved successfully:", mapped.number);
   const statusText = (mapped.status || "").toLowerCase();
   const company = mapped.siteId ? await getCompanyBySite(mapped.siteId) : null;
-  const receiptTxRef = extractTransactionRef(orderRaw);
+
+  // Check if this is a COD (cash on delivery) payment
+  const paymentMethodText = String(
+    orderRaw?.paymentMethod?.type ??
+    orderRaw?.paymentMethod?.name ??
+    orderRaw?.paymentMethodSummary?.type ??
+    orderRaw?.paymentMethodSummary?.name ??
+    ""
+  ).toLowerCase();
+  const isCOD = paymentMethodText.includes("offline") ||
+                paymentMethodText.includes("cash") ||
+                paymentMethodText.includes("cod") ||
+                paymentMethodText.includes("наложен");
+
+  // For COD orders, use order number as transaction ref
+  // For card payments, use the actual transaction ID
+  let receiptTxRef = extractTransactionRef(orderRaw);
+  if (isCOD && !receiptTxRef) {
+    receiptTxRef = mapped.number || mapped.id;
+    console.log("Using order number as transaction ref for COD payment:", receiptTxRef);
+  }
 
   // Only issue receipts for orders paid on or after the receipts start date
   // Default: 2026-01-01 (when app was "installed")
@@ -284,17 +304,24 @@ async function handleOrderEvent(event: any) {
     const orderTotal = Number(mapped.total) || 0;
     const hasValue = orderTotal > 0;
 
-    if (company?.fiscal_store_id && receiptTxRef && isAfterStartDate && hasValue) {
+    // For COD orders, check if COD receipts are enabled
+    const shouldIssueCODReceipt = isCOD && company?.codReceiptsEnabled === true;
+    const shouldIssueReceipt = isCOD ? shouldIssueCODReceipt : true;
+
+    if (company?.fiscal_store_id && receiptTxRef && isAfterStartDate && hasValue && shouldIssueReceipt) {
       await issueReceipt({
         orderId: mapped.id,
         payload: mapped,
         businessId: null,
         issuedAt: effectivePaidAt ?? mapped.createdAt ?? null,
       });
+      console.log(`Receipt issued for ${isCOD ? 'COD' : 'card'} payment:`, mapped.number);
     } else if (!hasValue) {
       console.warn("Skipping receipt: zero value order", mapped.total);
     } else if (!isAfterStartDate) {
       console.warn("Skipping receipt: order paid before receipts start date", effectivePaidAt);
+    } else if (isCOD && !shouldIssueCODReceipt) {
+      console.log("Skipping COD receipt: COD receipts are disabled in settings");
     } else {
       console.warn("Skipping receipt: missing fiscal store id or transaction ref.");
     }
