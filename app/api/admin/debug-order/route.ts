@@ -38,7 +38,7 @@ export async function GET(request: Request) {
       hasOrderTransactions: !!raw?.orderTransactions,
       hasPayments: !!raw?.orderTransactions?.payments,
       paymentsCount: raw?.orderTransactions?.payments?.length || 0,
-      firstPayment: raw?.orderTransactions?.payments?.[0] || null,
+      allPayments: raw?.orderTransactions?.payments || [],
       uditoData: raw?.udito || null,
       rawKeys: Object.keys(raw || {}),
     });
