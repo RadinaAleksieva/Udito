@@ -130,7 +130,7 @@ export default async function OverviewPage({
         50 // Show more orders (up to 50)
       )
     : [];
-  const company = siteId ? await getCompanyBySite(siteId) : null;
+  const company = await getCompanyBySite(siteId, instanceId);
   const siteLabel = await fetchSiteLabel(siteId, instanceId);
   const totalOrdersCount = effectiveSiteId ? await countOrdersForSite(effectiveSiteId) : 0;
   const monthOrdersCount = effectiveSiteId

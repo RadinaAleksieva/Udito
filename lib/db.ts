@@ -1005,7 +1005,9 @@ export async function getOrderByIdForBusiness(
   return result.rows[0] ?? null;
 }
 
-export async function getCompanyBySite(siteId: string) {
+export async function getCompanyBySite(siteId: string | null, instanceId?: string | null) {
+  if (!siteId && !instanceId) return null;
+
   const result = await sql`
     select site_id,
       instance_id,
@@ -1031,7 +1033,7 @@ export async function getCompanyBySite(siteId: string) {
       cod_receipts_enabled,
       updated_at
     from companies
-    where site_id = ${siteId}
+    where (site_id = ${siteId} OR instance_id = ${instanceId})
     limit 1;
   `;
   return result.rows[0] ?? null;
