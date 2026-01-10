@@ -53,7 +53,11 @@ async function handleOrderEvent(event: any) {
     event?.timestamp ??
     null;
 
-  const baseOrder = { ...rawOrder, paymentStatus };
+  const baseOrder = {
+    ...rawOrder,
+    paymentStatus,
+    instanceId: event?.metadata?.instanceId ?? raw?.instanceId ?? rawOrder?.instanceId ?? null,
+  };
   const base = pickOrderFields(baseOrder, "webhook");
   const orderId = base.id;
   let orderRaw: any = baseOrder;

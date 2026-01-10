@@ -774,7 +774,7 @@ export async function listAllDetailedOrdersForSite(siteId: string) {
       raw,
       source
     from orders
-    where site_id = ${siteId}
+    where (site_id = ${siteId} OR site_id IS NULL)
     order by created_at desc nulls last;
   `;
   return result.rows;
@@ -845,7 +845,7 @@ export async function listDetailedOrdersForPeriodForSite(
       raw,
       source
     from orders
-    where site_id = ${siteId}
+    where (site_id = ${siteId} OR site_id IS NULL)
       and created_at between ${startIso} and ${endIso}
     order by created_at desc nulls last;
   `;
