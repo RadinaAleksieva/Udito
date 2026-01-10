@@ -458,6 +458,7 @@ export default async function OrdersPage({
   await initDb();
   const token = await getActiveWixToken();
   const siteId = token?.site_id ?? null;
+  console.log("📋 Orders page - siteId:", siteId);
   const now = new Date();
   const monthParam = searchParams?.month || "all";
   const monthMatch = monthParam.match(/^(\d{4})-(\d{2})$/);
@@ -505,6 +506,9 @@ export default async function OrdersPage({
       : siteId
         ? await listAllDetailedOrdersForSite(siteId)
         : [];
+
+  console.log("📋 Orders page - fetched orders count:", orders.length);
+  console.log("📋 Orders page - order numbers:", orders.map((o: any) => o.number).join(", "));
 
   const dbOrders = orders as OrderRow[];
   const displayOrders = dbOrders.filter((order) => {
