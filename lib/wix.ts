@@ -497,7 +497,21 @@ export async function fetchOrderDetails(params: {
   const authHeader = accessToken.startsWith("Bearer ")
     ? accessToken
     : `Bearer ${accessToken}`;
-  const siteId = params.siteId ?? null;
+
+  // If no siteId but we have instanceId, try to resolve siteId from instance
+  let siteId = params.siteId ?? null;
+  if (!siteId && params.instanceId) {
+    try {
+      const appInstance = await getAppInstanceDetails({
+        instanceId: params.instanceId,
+        accessToken,
+      });
+      siteId = appInstance?.siteId ?? null;
+    } catch (error) {
+      console.warn("Failed to resolve siteId from instanceId:", error);
+    }
+  }
+
   const endpoints = [
     {
       url: `${WIX_API_BASE}/ecom/v1/orders/${params.orderId}`,
@@ -543,7 +557,21 @@ export async function fetchTransactionRefForOrder(params: {
   const authHeader = accessToken.startsWith("Bearer ")
     ? accessToken
     : `Bearer ${accessToken}`;
-  const siteId = params.siteId ?? null;
+
+  // If no siteId but we have instanceId, try to resolve siteId from instance
+  let siteId = params.siteId ?? null;
+  if (!siteId && params.instanceId) {
+    try {
+      const appInstance = await getAppInstanceDetails({
+        instanceId: params.instanceId,
+        accessToken,
+      });
+      siteId = appInstance?.siteId ?? null;
+    } catch (error) {
+      console.warn("Failed to resolve siteId from instanceId:", error);
+    }
+  }
+
   const response = await fetch(`${WIX_API_BASE}/payments/v1/transactions/query`, {
     method: "POST",
     headers: {
@@ -575,7 +603,7 @@ export async function fetchTransactionRefForOrder(params: {
   if (transactionRef) return transactionRef;
   const orderTx = await fetchOrderTransactionsForOrder({
     orderId: params.orderId,
-    siteId: params.siteId ?? null,
+    siteId: siteId ?? params.siteId ?? null,
     instanceId: params.instanceId ?? null,
     businessId: params.businessId ?? null,
   });
@@ -601,7 +629,20 @@ export async function fetchOrderTransactionsForOrder(params: {
   const authHeader = accessToken.startsWith("Bearer ")
     ? accessToken
     : `Bearer ${accessToken}`;
-  const siteId = params.siteId ?? null;
+
+  // If no siteId but we have instanceId, try to resolve siteId from instance
+  let siteId = params.siteId ?? null;
+  if (!siteId && params.instanceId) {
+    try {
+      const appInstance = await getAppInstanceDetails({
+        instanceId: params.instanceId,
+        accessToken,
+      });
+      siteId = appInstance?.siteId ?? null;
+    } catch (error) {
+      console.warn("Failed to resolve siteId from instanceId:", error);
+    }
+  }
 
   // First try the query endpoint which is more reliable
   const queryEndpoints = [
