@@ -118,7 +118,12 @@ async function handleOrderEvent(event: any) {
       orderRaw = { ...orderRaw, payment: record.payment };
     }
     // Fetch full orderTransactions for card details
-    if (!orderRaw?.orderTransactions) {
+    // ALWAYS fetch for payment_status_updated events (when order becomes paid)
+    const isPaymentStatusUpdate = event?.metadata?.eventType?.includes('payment_status');
+    const needsOrderTransactions = !orderRaw?.orderTransactions || isPaymentStatusUpdate;
+
+    if (needsOrderTransactions) {
+      console.log(`🔍 Fetching orderTransactions for order ${orderId} (paymentStatusUpdate: ${isPaymentStatusUpdate})`);
       const orderTx = await fetchOrderTransactionsForOrder({
         orderId,
         siteId: base.siteId ?? raw?.siteId ?? rawOrder?.siteId ?? null,
@@ -133,6 +138,9 @@ async function handleOrderEvent(event: any) {
           ...orderRaw,
           orderTransactions: orderTx.orderTransactions ?? { payments: orderTx.payments },
         };
+        console.log(`✅ OrderTransactions fetched for order ${orderId}`);
+      } else {
+        console.log(`⚠️ No orderTransactions found for order ${orderId}`);
       }
     }
     // Extract paymentSummary from orderTransactions if we have them but no paymentSummary
