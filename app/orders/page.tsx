@@ -3,6 +3,7 @@ import MonthFilter from "../components/month-filter";
 import AutoSync from "../overview/auto-sync";
 import {
   initDb,
+  listAllDetailedOrders,
   listAllDetailedOrdersForSite,
   listDetailedOrdersForPeriodForSite,
 } from "@/lib/db";
@@ -507,7 +508,7 @@ export default async function OrdersPage({
       ? await listDetailedOrdersForPeriodForSite(rangeStart, rangeEnd, siteId)
       : siteId
         ? await listAllDetailedOrdersForSite(siteId)
-        : [];
+        : await listAllDetailedOrders();
 
   console.log("📋 Orders page - fetched orders count:", orders.length);
   console.log("📋 Orders page - order numbers:", orders.map((o: any) => o.number).join(", "));
