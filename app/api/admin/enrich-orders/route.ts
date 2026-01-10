@@ -124,7 +124,7 @@ export async function POST(request: Request) {
         };
 
         // Re-pick fields to ensure consistency
-        const mapped = pickOrderFields(enrichedRaw, "enrichment");
+        const mapped = pickOrderFields(enrichedRaw, "backfill");
         if (!mapped.id) {
           console.warn(`Failed to map enriched order ${orderId}`);
           failed += 1;
