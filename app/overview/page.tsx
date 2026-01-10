@@ -132,12 +132,12 @@ export default async function OverviewPage({
     : [];
   const company = siteId ? await getCompanyBySite(siteId) : null;
   const siteLabel = await fetchSiteLabel(siteId, instanceId);
-  const totalOrdersCount = siteId ? await countOrdersForSite(siteId) : 0;
-  const monthOrdersCount = siteId
+  const totalOrdersCount = effectiveSiteId ? await countOrdersForSite(effectiveSiteId) : 0;
+  const monthOrdersCount = effectiveSiteId
     ? await countOrdersForPeriodForSite(
         monthStart.toISOString(),
         monthEnd.toISOString(),
-        siteId
+        effectiveSiteId
       )
     : 0;
   const monthLabelText = monthOptions.find((option) => option.value === monthLabel)
