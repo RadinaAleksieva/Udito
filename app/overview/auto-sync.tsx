@@ -56,16 +56,27 @@ export default function AutoSync() {
           return;
         }
 
-        // Run fix payments endpoint
-        const response = await fetch("/api/admin/fix-payments?limit=50", {
+        console.log("🔄 Starting payment enrichment for old orders...");
+
+        // Run enrich old orders endpoint
+        const response = await fetch("/api/admin/enrich-old-orders?limit=100", {
           method: "POST",
           credentials: "include",
         });
 
         if (response.ok) {
+          const data = await response.json();
+          console.log("✅ Payment enrichment completed:", data);
+          if (data.enriched > 0) {
+            console.log(`🎉 Successfully enriched ${data.enriched} old orders with payment data!`);
+          }
           localStorage.setItem(FIX_PAYMENTS_KEY, String(Date.now()));
+        } else {
+          const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
+          console.error("❌ Payment enrichment failed:", response.status, errorData);
         }
-      } catch {
+      } catch (error) {
+        console.error("❌ Payment enrichment exception:", error);
         // Background fix is best-effort
       }
     };
