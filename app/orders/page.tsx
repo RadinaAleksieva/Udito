@@ -457,8 +457,10 @@ export default async function OrdersPage({
 }) {
   await initDb();
   const token = await getActiveWixToken();
-  const siteId = token?.site_id ?? null;
+  const siteId = token?.site_id ?? token?.instance_id ?? null;
   console.log("📋 Orders page - siteId:", siteId);
+  console.log("📋 Orders page - token.site_id:", token?.site_id);
+  console.log("📋 Orders page - token.instance_id:", token?.instance_id);
   const now = new Date();
   const monthParam = searchParams?.month || "all";
   const monthMatch = monthParam.match(/^(\d{4})-(\d{2})$/);
