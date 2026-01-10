@@ -763,8 +763,8 @@ main {
 }
 
 .order-card--paid {
-  border-color: rgba(74, 204, 129, 0.35);
-  background: #f0fdf4;
+  border-color: rgba(74, 204, 129, 0.15);
+  background: #f7fef9;
 }
 
 .order-card--paid .order-card__status span {
@@ -811,8 +811,8 @@ main {
 }
 
 .orders-row--paid {
-  background: #f0fdf4;
-  border-color: rgba(74, 204, 129, 0.35);
+  background: #f7fef9;
+  border-color: rgba(74, 204, 129, 0.15);
 }
 
 .orders-row--unpaid {

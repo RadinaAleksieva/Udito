@@ -1,6 +1,7 @@
 import TopNav from "../components/top-nav";
 import MonthFilter from "../components/month-filter";
 import AutoSync from "../overview/auto-sync";
+import OrdersListWrapper from "./orders-list-wrapper";
 import {
   initDb,
   listAllDetailedOrders,
@@ -538,7 +539,7 @@ export default async function OrdersPage({
           {sortedOrders.length === 0 ? (
             <p>Няма поръчки за избрания период.</p>
           ) : (
-            <div className="order-cards">
+            <OrdersListWrapper>
               {sortedOrders.map((order) => {
                 const raw = order.raw as any;
                 const items = extractLineItems(raw);
@@ -749,7 +750,7 @@ export default async function OrdersPage({
                   </article>
                 );
               })}
-            </div>
+            </OrdersListWrapper>
           )}
         </section>
       </div>
