@@ -29,7 +29,7 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
-  if (!body?.fiscalStoreId) {
+  if (!body?.storeId) {
     return NextResponse.json(
       { ok: false, error: "Липсва уникален код на магазина." },
       { status: 400 }
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
     legalName: body?.legalName ?? null,
     vatNumber: body?.vatNumber ?? null,
     bulstat: body?.bulstat ?? null,
-    fiscalStoreId: body?.fiscalStoreId ?? null,
+    storeId: body?.storeId ?? null,
     logoUrl: body?.logoUrl ?? null,
     addressLine1: body?.addressLine1 ?? null,
     addressLine2: body?.addressLine2 ?? null,

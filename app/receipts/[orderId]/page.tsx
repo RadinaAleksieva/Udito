@@ -523,7 +523,7 @@ export default async function ReceiptPage({
   const vatNumber = company?.vat_number || "—";
   const contactEmail = company?.email || "Липсва";
   const contactPhone = company?.phone || "Липсва";
-  const storeId = company?.fiscal_store_id ?? null;
+  const storeId = company?.store_id ?? null;
   const customerName = extractCustomerName(record, orderRaw);
   const customerEmail = extractCustomerEmail(record, orderRaw);
   const shippingMethod = extractShippingMethod(orderRaw);

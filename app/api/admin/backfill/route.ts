@@ -70,7 +70,7 @@ export async function POST(request: Request) {
     const siteIdParam = url.searchParams.get("siteId");
     const instanceIdParam = url.searchParams.get("instanceId");
     const company = siteIdParam ? await getCompanyBySite(siteIdParam) : null;
-    const hasFiscalCode = Boolean(company?.fiscal_store_id);
+    const hasFiscalCode = Boolean(company?.store_id);
 
     const startDateIso = resolveStartDateIso();
     const limit = Number(process.env.BACKFILL_PAGE_LIMIT || 100);

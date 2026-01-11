@@ -37,7 +37,7 @@ export async function syncOrdersForSite(params: SyncParams) {
   let pages = 0;
 
   const company = await getCompanyBySite(siteId);
-  const hasFiscalCode = Boolean(company?.fiscal_store_id);
+  const hasFiscalCode = Boolean(company?.store_id);
 
   await upsertSyncState({
     siteId,

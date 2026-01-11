@@ -9,7 +9,7 @@ type CompanyFormState = {
   legalName: string;
   vatNumber: string;
   bulstat: string;
-  fiscalStoreId: string;
+  storeId: string;
   logoUrl: string;
   addressLine1: string;
   addressLine2: string;
@@ -41,7 +41,7 @@ const emptyForm: CompanyFormState = {
   legalName: "",
   vatNumber: "",
   bulstat: "",
-  fiscalStoreId: "",
+  storeId: "",
   logoUrl: "",
   addressLine1: "",
   addressLine2: "",
@@ -73,7 +73,7 @@ export default function CompanyForm() {
             legalName: data.company.legal_name || "",
             vatNumber: data.company.vat_number || "",
             bulstat: data.company.bulstat || "",
-            fiscalStoreId: data.company.fiscal_store_id || "",
+            storeId: data.company.store_id || "",
             logoUrl: data.company.logo_url || "",
             addressLine1: data.company.address_line1 || "",
             addressLine2: data.company.address_line2 || "",
@@ -191,8 +191,8 @@ export default function CompanyForm() {
         <label>
           Уникален код на магазина (в НАП)
           <input
-            value={form.fiscalStoreId}
-            onChange={(event) => updateField("fiscalStoreId", event.target.value)}
+            value={form.storeId}
+            onChange={(event) => updateField("storeId", event.target.value)}
             placeholder="XXXXXXXXX"
             required
           />

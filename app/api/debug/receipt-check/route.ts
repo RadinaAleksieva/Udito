@@ -74,7 +74,7 @@ export async function GET(request: Request) {
         isPaid: order.payment_status === "PAID",
         isNotCancelled: !String(order.status || "").toLowerCase().includes("cancel"),
         hasValue: Number(order.total || 0) > 0,
-        hasFiscalStore: Boolean(company?.fiscal_store_id),
+        hasFiscalStore: Boolean(company?.store_id),
         hasTransactionRef: Boolean(extractTransactionRef(raw)),
         isAfterStartDate: (() => {
           if (!order.paid_at) return false;
@@ -88,7 +88,7 @@ export async function GET(request: Request) {
 
       company: {
         exists: Boolean(company),
-        fiscalStoreId: company?.fiscal_store_id ?? null,
+        storeId: company?.store_id ?? null,
         receiptsStartDate: company?.receipts_start_date ?? "2026-01-01T00:00:00Z",
       },
 
@@ -108,7 +108,7 @@ export async function GET(request: Request) {
       checks.reasons.push("❌ Поръчката няма стойност (total = 0)");
     }
     if (!checks.conditions.hasFiscalStore) {
-      checks.reasons.push("❌ Липсва fiscal_store_id в настройките на компанията");
+      checks.reasons.push("❌ Липсва store_id в настройките на компанията");
     }
     if (!checks.conditions.hasTransactionRef) {
       checks.reasons.push("❌ Липсва transaction reference ID в payment данните");

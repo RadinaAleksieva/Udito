@@ -28,7 +28,7 @@ export type BusinessProfile = {
   legalName: string | null;
   vatNumber: string | null;
   bulstat: string | null;
-  fiscalStoreId?: string | null;
+  storeId?: string | null;
   logoUrl?: string | null;
   addressLine1: string | null;
   addressLine2: string | null;
@@ -52,7 +52,7 @@ export type CompanyProfile = {
   legalName: string | null;
   vatNumber: string | null;
   bulstat: string | null;
-  fiscalStoreId?: string | null;
+  storeId?: string | null;
   logoUrl?: string | null;
   addressLine1: string | null;
   addressLine2: string | null;
@@ -172,7 +172,7 @@ export async function initDb() {
       legal_name text,
       vat_number text,
       bulstat text,
-      fiscal_store_id text,
+      store_id text,
       logo_url text,
       address_line1 text,
       address_line2 text,
@@ -201,7 +201,7 @@ export async function initDb() {
       legal_name text,
       vat_number text,
       bulstat text,
-      fiscal_store_id text,
+      store_id text,
       logo_url text,
       address_line1 text,
       address_line2 text,
@@ -288,9 +288,20 @@ export async function initDb() {
   await sql`alter table receipts add column if not exists business_id text;`;
   await sql`create index if not exists receipts_business_id_idx on receipts (business_id);`;
 
-  await sql`alter table companies add column if not exists fiscal_store_id text;`;
+  // Migration: rename store_id to store_id (НАП уникален код на магазина)
+  await sql`alter table companies add column if not exists store_id text;`;
+  await sql`
+    update companies
+    set store_id = store_id
+    where store_id is null and store_id is not null;
+  `;
   await sql`alter table companies add column if not exists logo_url text;`;
-  await sql`alter table business_profiles add column if not exists fiscal_store_id text;`;
+  await sql`alter table business_profiles add column if not exists store_id text;`;
+  await sql`
+    update business_profiles
+    set store_id = store_id
+    where store_id is null and store_id is not null;
+  `;
   await sql`alter table business_profiles add column if not exists logo_url text;`;
 
   await sql`alter table companies add column if not exists business_id text;`;
@@ -1016,7 +1027,7 @@ export async function getCompanyBySite(siteId: string | null, instanceId?: strin
       legal_name,
       vat_number,
       bulstat,
-      fiscal_store_id,
+      store_id,
       logo_url,
       address_line1,
       address_line2,
@@ -1046,7 +1057,7 @@ export async function getBusinessProfile(businessId: string) {
       legal_name,
       vat_number,
       bulstat,
-      fiscal_store_id,
+      store_id,
       logo_url,
       address_line1,
       address_line2,
@@ -1077,7 +1088,7 @@ export async function getCompanyByBusiness(businessId: string) {
       legal_name,
       vat_number,
       bulstat,
-      fiscal_store_id,
+      store_id,
       logo_url,
       address_line1,
       address_line2,
@@ -1109,7 +1120,7 @@ export async function upsertCompany(profile: CompanyProfile) {
       legal_name,
       vat_number,
       bulstat,
-      fiscal_store_id,
+      store_id,
       logo_url,
       address_line1,
       address_line2,
@@ -1132,7 +1143,7 @@ export async function upsertCompany(profile: CompanyProfile) {
       ${profile.legalName},
       ${profile.vatNumber},
       ${profile.bulstat},
-      ${profile.fiscalStoreId ?? null},
+      ${profile.storeId ?? null},
       ${profile.logoUrl ?? null},
       ${profile.addressLine1},
       ${profile.addressLine2},
@@ -1155,7 +1166,7 @@ export async function upsertCompany(profile: CompanyProfile) {
       legal_name = excluded.legal_name,
       vat_number = excluded.vat_number,
       bulstat = excluded.bulstat,
-      fiscal_store_id = excluded.fiscal_store_id,
+      store_id = excluded.store_id,
       logo_url = excluded.logo_url,
       address_line1 = excluded.address_line1,
       address_line2 = excluded.address_line2,
@@ -1180,7 +1191,7 @@ export async function upsertBusinessProfile(profile: BusinessProfile) {
       legal_name,
       vat_number,
       bulstat,
-      fiscal_store_id,
+      store_id,
       logo_url,
       address_line1,
       address_line2,
@@ -1200,7 +1211,7 @@ export async function upsertBusinessProfile(profile: BusinessProfile) {
       ${profile.legalName},
       ${profile.vatNumber},
       ${profile.bulstat},
-      ${profile.fiscalStoreId ?? null},
+      ${profile.storeId ?? null},
       ${profile.logoUrl ?? null},
       ${profile.addressLine1},
       ${profile.addressLine2},
@@ -1220,7 +1231,7 @@ export async function upsertBusinessProfile(profile: BusinessProfile) {
       legal_name = excluded.legal_name,
       vat_number = excluded.vat_number,
       bulstat = excluded.bulstat,
-      fiscal_store_id = excluded.fiscal_store_id,
+      store_id = excluded.store_id,
       logo_url = excluded.logo_url,
       address_line1 = excluded.address_line1,
       address_line2 = excluded.address_line2,

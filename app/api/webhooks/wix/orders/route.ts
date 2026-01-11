@@ -260,7 +260,7 @@ async function handleOrderEvent(event: any) {
   const statusText = (mapped.status || "").toLowerCase();
   // Look up company by either siteId or instanceId (whichever matches)
   const company = (mapped.siteId || instanceId) ? await getCompanyBySite(mapped.siteId, instanceId) : null;
-  console.log("🏢 Company lookup:", { siteId: mapped.siteId, instanceId, found: !!company, fiscalStoreId: company?.fiscal_store_id });
+  console.log("🏢 Company lookup:", { siteId: mapped.siteId, instanceId, found: !!company, storeId: company?.store_id });
 
   // Check if this is a COD (cash on delivery) payment
   const paymentMethodText = String(
@@ -327,8 +327,8 @@ async function handleOrderEvent(event: any) {
 
     // Log all conditions for debugging
     console.log(`🧾 Receipt conditions for order ${mapped.number}:`, {
-      hasFiscalStoreId: !!company?.fiscal_store_id,
-      fiscalStoreId: company?.fiscal_store_id ?? "MISSING",
+      hasFiscalStoreId: !!company?.store_id,
+      storeId: company?.store_id ?? "MISSING",
       hasReceiptTxRef: !!receiptTxRef,
       receiptTxRef: receiptTxRef ?? "MISSING",
       isAfterStartDate,
@@ -341,7 +341,7 @@ async function handleOrderEvent(event: any) {
       codReceiptsEnabled: company?.codReceiptsEnabled,
     });
 
-    if (company?.fiscal_store_id && receiptTxRef && isAfterStartDate && hasValue && shouldIssueReceipt) {
+    if (company?.store_id && receiptTxRef && isAfterStartDate && hasValue && shouldIssueReceipt) {
       await issueReceipt({
         orderId: mapped.id,
         payload: mapped,
@@ -357,14 +357,14 @@ async function handleOrderEvent(event: any) {
       console.log("❌ Skipping COD receipt: COD receipts are disabled in settings");
     } else {
       console.warn("❌ Skipping receipt: missing fiscal store id or transaction ref.", {
-        fiscalStoreId: company?.fiscal_store_id,
+        storeId: company?.store_id,
         receiptTxRef,
       });
     }
   }
 
   // Handle refunds - create сторно бележка (refund receipt)
-  if ((isRefunded || hasRefundActivity) && company?.fiscal_store_id) {
+  if ((isRefunded || hasRefundActivity) && company?.store_id) {
     // Check if we have an original sale receipt for this order
     const originalReceipt = await getSaleReceiptByOrderId(mapped.id);
 

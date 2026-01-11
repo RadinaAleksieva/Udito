@@ -175,7 +175,7 @@ export async function GET(request: Request) {
     );
   }
 
-  if (!company?.fiscal_store_id) {
+  if (!company?.store_id) {
     return NextResponse.json(
       { ok: false, error: "Липсва уникален код на магазина (в НАП). Попълнете го в Настройки." },
       { status: 400 }
@@ -242,7 +242,7 @@ export async function GET(request: Request) {
   // Build the XML
   const xml = buildAuditXml({
     eik: company.bulstat,
-    shopNumber: company.fiscal_store_id,
+    shopNumber: company.store_id,
     domainName: company.store_domain || "unknown",
     shopType: 1,
     creationDate: formatDate(new Date()),
