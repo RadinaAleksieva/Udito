@@ -334,40 +334,34 @@
   color: #ffffff;
 }
 
-/* Mobile: scale down receipt to fit viewport, centered */
+/* Mobile: zoom out receipt to fit viewport while keeping A4 layout */
 @media (max-width: 720px) {
   .receipt-shell {
-    padding: 8px;
-    overflow-x: hidden;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-  }
-
-  .receipt-actions {
-    width: 700px;
-    transform: scale(0.52);
-    transform-origin: top center;
-    margin-bottom: -15px;
-  }
-
-  .receipt {
-    width: 700px;
-    min-height: auto;
-    padding: 24px 38px 40px;
-    transform: scale(0.52);
-    transform-origin: top center;
+    padding: 4px;
+    zoom: 0.48;
+    -moz-transform: scale(0.48);
+    -moz-transform-origin: top center;
   }
 }
 
-/* Slightly larger phones */
 @media (min-width: 400px) and (max-width: 720px) {
-  .receipt-actions {
-    transform: scale(0.55);
+  .receipt-shell {
+    zoom: 0.52;
+    -moz-transform: scale(0.52);
   }
+}
 
-  .receipt {
-    transform: scale(0.55);
+@media (min-width: 500px) and (max-width: 720px) {
+  .receipt-shell {
+    zoom: 0.65;
+    -moz-transform: scale(0.65);
+  }
+}
+
+@media (min-width: 600px) and (max-width: 720px) {
+  .receipt-shell {
+    zoom: 0.78;
+    -moz-transform: scale(0.78);
   }
 }
 
