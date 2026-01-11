@@ -46,6 +46,7 @@ function formatPaymentStatus(paymentStatus: string | null, orderStatus?: string 
   if (paymentStatus === "PAID") return "Платена";
   if (paymentStatus === "NOT_PAID") return "Неплатена";
   if (paymentStatus === "PARTIALLY_PAID") return "Частично платена";
+  if (paymentStatus === "FULLY_REFUNDED" || paymentStatus === "PARTIALLY_REFUNDED") return "Възстановени суми";
   return paymentStatus;
 }
 

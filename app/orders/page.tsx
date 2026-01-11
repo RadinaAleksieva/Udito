@@ -61,6 +61,7 @@ function formatPaymentStatus(status: string | null) {
   if (status === "PAID") return "Платена";
   if (status === "NOT_PAID") return "Неплатена";
   if (status === "PARTIALLY_PAID") return "Частично платена";
+  if (status === "FULLY_REFUNDED" || status === "PARTIALLY_REFUNDED") return "Възстановени суми";
   return status;
 }
 
@@ -370,6 +371,8 @@ function formatOrderStatusLabel(order: OrderRow, raw: any) {
   const statusText = String(order.status ?? raw?.status ?? "").toLowerCase();
   if (statusText.includes("cancel")) return "Отказана";
   const paymentStatus = (order.payment_status || "").toUpperCase();
+  if (paymentStatus === "FULLY_REFUNDED") return "Напълно възстановени суми";
+  if (paymentStatus === "PARTIALLY_REFUNDED") return "Частично възстановени суми";
   if (paymentStatus === "PAID") return "Платена";
   if (paymentStatus === "PARTIALLY_PAID") return "Частично платена";
   if (paymentStatus === "NOT_PAID") return "Очаква плащане";
