@@ -42,15 +42,18 @@ export type AuditExportInput = {
 };
 
 /**
- * Escape special XML characters
+ * Escape special XML characters and clean up text
  */
 function escapeXml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
+    .replace(/"/g, "")  // Remove quotes instead of escaping
+    .replace(/'/g, "")  // Remove single quotes too
+    .replace(/„/g, "")  // Remove Bulgarian opening quote
+    .replace(/"/g, "")  // Remove Bulgarian closing quote
+    .trim();
 }
 
 /**
@@ -157,7 +160,7 @@ export function buildAuditXml(input: AuditExportInput): string {
     ? returns.map(buildReturnXml).join("\n")
     : "";
 
-  return `<?xml version="1.0" encoding="windows-1251"?>
+  return `<?xml version="1.0" encoding="UTF-8"?>
 <audit>
 <eik>${escapeXml(input.eik)}</eik>
 <e_shop_n>${escapeXml(input.shopNumber)}</e_shop_n>

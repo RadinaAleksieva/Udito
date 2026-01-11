@@ -223,6 +223,9 @@ export async function GET(request: Request) {
     // Extract line items
     let items = extractLineItems(raw);
 
+    // Filter out zero-value items (items with no price)
+    items = items.filter(item => item.priceWithVat > 0);
+
     // Skip orders with no items
     if (items.length === 0) {
       // Add a fallback item for the total
@@ -285,7 +288,7 @@ export async function GET(request: Request) {
 
   return new NextResponse(xml, {
     headers: {
-      "Content-Type": "application/xml; charset=windows-1251",
+      "Content-Type": "application/xml; charset=utf-8",
       "Content-Disposition": `attachment; filename="${filename}"`,
     },
   });
