@@ -298,6 +298,8 @@ async function handleOrderEvent(event: any) {
   // Check if this is a COD (cash on delivery) payment
   // Use savedRaw from database - it has enriched data
   const paymentMethodText = String(
+    savedRaw?.udito?.paymentSummary?.methodText ??  // Our enriched data - check first!
+    savedRaw?.udito?.paymentSummary?.methodLabel ??
     savedRaw?.paymentMethod?.type ??
     savedRaw?.paymentMethod?.name ??
     savedRaw?.paymentMethodSummary?.type ??
@@ -306,7 +308,6 @@ async function handleOrderEvent(event: any) {
     savedRaw?.paymentInfo?.name ??
     savedRaw?.billingInfo?.paymentMethod ??
     savedRaw?.channelInfo?.type ??
-    savedRaw?.udito?.paymentSummary?.method ??
     ""
   ).toLowerCase();
 
