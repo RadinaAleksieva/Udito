@@ -42,8 +42,13 @@ export async function POST(request: Request) {
       if (ids.length === 0) {
         return NextResponse.json({ ok: false, error: "No valid IDs" }, { status: 400 });
       }
-      const deleteResult = await sql`DELETE FROM receipts WHERE id = ANY(${ids}::bigint[]);`;
-      return NextResponse.json({ ok: true, deleted: deleteResult.rowCount, ids });
+      // Delete each ID individually to avoid array type issues
+      let deletedCount = 0;
+      for (const id of ids) {
+        const result = await sql`DELETE FROM receipts WHERE id = ${id};`;
+        deletedCount += result.rowCount ?? 0;
+      }
+      return NextResponse.json({ ok: true, deleted: deletedCount, ids });
     }
 
     // 1. Find thewhiterabbitshop.com site_id
