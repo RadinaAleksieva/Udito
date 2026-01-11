@@ -556,9 +556,8 @@ export default async function ReceiptPage({
   const qrContent = transactionRef
     ? `${storeId}*${transactionRef}*${datePart}*${timePart}*${qrAmount}*${orderNumber}`
     : null;
-  // Use segments API to force byte mode encoding - prevents phone from detecting as phone number
   const qrDataUrl = qrContent
-    ? await QRCode.toDataURL([{ data: Buffer.from(qrContent, 'utf8'), mode: 'byte' }], {
+    ? await QRCode.toDataURL(qrContent, {
         errorCorrectionLevel: "M",
         margin: 4,
         scale: 6,
