@@ -554,7 +554,7 @@ export default async function ReceiptPage({
   const issuedForQr = paidAt ? new Date(paidAt) : new Date();
   const { datePart, timePart } = formatQrDate(issuedForQr);
   const qrContent = transactionRef
-    ? `${storeId}*${transactionRef}*${datePart}*${timePart}*${qrAmount}*${currency}*#${orderNumber}`
+    ? `${storeId}*${transactionRef}*${datePart}*${timePart}*${qrAmount}*#${orderNumber}`
     : null;
   const qrDataUrl = qrContent
     ? await QRCode.toDataURL(qrContent, {
