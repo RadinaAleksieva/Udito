@@ -334,20 +334,38 @@
   color: #ffffff;
 }
 
-/* Mobile: keep A4 layout, allow horizontal scroll */
+/* Mobile: scale down receipt to fit viewport */
 @media (max-width: 720px) {
   .receipt-shell {
-    padding: 12px;
-    overflow-x: auto;
-  }
-
-  .receipt {
-    min-width: 680px;
-    padding: 24px 38px 40px;
+    padding: 8px;
+    overflow-x: hidden;
   }
 
   .receipt-actions {
-    min-width: 680px;
+    width: 700px;
+    transform-origin: top left;
+    transform: scale(0.52);
+    height: auto;
+    margin-bottom: -15px;
+  }
+
+  .receipt {
+    width: 700px;
+    min-height: auto;
+    padding: 24px 38px 40px;
+    transform-origin: top left;
+    transform: scale(0.52);
+  }
+}
+
+/* Slightly larger phones */
+@media (min-width: 400px) and (max-width: 720px) {
+  .receipt-actions {
+    transform: scale(0.55);
+  }
+
+  .receipt {
+    transform: scale(0.55);
   }
 }
 
