@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AppStrategy, createClient } from "@wix/sdk";
 import { orders } from "@wix/ecom";
-import { getCompanyBySite, getLatestWixToken, initDb, saveWixTokens, upsertOrder } from "@/lib/db";
+import { getCompanyBySite, getLatestWixToken, getOrderById, initDb, saveWixTokens, upsertOrder } from "@/lib/db";
 import { issueReceipt, issueRefundReceipt, getSaleReceiptByOrderId } from "@/lib/receipts";
 import {
   extractTransactionRef,
@@ -257,7 +257,12 @@ async function handleOrderEvent(event: any) {
   });
 
   console.log("✅ Order saved successfully:", mapped.number);
-  const statusText = (mapped.status || "").toLowerCase();
+
+  // Read the order back from OUR database for receipt logic
+  // This ensures we use the enriched data we've already processed
+  const savedOrder = await getOrderById(mapped.id);
+  const savedRaw = savedOrder?.raw ?? orderRaw;
+  const statusText = (savedOrder?.status || mapped.status || "").toLowerCase();
 
   // Look up company by either siteId or instanceId (whichever matches)
   let company = (mapped.siteId || instanceId) ? await getCompanyBySite(mapped.siteId, instanceId) : null;
@@ -276,20 +281,51 @@ async function handleOrderEvent(event: any) {
   console.log("🏢 Company lookup:", { siteId: mapped.siteId, instanceId, found: !!company, storeId: company?.store_id });
 
   // Check if this is a COD (cash on delivery) payment
+  // Use savedRaw from database - it has enriched data
   const paymentMethodText = String(
-    orderRaw?.paymentMethod?.type ??
-    orderRaw?.paymentMethod?.name ??
-    orderRaw?.paymentMethodSummary?.type ??
-    orderRaw?.paymentMethodSummary?.name ??
+    savedRaw?.paymentMethod?.type ??
+    savedRaw?.paymentMethod?.name ??
+    savedRaw?.paymentMethodSummary?.type ??
+    savedRaw?.paymentMethodSummary?.name ??
+    savedRaw?.paymentInfo?.type ??
+    savedRaw?.paymentInfo?.name ??
+    savedRaw?.billingInfo?.paymentMethod ??
+    savedRaw?.channelInfo?.type ??
+    savedRaw?.udito?.paymentSummary?.method ??
     ""
   ).toLowerCase();
+
+  // Also check in payments array from database
+  const paymentsArray = savedRaw?.orderTransactions?.payments ?? savedRaw?.payments ?? [];
+  const firstPayment = Array.isArray(paymentsArray) ? paymentsArray[0] : null;
+  const paymentGateway = String(
+    firstPayment?.paymentGatewayOrderId ??
+    firstPayment?.providerAppId ??
+    firstPayment?.regularPaymentDetails?.offlinePayment?.description ??
+    firstPayment?.offlinePayment?.description ??
+    ""
+  ).toLowerCase();
+
   const isCOD = paymentMethodText.includes("offline") ||
                 paymentMethodText.includes("cash") ||
                 paymentMethodText.includes("cod") ||
-                paymentMethodText.includes("наложен");
+                paymentMethodText.includes("наложен") ||
+                paymentGateway.includes("offline") ||
+                paymentGateway.includes("cash") ||
+                Boolean(firstPayment?.regularPaymentDetails?.offlinePayment) ||
+                Boolean(firstPayment?.offlinePayment);
 
-  // Extract transaction ref (same for both COD and card payments)
-  const receiptTxRef = extractTransactionRef(orderRaw);
+  // Debug logging for payment method detection
+  console.log(`💳 Payment method detection for order ${mapped.number}:`, {
+    paymentMethodText: paymentMethodText || "(empty)",
+    paymentGateway: paymentGateway || "(empty)",
+    hasOfflinePayment: Boolean(firstPayment?.regularPaymentDetails?.offlinePayment || firstPayment?.offlinePayment),
+    isCOD,
+    usingDatabaseRaw: savedOrder !== null,
+  });
+
+  // Extract transaction ref from database order (has enriched data)
+  const receiptTxRef = extractTransactionRef(savedRaw);
 
   // Only issue receipts for orders paid on or after the receipts start date
   // Default: 2026-01-01 (when app was "installed")
@@ -323,21 +359,34 @@ async function handleOrderEvent(event: any) {
   // Get refund timestamp
   const refundTimestamp = refundActivity?.createdDate ?? eventTimestamp ?? null;
 
+  // Use payment status from saved order (database) for receipt decision
+  const savedPaymentStatus = (savedOrder?.payment_status || mapped.paymentStatus || "").toUpperCase();
+  const savedIsPaid = savedPaymentStatus === "PAID";
+  const savedPaidAt = savedOrder?.paid_at ?? effectivePaidAt;
+
+  // Recalculate orderPaidAt using saved data
+  const finalPaidAt = savedPaidAt
+    ? new Date(savedPaidAt)
+    : (savedIsPaid ? new Date() : null);
+  const finalIsAfterStartDate = finalPaidAt && finalPaidAt >= receiptsStartDate;
+
   // DEBUG: Log receipt decision factors
   console.log(`📊 Receipt decision for order ${mapped.number}:`, {
-    paymentStatus: mapped.paymentStatus,
-    isPaid,
-    status: mapped.status,
+    savedPaymentStatus,
+    savedIsPaid,
+    webhookPaymentStatus: mapped.paymentStatus,
+    status: savedOrder?.status || mapped.status,
     statusText,
     isCancelled: statusText.includes("cancel"),
+    usingDatabaseData: !!savedOrder,
   });
 
   if (
-    isPaid &&
+    savedIsPaid &&
     !statusText.includes("cancel")
   ) {
     // Skip zero-value orders
-    const orderTotal = Number(mapped.total) || 0;
+    const orderTotal = Number(savedOrder?.total || mapped.total) || 0;
     const hasValue = orderTotal > 0;
 
     // For COD orders, check if COD receipts are enabled
@@ -347,37 +396,38 @@ async function handleOrderEvent(event: any) {
     const shouldIssueReceipt = isCOD ? shouldIssueCODReceipt : true;
 
     // Log all conditions for debugging
-    const paidAtSource = effectivePaidAt ? 'from event/order' : (isPaid ? 'using current time (fallback)' : 'not paid');
+    const paidAtSource = savedPaidAt ? 'from database' : (savedIsPaid ? 'using current time (fallback)' : 'not paid');
     console.log(`🧾 Receipt conditions for order ${mapped.number}:`, {
       hasStoreId: !!company?.store_id,
       storeId: company?.store_id ?? "MISSING",
       hasReceiptTxRef: !!receiptTxRef,
       receiptTxRef: receiptTxRef ?? "MISSING",
-      isAfterStartDate,
+      isAfterStartDate: finalIsAfterStartDate,
       receiptsStartDate: company?.receipts_start_date ?? "default:2026-01-01",
-      orderPaidAt: orderPaidAt?.toISOString() ?? "null",
+      orderPaidAt: finalPaidAt?.toISOString() ?? "null",
       paidAtSource,
-      effectivePaidAt: effectivePaidAt ?? "null",
+      savedPaidAt: savedPaidAt ?? "null",
       hasValue,
       orderTotal,
       isCOD,
       shouldIssueReceipt,
       codReceiptsEnabled,
       companyFound: !!company,
+      usingDatabaseData: !!savedOrder,
     });
 
-    if (company?.store_id && receiptTxRef && isAfterStartDate && hasValue && shouldIssueReceipt) {
+    if (company?.store_id && receiptTxRef && finalIsAfterStartDate && hasValue && shouldIssueReceipt) {
       await issueReceipt({
         orderId: mapped.id,
-        payload: mapped,
+        payload: savedOrder ?? mapped,
         businessId: null,
-        issuedAt: effectivePaidAt ?? mapped.createdAt ?? null,
+        issuedAt: savedPaidAt ?? mapped.createdAt ?? null,
       });
       console.log(`✅ Receipt issued for ${isCOD ? 'COD' : 'card'} payment:`, mapped.number);
     } else if (!hasValue) {
-      console.warn("❌ Skipping receipt: zero value order", mapped.total);
-    } else if (!isAfterStartDate) {
-      console.warn("❌ Skipping receipt: order paid before receipts start date", effectivePaidAt);
+      console.warn("❌ Skipping receipt: zero value order", orderTotal);
+    } else if (!finalIsAfterStartDate) {
+      console.warn("❌ Skipping receipt: order paid before receipts start date", savedPaidAt);
     } else if (isCOD && !shouldIssueCODReceipt) {
       console.log("❌ Skipping COD receipt: COD receipts are disabled in settings");
     } else {
