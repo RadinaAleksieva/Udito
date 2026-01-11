@@ -1095,9 +1095,10 @@ main {
   /* Overview/Orders table (5 columns: Поръчка, Статус, Общо, Източник, Създадена) */
   .orders-head,
   .orders-row {
-    min-width: 580px;
-    grid-template-columns: 70px 110px 90px 60px 150px;
-    font-size: 13px;
+    min-width: 620px;
+    grid-template-columns: 65px 100px 85px 70px 170px;
+    font-size: 12px;
+    gap: 8px;
   }
 
   /* Receipts table (8 columns) */
