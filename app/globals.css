@@ -1080,18 +1080,24 @@ main {
     align-items: center;
   }
 
-  .orders-head,
-  .orders-row {
-    grid-template-columns: 1.5fr 1fr 1fr;
+  .container {
+    padding: 24px 12px 60px;
   }
 
-  .orders-head span:nth-child(4),
-  .orders-head span:nth-child(5),
-  .orders-head span:nth-child(6),
-  .orders-row span:nth-child(4),
-  .orders-row span:nth-child(5),
-  .orders-row span:nth-child(6) {
-    display: none;
+  /* Receipts table - horizontal scroll instead of hiding columns */
+  .orders-table {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .orders-head,
+  .orders-row {
+    min-width: 800px;
+  }
+
+  .orders-head--receipts,
+  .orders-row--receipts {
+    min-width: 900px;
   }
 
   .section-header {
