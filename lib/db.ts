@@ -288,22 +288,30 @@ export async function initDb() {
   await sql`alter table receipts add column if not exists business_id text;`;
   await sql`create index if not exists receipts_business_id_idx on receipts (business_id);`;
 
-  // Migration: copy fiscal_store_id to store_id (НАП уникален код на магазина)
+  // Migration: ensure store_id column exists
   await sql`alter table companies add column if not exists store_id text;`;
-  // Copy data from fiscal_store_id to store_id if store_id is null
-  await sql`
-    update companies
-    set store_id = fiscal_store_id
-    where store_id is null and fiscal_store_id is not null;
-  `;
+  // Copy data from fiscal_store_id to store_id if applicable (safe: ignore if fiscal_store_id doesn't exist)
+  try {
+    await sql`
+      update companies
+      set store_id = fiscal_store_id
+      where store_id is null and fiscal_store_id is not null;
+    `;
+  } catch (e) {
+    // fiscal_store_id column might not exist, which is fine
+  }
   await sql`alter table companies add column if not exists logo_url text;`;
   await sql`alter table business_profiles add column if not exists store_id text;`;
-  // Copy data from fiscal_store_id to store_id if store_id is null
-  await sql`
-    update business_profiles
-    set store_id = fiscal_store_id
-    where store_id is null and fiscal_store_id is not null;
-  `;
+  // Copy data from fiscal_store_id to store_id if applicable (safe: ignore if fiscal_store_id doesn't exist)
+  try {
+    await sql`
+      update business_profiles
+      set store_id = fiscal_store_id
+      where store_id is null and fiscal_store_id is not null;
+    `;
+  } catch (e) {
+    // fiscal_store_id column might not exist, which is fine
+  }
   await sql`alter table business_profiles add column if not exists logo_url text;`;
 
   await sql`alter table companies add column if not exists business_id text;`;
@@ -1029,7 +1037,7 @@ export async function getCompanyBySite(siteId: string | null, instanceId?: strin
       legal_name,
       vat_number,
       bulstat,
-      COALESCE(store_id, fiscal_store_id) as store_id,
+      store_id,
       logo_url,
       address_line1,
       address_line2,
