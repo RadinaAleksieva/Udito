@@ -36,8 +36,8 @@ export async function GET() {
   const orderNumber = "10259";
   const { datePart, timePart } = formatQrDate(new Date());
 
-  // Format matches other software: storeId*transactionRef*date*time*amount (no orderNumber)
-  const qrContent = `${storeId}*${transactionRef}*${datePart}*${timePart}*${amount}`;
+  // Format: storeId*transactionRef*date*time*amount*orderNumber
+  const qrContent = `${storeId}*${transactionRef}*${datePart}*${timePart}*${amount}*${orderNumber}`;
 
   const qrDataUrl = await QRCode.toDataURL(qrContent, {
     errorCorrectionLevel: "M",
