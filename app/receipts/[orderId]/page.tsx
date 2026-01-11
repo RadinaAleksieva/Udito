@@ -16,7 +16,7 @@ import {
   needsOrderEnrichment,
   pickOrderFields,
 } from "@/lib/wix";
-import { getReceiptByOrderId } from "@/lib/receipts";
+import { getReceiptByOrderIdAndType } from "@/lib/receipts";
 import PrintTrigger from "./print-trigger";
 import ReceiptActions from "./receipt-actions";
 import "./receipt.css";
@@ -361,10 +361,12 @@ export default async function ReceiptPage({
   searchParams,
 }: {
   params: { orderId: string };
-  searchParams?: { print?: string };
+  searchParams?: { print?: string; type?: string };
 }) {
   await initDb();
   const orderId = params.orderId;
+  const receiptType = searchParams?.type || "sale";
+  const isRefund = receiptType === "refund";
   const token = await getActiveWixToken();
   const siteId = token?.site_id ?? null;
   if (!siteId) {
@@ -374,7 +376,7 @@ export default async function ReceiptPage({
   if (!record) {
     notFound();
   }
-  const receiptRecord = await getReceiptByOrderId(orderId);
+  const receiptRecord = await getReceiptByOrderIdAndType(orderId, receiptType);
   const companySiteId = record.site_id || siteId;
   const company = companySiteId ? await getCompanyBySite(companySiteId) : null;
   const currency = record.currency || "BGN";
@@ -504,10 +506,11 @@ export default async function ReceiptPage({
     ? String(receiptRecord.id).padStart(10, "0")
     : String(record.number || record.id).padStart(10, "0");
   const summary = orderRaw?.priceSummary ?? {};
-  const subtotal = Number(record.subtotal ?? summary?.subtotal ?? 0);
-  const taxTotal = Number(record.tax_total ?? summary?.tax ?? 0);
-  const shippingTotal = Number(record.shipping_total ?? summary?.shipping ?? 0);
-  const total = Number(record.total ?? summary?.total ?? 0);
+  const refundMultiplier = isRefund ? -1 : 1;
+  const subtotal = refundMultiplier * Number(record.subtotal ?? summary?.subtotal ?? 0);
+  const taxTotal = refundMultiplier * Number(record.tax_total ?? summary?.tax ?? 0);
+  const shippingTotal = refundMultiplier * Number(record.shipping_total ?? summary?.shipping ?? 0);
+  const total = refundMultiplier * Number(record.total ?? summary?.total ?? 0);
   const paymentLabel = resolvePaymentLabel(orderRaw, paidAt);
   const transactionCode = transactionRef ?? "";
   const template = company?.receipt_template || "classic";
@@ -581,7 +584,7 @@ export default async function ReceiptPage({
           </div>
           <div className="receipt-meta">
             <p className="receipt-title">
-              Бележка <strong>{receiptNumber}</strong>
+              {isRefund ? "СТОРНО бележка" : "Бележка"} <strong>{receiptNumber}</strong>
             </p>
             <p className="meta-single">
               Дата и час на издаване: <strong>{issuedDate}</strong>

@@ -137,6 +137,17 @@ export async function getReceiptByOrderId(orderId: string) {
   return result.rows[0] ?? null;
 }
 
+export async function getReceiptByOrderIdAndType(orderId: string, type: string) {
+  const result = await sql`
+    select id, issued_at, payload, type, refund_amount, reference_receipt_id
+    from receipts
+    where order_id = ${orderId}
+      and type = ${type}
+    limit 1;
+  `;
+  return result.rows[0] ?? null;
+}
+
 export async function listRecentReceipts(limit = 20) {
   const result = await sql`
     select id as receipt_id, order_id, issued_at, status, payload
