@@ -652,7 +652,7 @@ export default async function ReceiptPage({
                 items.map((item, idx) => (
                   <tr key={`${record.id}-item-${idx}`}>
                     <td>{item.name}</td>
-                    <td>{item.quantity}</td>
+                    <td>{isRefund ? -item.quantity : item.quantity}</td>
                     <td>
                       {(() => {
                         const quantity = Number(item.quantity || 0) || 1;
@@ -672,11 +672,13 @@ export default async function ReceiptPage({
                     </td>
                     <td>
                       {(() => {
-                        if (Number.isFinite(item.lineTotal)) {
-                          return formatMoney(item.lineTotal, currency);
-                        }
-                        if (!Number.isFinite(item.price)) return "—";
-                        return formatMoney(item.price * item.quantity, currency);
+                        const lineTotal = Number.isFinite(item.lineTotal)
+                          ? item.lineTotal
+                          : Number.isFinite(item.price)
+                            ? item.price * item.quantity
+                            : null;
+                        if (lineTotal == null) return "—";
+                        return formatMoney(isRefund ? -lineTotal : lineTotal, currency);
                       })()}
                     </td>
                   </tr>
