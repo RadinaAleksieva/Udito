@@ -311,6 +311,22 @@ async function handleOrderEvent(event: any) {
     const shouldIssueCODReceipt = isCOD && company?.codReceiptsEnabled === true;
     const shouldIssueReceipt = isCOD ? shouldIssueCODReceipt : true;
 
+    // Log all conditions for debugging
+    console.log(`🧾 Receipt conditions for order ${mapped.number}:`, {
+      hasFiscalStoreId: !!company?.fiscal_store_id,
+      fiscalStoreId: company?.fiscal_store_id ?? "MISSING",
+      hasReceiptTxRef: !!receiptTxRef,
+      receiptTxRef: receiptTxRef ?? "MISSING",
+      isAfterStartDate,
+      receiptsStartDate: company?.receipts_start_date ?? "default:2026-01-01",
+      effectivePaidAt,
+      hasValue,
+      orderTotal,
+      isCOD,
+      shouldIssueReceipt,
+      codReceiptsEnabled: company?.codReceiptsEnabled,
+    });
+
     if (company?.fiscal_store_id && receiptTxRef && isAfterStartDate && hasValue && shouldIssueReceipt) {
       await issueReceipt({
         orderId: mapped.id,
@@ -318,15 +334,18 @@ async function handleOrderEvent(event: any) {
         businessId: null,
         issuedAt: effectivePaidAt ?? mapped.createdAt ?? null,
       });
-      console.log(`Receipt issued for ${isCOD ? 'COD' : 'card'} payment:`, mapped.number);
+      console.log(`✅ Receipt issued for ${isCOD ? 'COD' : 'card'} payment:`, mapped.number);
     } else if (!hasValue) {
-      console.warn("Skipping receipt: zero value order", mapped.total);
+      console.warn("❌ Skipping receipt: zero value order", mapped.total);
     } else if (!isAfterStartDate) {
-      console.warn("Skipping receipt: order paid before receipts start date", effectivePaidAt);
+      console.warn("❌ Skipping receipt: order paid before receipts start date", effectivePaidAt);
     } else if (isCOD && !shouldIssueCODReceipt) {
-      console.log("Skipping COD receipt: COD receipts are disabled in settings");
+      console.log("❌ Skipping COD receipt: COD receipts are disabled in settings");
     } else {
-      console.warn("Skipping receipt: missing fiscal store id or transaction ref.");
+      console.warn("❌ Skipping receipt: missing fiscal store id or transaction ref.", {
+        fiscalStoreId: company?.fiscal_store_id,
+        receiptTxRef,
+      });
     }
   }
 
