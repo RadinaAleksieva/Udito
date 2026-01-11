@@ -1027,7 +1027,7 @@ export async function getCompanyBySite(siteId: string | null, instanceId?: strin
       legal_name,
       vat_number,
       bulstat,
-      store_id,
+      COALESCE(store_id, fiscal_store_id) as store_id,
       logo_url,
       address_line1,
       address_line2,
