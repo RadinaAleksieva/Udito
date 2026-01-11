@@ -281,6 +281,9 @@ export async function listReceiptsWithOrdersForPeriodForSite(
       receipts.issued_at,
       receipts.status,
       receipts.payload,
+      receipts.type as receipt_type,
+      receipts.reference_receipt_id,
+      receipts.refund_amount,
       orders.number as order_number,
       orders.customer_name,
       orders.total,
@@ -288,12 +291,8 @@ export async function listReceiptsWithOrdersForPeriodForSite(
     from receipts
     left join orders on orders.id = receipts.order_id
     where (orders.site_id = ${siteId} OR orders.site_id IS NULL)
-      and orders.paid_at between ${startIso} and ${endIso}
-      and (orders.status is null
-        or lower(orders.status) not like 'cancel%')
-      and (orders.status is null
-        or lower(orders.status) not like 'archiv%')
-    order by coalesce(orders.paid_at, receipts.issued_at) desc nulls last;
+      and receipts.issued_at between ${startIso} and ${endIso}
+    order by receipts.id desc;
   `;
   return result.rows;
 }

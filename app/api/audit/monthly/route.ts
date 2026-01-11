@@ -12,6 +12,23 @@ import { extractTransactionRef } from "@/lib/wix";
 
 export const dynamic = "force-dynamic";
 
+// Official EUR/BGN conversion rate per regulation
+const BGN_TO_EUR = 0.51129;
+
+/**
+ * Check if date is January 2026 or later (EUR conversion required)
+ */
+function requiresEurConversion(date: Date): boolean {
+  return date >= new Date("2026-01-01T00:00:00.000Z");
+}
+
+/**
+ * Convert BGN to EUR
+ */
+function convertBgnToEur(amount: number): number {
+  return amount * BGN_TO_EUR;
+}
+
 /**
  * Format date as YYYY-MM-DD
  */
@@ -192,19 +209,36 @@ export async function GET(request: Request) {
     // Get full order details
     const fullOrder = await getOrderByIdForSite(row.id, siteId);
     const raw = (fullOrder?.raw ?? row.raw ?? {}) as any;
+    const currency = row.currency || fullOrder?.currency || "BGN";
+
+    // Format dates
+    const paidAt = row.paid_at ? new Date(row.paid_at) : new Date(row.created_at);
+    const receiptIssuedAt = row.receipt_issued_at
+      ? new Date(row.receipt_issued_at)
+      : paidAt;
+
+    // Check if EUR conversion is needed (January 2026+)
+    const needsEurConversion = requiresEurConversion(receiptIssuedAt) && currency === "BGN";
 
     // Extract line items
-    const items = extractLineItems(raw);
+    let items = extractLineItems(raw);
 
     // Skip orders with no items
     if (items.length === 0) {
       // Add a fallback item for the total
+      const totalAmount = Number(row.total) || 0;
       items.push({
         name: "Поръчка",
         quantity: 1,
-        priceWithVat: Number(row.total) || 0,
+        priceWithVat: needsEurConversion ? convertBgnToEur(totalAmount) : totalAmount,
         vatRate: 20,
       });
+    } else if (needsEurConversion) {
+      // Convert all item prices to EUR
+      items = items.map(item => ({
+        ...item,
+        priceWithVat: convertBgnToEur(item.priceWithVat),
+      }));
     }
 
     // Discount is always 0 - item prices already include any discounts applied
@@ -219,12 +253,6 @@ export async function GET(request: Request) {
 
     // Get processor ID
     const processorId = extractProcessorId(raw);
-
-    // Format dates
-    const paidAt = row.paid_at ? new Date(row.paid_at) : new Date(row.created_at);
-    const receiptIssuedAt = row.receipt_issued_at
-      ? new Date(row.receipt_issued_at)
-      : paidAt;
 
     auditOrders.push({
       orderNumber: String(row.number || row.id).padStart(10, "0"),

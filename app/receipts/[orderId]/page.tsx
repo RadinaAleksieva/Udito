@@ -41,9 +41,11 @@ function formatMoney(amount: number | null | undefined, currency: string) {
   }).format(amount);
 }
 
+// Official EUR/BGN conversion rate per regulation
+const BGN_TO_EUR = 0.51129;
+const EUR_TO_BGN = 1.95583;
+
 function formatFx(amount: number, currency: string) {
-  const EUR_TO_BGN = 1.95583;
-  const BGN_TO_EUR = 0.5138;
   if (!Number.isFinite(amount)) return "";
   if (currency === "BGN") {
     const eur = amount * BGN_TO_EUR;
@@ -54,6 +56,18 @@ function formatFx(amount: number, currency: string) {
     return ` / ${formatMoney(bgn, "BGN")}`;
   }
   return "";
+}
+
+// Check if receipt should show EUR as primary (January 2026+)
+function shouldShowEurPrimary(issuedAt: string | null): boolean {
+  if (!issuedAt) return false;
+  const date = new Date(issuedAt);
+  return date >= new Date("2026-01-01T00:00:00.000Z");
+}
+
+// Convert BGN to EUR for display
+function convertToEur(amount: number): number {
+  return amount * BGN_TO_EUR;
 }
 
 function normalizeText(value: any, fallback = "—") {
@@ -500,9 +514,12 @@ export default async function ReceiptPage({
   const shipping = extractShipping(orderRaw);
   const shippingLines = resolveShippingLines(shipping);
   const phone = extractPhone(orderRaw);
+  // For refunds, use receipt's issued_at; for sales, use paid_at
+  const receiptIssuedAt = receiptRecord?.issued_at ?? null;
   const paidAt = resolvePaidAt(record, orderRaw) ?? record.created_at ?? null;
-  const issuedDate = paidAt
-    ? new Date(paidAt).toLocaleString("bg-BG", {
+  const effectiveIssuedAt = isRefund && receiptIssuedAt ? receiptIssuedAt : paidAt;
+  const issuedDate = effectiveIssuedAt
+    ? new Date(effectiveIssuedAt).toLocaleString("bg-BG", {
         timeZone: "Europe/Sofia",
       })
     : "";
@@ -511,10 +528,36 @@ export default async function ReceiptPage({
     : String(record.number || record.id).padStart(10, "0");
   const summary = orderRaw?.priceSummary ?? {};
   const refundMultiplier = isRefund ? -1 : 1;
-  const subtotal = refundMultiplier * Number(record.subtotal ?? summary?.subtotal ?? 0);
-  const taxTotal = refundMultiplier * Number(record.tax_total ?? summary?.tax ?? 0);
-  const shippingTotal = refundMultiplier * Number(record.shipping_total ?? summary?.shipping ?? 0);
-  const total = refundMultiplier * Number(record.total ?? summary?.total ?? 0);
+
+  // For refunds, use refund_amount from receipt record (excludes shipping if not refunded)
+  const refundAmount = receiptRecord?.refund_amount ? Number(receiptRecord.refund_amount) : null;
+
+  // Calculate totals - for refunds use refund_amount, for sales use order totals
+  let subtotal: number;
+  let taxTotal: number;
+  let shippingTotal: number;
+  let total: number;
+
+  if (isRefund && refundAmount != null) {
+    // Refund with specific amount (shipping NOT included)
+    total = -refundAmount;
+    shippingTotal = 0; // No shipping refund
+    // Calculate tax from refund amount (assuming 20% VAT included)
+    const netAmount = refundAmount / 1.2;
+    taxTotal = -(refundAmount - netAmount);
+    subtotal = -netAmount;
+  } else {
+    // Regular sale or full refund
+    subtotal = refundMultiplier * Number(record.subtotal ?? summary?.subtotal ?? 0);
+    taxTotal = refundMultiplier * Number(record.tax_total ?? summary?.tax ?? 0);
+    shippingTotal = refundMultiplier * Number(record.shipping_total ?? summary?.shipping ?? 0);
+    total = refundMultiplier * Number(record.total ?? summary?.total ?? 0);
+  }
+
+  // Check if this receipt should show EUR as primary (January 2026+)
+  const showEurPrimary = shouldShowEurPrimary(effectiveIssuedAt);
+  const isPartialRefund = isRefund && refundAmount != null;
+
   const paymentLabel = resolvePaymentLabel(orderRaw, paidAt);
   const transactionCode = transactionRef ?? "";
   const template = company?.receipt_template || "classic";
@@ -551,8 +594,10 @@ export default async function ReceiptPage({
       </div>
     );
   }
-  const qrAmount = Number.isFinite(total) ? total.toFixed(2) : "0.00";
-  const issuedForQr = paidAt ? new Date(paidAt) : new Date();
+  // QR code amount - convert to EUR for January 2026+
+  const qrAmountValue = showEurPrimary && currency === "BGN" ? convertToEur(total) : total;
+  const qrAmount = Number.isFinite(qrAmountValue) ? qrAmountValue.toFixed(2) : "0.00";
+  const issuedForQr = effectiveIssuedAt ? new Date(effectiveIssuedAt) : new Date()
   const { datePart, timePart } = formatQrDate(issuedForQr);
   const qrContent = transactionRef
     ? `${storeId}*${transactionRef}*${datePart}*${timePart}*${qrAmount}*${orderNumber}`
@@ -589,6 +634,9 @@ export default async function ReceiptPage({
           <div className="receipt-meta">
             <p className="receipt-title">
               {isRefund ? "СТОРНО бележка" : "Бележка"} <strong>{receiptNumber}</strong>
+              {isRefund && receiptRecord?.reference_receipt_id && (
+                <span className="refund-reference"> към бележка #{receiptRecord.reference_receipt_id}</span>
+              )}
             </p>
             <p className="meta-single">
               Дата и час на издаване: <strong>{issuedDate}</strong>
@@ -643,7 +691,24 @@ export default async function ReceiptPage({
               </tr>
             </thead>
             <tbody>
-              {items.length === 0 ? (
+              {isRefund && refundAmount != null ? (
+                // For partial refunds, show single refund line item
+                <tr>
+                  <td>Възстановена сума (без доставка)</td>
+                  <td>-1</td>
+                  <td>
+                    {showEurPrimary && currency === "BGN"
+                      ? formatMoney(convertToEur(refundAmount / 1.2), "EUR")
+                      : formatMoney(refundAmount / 1.2, currency)}
+                  </td>
+                  <td>20%</td>
+                  <td>
+                    {showEurPrimary && currency === "BGN"
+                      ? formatMoney(convertToEur(-refundAmount), "EUR")
+                      : formatMoney(-refundAmount, currency)}
+                  </td>
+                </tr>
+              ) : items.length === 0 ? (
                 <tr>
                   <td>—</td>
                   <td>—</td>
@@ -667,7 +732,9 @@ export default async function ReceiptPage({
                         if (grossUnit == null) return "—";
                         const taxPercent = resolveTaxPercent(item, raw);
                         const netUnit = grossUnit / (1 + taxPercent / 100);
-                        return formatMoney(netUnit, currency);
+                        return showEurPrimary && currency === "BGN"
+                          ? formatMoney(convertToEur(netUnit), "EUR")
+                          : formatMoney(netUnit, currency);
                       })()}
                     </td>
                     <td>
@@ -681,7 +748,10 @@ export default async function ReceiptPage({
                             ? item.price * item.quantity
                             : null;
                         if (lineTotal == null) return "—";
-                        return formatMoney(isRefund ? -lineTotal : lineTotal, currency);
+                        const displayTotal = isRefund ? -lineTotal : lineTotal;
+                        return showEurPrimary && currency === "BGN"
+                          ? formatMoney(convertToEur(displayTotal), "EUR")
+                          : formatMoney(displayTotal, currency);
                       })()}
                     </td>
                   </tr>
@@ -695,21 +765,36 @@ export default async function ReceiptPage({
           <div className="totals-right">
             <div className="row">
               <span>Междинна сума</span>
-              <strong>{formatMoney(subtotal, currency)}</strong>
+              <strong>
+                {showEurPrimary && currency === "BGN"
+                  ? `${formatMoney(convertToEur(subtotal), "EUR")} / ${formatMoney(subtotal, currency)}`
+                  : `${formatMoney(subtotal, currency)}${formatFx(subtotal, currency)}`}
+              </strong>
             </div>
-            <div className="row">
-              <span>Такса за доставка</span>
-              <strong>{formatMoney(shippingTotal, currency)}</strong>
-            </div>
+            {!isPartialRefund && (
+              <div className="row">
+                <span>Такса за доставка</span>
+                <strong>
+                  {showEurPrimary && currency === "BGN"
+                    ? `${formatMoney(convertToEur(shippingTotal), "EUR")} / ${formatMoney(shippingTotal, currency)}`
+                    : `${formatMoney(shippingTotal, currency)}${formatFx(shippingTotal, currency)}`}
+                </strong>
+              </div>
+            )}
             <div className="row">
               <span>Данъци</span>
-              <strong>{formatMoney(taxTotal, currency)}</strong>
+              <strong>
+                {showEurPrimary && currency === "BGN"
+                  ? `${formatMoney(convertToEur(taxTotal), "EUR")} / ${formatMoney(taxTotal, currency)}`
+                  : `${formatMoney(taxTotal, currency)}${formatFx(taxTotal, currency)}`}
+              </strong>
             </div>
             <div className="row total">
               <span>Обща сума</span>
               <strong>
-                {formatMoney(total, currency)}
-                {formatFx(total, currency)}
+                {showEurPrimary && currency === "BGN"
+                  ? `${formatMoney(convertToEur(total), "EUR")} / ${formatMoney(total, currency)}`
+                  : `${formatMoney(total, currency)}${formatFx(total, currency)}`}
               </strong>
             </div>
           </div>
@@ -719,12 +804,13 @@ export default async function ReceiptPage({
           <h2>Данни за плащане</h2>
           <div className="payment-row">
             <span>
-              {paidAt ? new Date(paidAt).toLocaleDateString("bg-BG") : "—"}
+              {effectiveIssuedAt ? new Date(effectiveIssuedAt).toLocaleDateString("bg-BG") : "—"}
             </span>
             <span>{paymentLabel}</span>
             <span>
-              {formatMoney(total, currency)}
-              {formatFx(total, currency)}
+              {showEurPrimary && currency === "BGN"
+                ? `${formatMoney(convertToEur(total), "EUR")} / ${formatMoney(total, currency)}`
+                : `${formatMoney(total, currency)}${formatFx(total, currency)}`}
             </span>
           </div>
         </section>

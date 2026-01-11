@@ -216,11 +216,20 @@ export default async function ReceiptsPage({
                       {displayAmount} {currency}
                     </span>
                     <span>
-                      {receipt.issued_at
-                        ? new Date(receipt.issued_at).toLocaleString("bg-BG", {
+                      {receipt.issued_at ? (
+                        <>
+                          {new Date(receipt.issued_at).toLocaleDateString("bg-BG", {
                             timeZone: "Europe/Sofia",
-                          })
-                        : "—"}
+                          })}
+                          <br />
+                          {new Date(receipt.issued_at).toLocaleTimeString("bg-BG", {
+                            timeZone: "Europe/Sofia",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            second: "2-digit",
+                          })} ч.
+                        </>
+                      ) : "—"}
                     </span>
                     <span>
                       <a className="status-link" href={`/receipts/${receipt.order_id}?type=${receipt.receipt_type || "sale"}`}>
