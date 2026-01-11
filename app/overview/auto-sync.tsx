@@ -2,17 +2,21 @@
 
 import { useEffect } from "react";
 
+const INITIAL_SYNC_KEY = "udito_initial_sync_done";
 const AUTO_SYNC_KEY = "udito_auto_sync_at";
-const AUTO_SYNC_WINDOW_MS = 2 * 60 * 1000; // 2 minutes window
-const AUTO_SYNC_MAX_RUNS = 30; // Allow more runs to sync all orders
-const AUTO_SYNC_DELAY_MS = 500; // Faster retries
+const AUTO_SYNC_WINDOW_MS = 10 * 60 * 1000; // 10 minutes window (less frequent)
+const AUTO_SYNC_MAX_RUNS = 5; // Fewer runs since we only sync recent orders
+const AUTO_SYNC_DELAY_MS = 500;
 const FIX_PAYMENTS_KEY = "udito_fix_payments_at";
-const FIX_PAYMENTS_WINDOW_MS = 5 * 60 * 1000; // 5 minutes window
+const FIX_PAYMENTS_WINDOW_MS = 30 * 60 * 1000; // 30 minutes window
 
 export default function AutoSync() {
   useEffect(() => {
     const now = Date.now();
-    let shouldReset = true;
+
+    // Check if initial sync was ever done
+    const initialSyncDone = localStorage.getItem(INITIAL_SYNC_KEY) === "true";
+
     try {
       const lastRun = Number(localStorage.getItem(AUTO_SYNC_KEY) || 0);
       if (lastRun && now - lastRun < AUTO_SYNC_WINDOW_MS) {
@@ -22,16 +26,29 @@ export default function AutoSync() {
     } catch {
       // Ignore storage errors; still attempt sync once.
     }
+
     const runSync = async (cursor?: string | null, run = 0) => {
       if (run >= AUTO_SYNC_MAX_RUNS) return;
+
+      // If initial sync done, only sync last 7 days
+      // If not done, do full sync from 2000
+      const startDate = initialSyncDone
+        ? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+        : "2000-01-01T00:00:00Z";
+
       const params = new URLSearchParams({
         auto: "1",
         limit: "100",
-        maxPages: "20", // More pages per run
-        start: "2000-01-01T00:00:00Z",
+        maxPages: initialSyncDone ? "3" : "20", // Fewer pages for incremental sync
+        start: startDate,
       });
-      if (run === 0 && !cursor && shouldReset) params.set("reset", "1");
+
+      // Only reset on first-ever sync, not on subsequent syncs
+      if (run === 0 && !cursor && !initialSyncDone) {
+        params.set("reset", "1");
+      }
       if (cursor) params.set("cursor", cursor);
+
       const response = await fetch(`/api/backfill?${params.toString()}`, {
         method: "POST",
         credentials: "include",
@@ -43,6 +60,10 @@ export default function AutoSync() {
           void runSync(data.cursor ?? null, run + 1);
         }, AUTO_SYNC_DELAY_MS);
       } else {
+        // Mark initial sync as done
+        if (!initialSyncDone) {
+          localStorage.setItem(INITIAL_SYNC_KEY, "true");
+        }
         // Backfill completed, now fix missing payment data
         runFixPayments();
       }
