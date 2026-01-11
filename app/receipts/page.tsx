@@ -90,7 +90,10 @@ export default async function ReceiptsPage({
   const token = await getActiveWixToken();
   const siteId = token?.site_id ?? null;
   const now = new Date();
-  const monthParam = searchParams?.month || "all";
+
+  // Default to current month instead of "all"
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const monthParam = searchParams?.month || currentMonth;
   const monthMatch = monthParam.match(/^(\d{4})-(\d{2})$/);
   const monthOptions = [
     { value: "all", label: "Всички месеци" },
@@ -232,14 +235,14 @@ export default async function ReceiptsPage({
                       ) : "—"}
                     </span>
                     <span>
-                      <a className="status-link" href={`/receipts/${receipt.order_id}?type=${receipt.receipt_type || "sale"}`}>
+                      <a className="status-link" href={`/receipts/${receipt.order_id}?type=${receipt.receipt_type || "sale"}&month=${monthValue}`}>
                         Преглед
                       </a>
                     </span>
                     <span>
                       <a
                         className="status-link"
-                        href={`/receipts/${receipt.order_id}?type=${receipt.receipt_type || "sale"}&print=1`}
+                        href={`/receipts/${receipt.order_id}?type=${receipt.receipt_type || "sale"}&print=1&month=${monthValue}`}
                       >
                         Изтегли
                       </a>

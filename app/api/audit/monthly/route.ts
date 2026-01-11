@@ -59,7 +59,24 @@ function extractLineItems(raw: any): AuditLineItem[] {
     // Get quantity
     const quantity = Number(item?.quantity ?? item?.amount ?? 1) || 1;
 
-    // Get price with VAT (единична цена)
+    // IMPORTANT: Use totalPriceAfterTax if available (includes discounts)
+    // This is the actual amount paid for this item after any coupon/discount
+    const totalPriceAfterTax = Number(item?.totalPriceAfterTax?.amount ?? 0) || 0;
+
+    if (totalPriceAfterTax > 0) {
+      // Use the discounted total price divided by quantity
+      const priceWithVat = totalPriceAfterTax / quantity;
+      const vatRate = Number(item?.taxDetails?.taxRate ?? item?.taxInfo?.taxRate ?? 0.2) * 100 || 20;
+
+      return {
+        name: String(name).substring(0, 200),
+        quantity,
+        priceWithVat,
+        vatRate,
+      };
+    }
+
+    // Fallback: Get price with VAT (единична цена) - original price without discounts
     const unitPrice = Number(
       item?.price?.amount ??
       item?.price?.value ??
