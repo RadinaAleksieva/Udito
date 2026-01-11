@@ -3,39 +3,40 @@ import { sql } from "@vercel/postgres";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const searchNumber = url.searchParams.get("number");
+
   try {
-    // Get all orders with number 10232
-    const order10232 = await sql`
-      SELECT id, number, site_id, status, payment_status, created_at, source
-      FROM orders
-      WHERE number = '10232'
-      ORDER BY created_at DESC
-      LIMIT 5
-    `;
+    // Search for specific order if number provided
+    let searchResult = null;
+    if (searchNumber) {
+      const result = await sql`
+        SELECT id, number, site_id, status, payment_status, created_at, paid_at, source
+        FROM orders
+        WHERE number = ${searchNumber}
+        LIMIT 5
+      `;
+      searchResult = result.rows;
+    }
 
     // Get total count of all orders
     const totalCount = await sql`
       SELECT COUNT(*) as count FROM orders
     `;
 
-    // Get count of orders with null site_id
-    const nullSiteIdCount = await sql`
-      SELECT COUNT(*) as count FROM orders WHERE site_id IS NULL
-    `;
-
-    // Get recent orders
+    // Get recent orders - sorted by number descending to see newest
     const recentOrders = await sql`
-      SELECT id, number, site_id, status, payment_status, created_at, source
+      SELECT id, number, site_id, status, payment_status, created_at, paid_at, source
       FROM orders
-      ORDER BY created_at DESC
-      LIMIT 10
+      ORDER BY CAST(number AS INTEGER) DESC NULLS LAST
+      LIMIT 20
     `;
 
     return NextResponse.json({
-      order10232: order10232.rows,
+      searchNumber,
+      searchResult,
       totalCount: totalCount.rows[0],
-      nullSiteIdCount: nullSiteIdCount.rows[0],
       recentOrders: recentOrders.rows,
     });
   } catch (error) {
