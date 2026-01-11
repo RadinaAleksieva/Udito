@@ -1084,7 +1084,7 @@ main {
     padding: 24px 12px 60px;
   }
 
-  /* Receipts table - horizontal scroll with fixed column widths */
+  /* Tables - horizontal scroll with fixed column widths */
   .orders-table {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
@@ -1092,16 +1092,20 @@ main {
     padding: 0 12px;
   }
 
+  /* Overview/Orders table (5 columns: Поръчка, Статус, Общо, Източник, Създадена) */
   .orders-head,
   .orders-row {
-    min-width: 700px;
-    grid-template-columns: 100px 80px 80px 100px 100px;
+    min-width: 580px;
+    grid-template-columns: 70px 110px 90px 60px 150px;
+    font-size: 13px;
   }
 
+  /* Receipts table (8 columns) */
   .orders-head--receipts,
   .orders-row--receipts {
-    min-width: 950px;
-    grid-template-columns: 100px 130px 70px 120px 80px 140px 70px 70px;
+    min-width: 900px;
+    grid-template-columns: 95px 120px 65px 110px 75px 130px 65px 65px;
+    font-size: 12px;
   }
 
   .section-header {
@@ -1111,5 +1115,58 @@ main {
 
   .help-section {
     padding: 20px;
+  }
+
+  /* Hero section mobile */
+  .hero {
+    gap: 24px;
+  }
+
+  .hero h1 {
+    font-size: 24px;
+  }
+
+  .hero p {
+    font-size: 15px;
+  }
+
+  /* Status grid mobile */
+  .status-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .status-card {
+    padding: 14px 16px;
+  }
+
+  .status-card strong {
+    font-size: 18px;
+  }
+
+  /* Hero card mobile */
+  .hero-card {
+    padding: 20px;
+  }
+
+  .hero-card h2 {
+    font-size: 20px;
+  }
+
+  .grid {
+    gap: 16px;
+    margin-top: 24px;
+  }
+
+  .card {
+    padding: 16px;
+  }
+
+  .card h3 {
+    font-size: 16px;
+  }
+
+  .card p {
+    font-size: 14px;
   }
 }
