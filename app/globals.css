@@ -1084,20 +1084,24 @@ main {
     padding: 24px 12px 60px;
   }
 
-  /* Receipts table - horizontal scroll instead of hiding columns */
+  /* Receipts table - horizontal scroll with fixed column widths */
   .orders-table {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+    margin: 0 -12px;
+    padding: 0 12px;
   }
 
   .orders-head,
   .orders-row {
-    min-width: 800px;
+    min-width: 700px;
+    grid-template-columns: 100px 80px 80px 100px 100px;
   }
 
   .orders-head--receipts,
   .orders-row--receipts {
-    min-width: 900px;
+    min-width: 950px;
+    grid-template-columns: 100px 130px 70px 120px 80px 140px 70px 70px;
   }
 
   .section-header {
