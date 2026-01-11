@@ -120,8 +120,9 @@ function formatQrDate(date: Date) {
     },
     {}
   );
-  const datePart = `${parts.year}-${parts.month}-${parts.day}`;
-  const timePart = `${parts.hour}-${parts.minute}-${parts.second}`;
+  // Use dots for date and colons for time to avoid phone number detection
+  const datePart = `${parts.day}.${parts.month}.${parts.year}`;
+  const timePart = `${parts.hour}:${parts.minute}:${parts.second}`;
   return { datePart, timePart };
 }
 
