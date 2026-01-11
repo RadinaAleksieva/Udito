@@ -324,6 +324,7 @@ export async function initDb() {
   // Receipt settings migrations
   await sql`alter table companies add column if not exists receipt_number_start bigint;`;
   await sql`alter table companies add column if not exists cod_receipts_enabled boolean default false;`;
+  await sql`alter table companies add column if not exists receipts_start_date timestamptz;`;
 
   await sql`
     create unique index if not exists store_connections_site_id_key
@@ -1052,6 +1053,7 @@ export async function getCompanyBySite(siteId: string | null, instanceId?: strin
       receipt_template,
       receipt_number_start,
       cod_receipts_enabled,
+      receipts_start_date,
       updated_at
     from companies
     where (site_id = ${siteId} OR instance_id = ${instanceId})

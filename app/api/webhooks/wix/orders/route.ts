@@ -293,8 +293,10 @@ async function handleOrderEvent(event: any) {
 
   // Only issue receipts for orders paid on or after the receipts start date
   // Default: 2026-01-01 (when app was "installed")
-  const receiptsStartDate = company?.receipts_start_date
-    ? new Date(company.receipts_start_date)
+  // Note: database returns snake_case (receipts_start_date)
+  const companyStartDate = company?.receipts_start_date ?? company?.receiptsStartDate ?? null;
+  const receiptsStartDate = companyStartDate
+    ? new Date(companyStartDate)
     : new Date("2026-01-01T00:00:00Z");
   // For paid orders, use effectivePaidAt or current time as fallback
   // This ensures we can issue receipts even if timestamp is missing
@@ -339,7 +341,9 @@ async function handleOrderEvent(event: any) {
     const hasValue = orderTotal > 0;
 
     // For COD orders, check if COD receipts are enabled
-    const shouldIssueCODReceipt = isCOD && company?.codReceiptsEnabled === true;
+    // Note: database returns snake_case (cod_receipts_enabled), not camelCase
+    const codReceiptsEnabled = company?.cod_receipts_enabled ?? company?.codReceiptsEnabled ?? false;
+    const shouldIssueCODReceipt = isCOD && codReceiptsEnabled === true;
     const shouldIssueReceipt = isCOD ? shouldIssueCODReceipt : true;
 
     // Log all conditions for debugging
@@ -358,7 +362,7 @@ async function handleOrderEvent(event: any) {
       orderTotal,
       isCOD,
       shouldIssueReceipt,
-      codReceiptsEnabled: company?.codReceiptsEnabled,
+      codReceiptsEnabled,
       companyFound: !!company,
     });
 
