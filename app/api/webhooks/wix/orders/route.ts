@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AppStrategy, createClient } from "@wix/sdk";
 import { orders } from "@wix/ecom";
-import { getCompanyBySite, initDb, saveWixTokens, upsertOrder } from "@/lib/db";
+import { getCompanyBySite, getLatestWixToken, initDb, saveWixTokens, upsertOrder } from "@/lib/db";
 import { issueReceipt, issueRefundReceipt, getSaleReceiptByOrderId } from "@/lib/receipts";
 import {
   extractTransactionRef,
@@ -258,8 +258,21 @@ async function handleOrderEvent(event: any) {
 
   console.log("✅ Order saved successfully:", mapped.number);
   const statusText = (mapped.status || "").toLowerCase();
+
   // Look up company by either siteId or instanceId (whichever matches)
-  const company = (mapped.siteId || instanceId) ? await getCompanyBySite(mapped.siteId, instanceId) : null;
+  let company = (mapped.siteId || instanceId) ? await getCompanyBySite(mapped.siteId, instanceId) : null;
+
+  // Fallback: if no siteId/instanceId, try to get from the latest token
+  if (!company) {
+    const latestToken = await getLatestWixToken();
+    if (latestToken) {
+      console.log("🔍 Fallback: trying company lookup from latest token:", {
+        tokenSiteId: latestToken.site_id,
+        tokenInstanceId: latestToken.instance_id
+      });
+      company = await getCompanyBySite(latestToken.site_id, latestToken.instance_id);
+    }
+  }
   console.log("🏢 Company lookup:", { siteId: mapped.siteId, instanceId, found: !!company, storeId: company?.store_id });
 
   // Check if this is a COD (cash on delivery) payment
@@ -447,6 +460,9 @@ export async function POST(request: NextRequest) {
       const decoded = Buffer.from(payload, 'base64').toString('utf8');
       const parsedPayload = JSON.parse(decoded);
       console.log("📦 Decoded JWS payload:", JSON.stringify(parsedPayload, null, 2).substring(0, 500));
+      console.log("📦 parsedPayload keys:", Object.keys(parsedPayload || {}));
+      console.log("📦 parsedPayload.instanceId:", parsedPayload?.instanceId);
+      console.log("📦 parsedPayload.instance:", parsedPayload?.instance);
 
       // Extract event data from the payload (handle triple-nested structure)
       if (parsedPayload.data) {
