@@ -596,9 +596,8 @@ export default async function ReceiptPage({
             <p>
               № на поръчка: <strong>{orderNumber}</strong>
             </p>
-            <p className="meta-single">
-              Уникален код на транзакцията: <strong>{transactionCode}</strong>
-            </p>
+            <p className="meta-label">Уникален код на транзакцията:</p>
+            <p className="transaction-code">{transactionCode}</p>
           </div>
         </header>
 
