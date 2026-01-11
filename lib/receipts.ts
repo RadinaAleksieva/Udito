@@ -199,7 +199,7 @@ export async function listReceiptsWithOrdersForSite(
       orders.currency
     from receipts
     left join orders on orders.id = receipts.order_id
-    where orders.site_id = ${siteId}
+    where orders.site_id = ${siteId} OR orders.site_id IS NULL
     order by receipts.id desc
     limit ${limit};
   `;
@@ -276,7 +276,7 @@ export async function listReceiptsWithOrdersForPeriodForSite(
       orders.currency
     from receipts
     left join orders on orders.id = receipts.order_id
-    where orders.site_id = ${siteId}
+    where (orders.site_id = ${siteId} OR orders.site_id IS NULL)
       and orders.paid_at between ${startIso} and ${endIso}
       and (orders.status is null
         or lower(orders.status) not like 'cancel%')
