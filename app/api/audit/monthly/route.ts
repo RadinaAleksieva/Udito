@@ -93,6 +93,30 @@ function extractLineItems(raw: any): AuditLineItem[] {
 }
 
 /**
+ * Extract shipping cost from raw order data
+ */
+function extractShippingCost(raw: any): number {
+  const summary = raw?.udito?.paymentSummary ?? null;
+
+  // Try various locations for shipping cost
+  const shipping = Number(
+    summary?.shipping ??
+    raw?.shippingInfo?.cost?.price?.amount ??
+    raw?.shippingInfo?.cost?.totalPrice?.amount ??
+    raw?.shippingInfo?.shippingCost?.amount ??
+    raw?.shippingInfo?.price?.amount ??
+    raw?.totals?.shipping ??
+    raw?.priceSummary?.shipping?.amount ??
+    raw?.shipping?.cost ??
+    raw?.shippingCost ??
+    raw?.deliveryCost ??
+    0
+  ) || 0;
+
+  return shipping;
+}
+
+/**
  * Extract payment method from raw order data
  */
 function extractPaymentMethod(raw: any): string {
@@ -242,6 +266,17 @@ export async function GET(request: Request) {
         ...item,
         priceWithVat: convertBgnToEur(item.priceWithVat),
       }));
+    }
+
+    // Extract and add shipping cost as a line item (if > 0)
+    const shippingCost = extractShippingCost(raw);
+    if (shippingCost > 0) {
+      items.push({
+        name: "Доставка",
+        quantity: 1,
+        priceWithVat: needsEurConversion ? convertBgnToEur(shippingCost) : shippingCost,
+        vatRate: 20,
+      });
     }
 
     // Discount is always 0 - item prices already include any discounts applied
