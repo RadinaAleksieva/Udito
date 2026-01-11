@@ -203,11 +203,6 @@ export default async function ReceiptsPage({
                     </span>
                     <span className={isRefund ? "receipt-type-refund" : ""}>
                       {formatReceiptType(receipt.receipt_type)}
-                      {isRefund && (
-                        <small className="refund-sub">
-                          {" "}(възстановени суми)
-                        </small>
-                      )}
                       {isRefund && receipt.reference_receipt_id && (
                         <small className="refund-ref">
                           {" "}
