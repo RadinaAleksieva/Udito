@@ -991,7 +991,7 @@ export async function getOrderByIdForSite(orderId: string, siteId: string) {
       raw
     from orders
     where id = ${orderId}
-      and site_id = ${siteId}
+      and (site_id = ${siteId} OR site_id IS NULL)
     limit 1;
   `;
   return result.rows[0] ?? null;
