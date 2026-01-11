@@ -1095,18 +1095,20 @@ main {
   /* Overview/Orders table (5 columns: Поръчка, Статус, Общо, Източник, Създадена) */
   .orders-head,
   .orders-row {
-    min-width: 680px;
-    grid-template-columns: 60px 130px 75px 55px 180px;
-    font-size: 12px;
-    gap: 12px;
+    min-width: 560px;
+    grid-template-columns: 70px 120px 80px 80px 170px;
+    font-size: 11px;
+    gap: 8px;
+    padding: 10px 12px;
   }
 
   /* Receipts table (8 columns) */
   .orders-head--receipts,
   .orders-row--receipts {
-    min-width: 900px;
-    grid-template-columns: 95px 120px 65px 110px 75px 130px 65px 65px;
-    font-size: 12px;
+    min-width: 820px;
+    grid-template-columns: 80px 100px 55px 100px 70px 120px 55px 55px;
+    font-size: 11px;
+    gap: 8px;
   }
 
   .section-header {
