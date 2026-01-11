@@ -562,6 +562,7 @@ export default async function ReceiptPage({
         margin: 4,
         scale: 6,
         color: { dark: "#000000", light: "#ffffff" },
+        mode: "byte",
       })
     : null;
 
