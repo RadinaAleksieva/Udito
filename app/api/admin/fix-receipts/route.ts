@@ -27,6 +27,43 @@ const REAL_RECEIPTS = [
   { orderNumber: "10164", issuedAt: "2025-11-28T12:00:00.000Z" },
 ];
 
+export async function DELETE(request: Request) {
+  try {
+    requireSecret(request);
+    await initDb();
+
+    const url = new URL(request.url);
+    const idsParam = url.searchParams.get("ids");
+
+    if (!idsParam) {
+      return NextResponse.json({ ok: false, error: "Missing ids parameter" }, { status: 400 });
+    }
+
+    const ids = idsParam.split(",").map(id => parseInt(id.trim(), 10)).filter(id => !isNaN(id));
+
+    if (ids.length === 0) {
+      return NextResponse.json({ ok: false, error: "No valid IDs provided" }, { status: 400 });
+    }
+
+    // Delete receipts by ID
+    const deleteResult = await sql`
+      DELETE FROM receipts WHERE id = ANY(${ids}::bigint[]);
+    `;
+
+    return NextResponse.json({
+      ok: true,
+      deleted: deleteResult.rowCount,
+      ids,
+    });
+  } catch (error) {
+    console.error("Delete receipts failed:", error);
+    return NextResponse.json(
+      { ok: false, error: (error as Error).message },
+      { status: 500 }
+    );
+  }
+}
+
 export async function POST(request: Request) {
   try {
     requireSecret(request);
