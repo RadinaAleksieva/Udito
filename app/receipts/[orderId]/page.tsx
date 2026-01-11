@@ -30,6 +30,8 @@ type LineItem = {
   price: number;
   lineTotal: number;
   taxPercent: number | null;
+  originalPrice: number | null;
+  discount: number | null;
 };
 
 function formatMoney(amount: number | null | undefined, currency: string) {
@@ -213,29 +215,39 @@ function extractLineItems(raw: any): LineItem[] {
     raw?.line_items ??
     [];
   if (!Array.isArray(items)) return [];
-  return items.map((item: any) => ({
-    name: normalizeText(
-      item?.name ?? item?.productName ?? item?.description,
-      "Артикул"
-    ),
-    quantity: Number(item?.quantity ?? item?.amount ?? 1),
-    price: Number(
-      item?.price?.amount ??
-        item?.price ??
-        item?.price?.value ??
-        item?.totalPrice?.amount ??
-        item?.total ??
-        0
-    ),
-    lineTotal: Number(
-      item?.totalPrice?.amount ??
-        item?.total ??
+  return items.map((item: any) => {
+    // Original price (before discount)
+    const originalPrice = Number(
+      item?.priceBeforeDiscounts?.amount ??
         item?.price?.amount ??
         item?.price ??
         0
-    ),
-    taxPercent: item?.taxPercent ?? item?.taxRate ?? null,
-  }));
+    ) || null;
+
+    // Discount amount for this item
+    const discount = Number(item?.totalDiscount?.amount ?? 0) || null;
+
+    // Price after discount (totalPriceAfterTax) or original price
+    const priceAfterDiscount = Number(
+      item?.totalPriceAfterTax?.amount ??
+        item?.price?.amount ??
+        item?.price ??
+        0
+    );
+
+    return {
+      name: normalizeText(
+        item?.name ?? item?.productName ?? item?.description,
+        "Артикул"
+      ),
+      quantity: Number(item?.quantity ?? item?.amount ?? 1),
+      price: priceAfterDiscount,
+      lineTotal: priceAfterDiscount,
+      taxPercent: item?.taxPercent ?? item?.taxRate ?? null,
+      originalPrice,
+      discount,
+    };
+  });
 }
 
 function extractShipping(raw: any) {
@@ -529,6 +541,11 @@ export default async function ReceiptPage({
   const summary = orderRaw?.priceSummary ?? {};
   const refundMultiplier = isRefund ? -1 : 1;
 
+  // Extract discount information
+  const discountAmount = Number(summary?.discount?.amount ?? 0) || 0;
+  const appliedDiscounts = orderRaw?.appliedDiscounts ?? [];
+  const discountCode = appliedDiscounts[0]?.coupon?.code ?? null;
+
   // For refunds, use refund_amount from receipt record (excludes shipping if not refunded)
   const refundAmount = receiptRecord?.refund_amount ? Number(receiptRecord.refund_amount) : null;
 
@@ -771,6 +788,16 @@ export default async function ReceiptPage({
                   : `${formatMoney(subtotal, currency)}${formatFx(subtotal, currency)}`}
               </strong>
             </div>
+            {discountAmount > 0 && !isRefund && (
+              <div className="row discount-row">
+                <span>Отстъпка{discountCode ? ` (${discountCode})` : ""}</span>
+                <strong className="discount-amount">
+                  {showEurPrimary && currency === "BGN"
+                    ? `−${formatMoney(convertToEur(discountAmount), "EUR")} / −${formatMoney(discountAmount, currency)}`
+                    : `−${formatMoney(discountAmount, currency)}${formatFx(discountAmount, currency)}`}
+                </strong>
+              </div>
+            )}
             {!isPartialRefund && (
               <div className="row">
                 <span>Такса за доставка</span>

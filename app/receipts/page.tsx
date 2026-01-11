@@ -145,18 +145,13 @@ export default async function ReceiptsPage({
         : [];
 
   const dbReceipts = receipts as ReceiptRow[];
-  const displayReceipts: ReceiptRow[] = [];
-  for (const receipt of dbReceipts) {
-    let customerName = receipt.customer_name || "";
-    if (siteId && (!customerName || customerName === "—")) {
-      const order = await getOrderByIdForSite(receipt.order_id, siteId);
-      if (order) {
-        const raw = (order.raw ?? {}) as any;
-        customerName = extractCustomerName(raw, order.customer_name);
-      }
-    }
-    displayReceipts.push({ ...receipt, customer_name: customerName });
-  }
+
+  // Use customer names from the JOIN query - no need for separate lookups
+  // The listReceiptsWithOrdersForSite already joins with orders table
+  const displayReceipts = dbReceipts.map((receipt) => ({
+    ...receipt,
+    customer_name: receipt.customer_name || "—",
+  }));
 
   return (
     <main>
