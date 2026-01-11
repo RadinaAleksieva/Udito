@@ -1058,6 +1058,12 @@ main {
   color: #d32f2f;
 }
 
+.refund-sub {
+  font-size: 10px;
+  color: #888;
+  font-weight: normal;
+}
+
 .refund-ref {
   display: block;
   font-size: 11px;

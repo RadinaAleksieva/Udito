@@ -72,7 +72,7 @@ function formatReceiptStatus(status: string | null) {
 
 function formatReceiptType(type: string | null | undefined): string {
   if (!type || type === "sale") return "Продажба";
-  if (type === "refund") return "Сторно (възстановени суми)";
+  if (type === "refund") return "Сторно";
   return type;
 }
 
@@ -203,6 +203,11 @@ export default async function ReceiptsPage({
                     </span>
                     <span className={isRefund ? "receipt-type-refund" : ""}>
                       {formatReceiptType(receipt.receipt_type)}
+                      {isRefund && (
+                        <small className="refund-sub">
+                          {" "}(възстановени суми)
+                        </small>
+                      )}
                       {isRefund && receipt.reference_receipt_id && (
                         <small className="refund-ref">
                           {" "}
