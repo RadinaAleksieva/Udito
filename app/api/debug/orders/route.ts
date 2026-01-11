@@ -77,6 +77,14 @@ export async function GET(request: Request) {
           items,
           rawPaymentMethod: raw?.paymentMethod ?? raw?.paymentMethodSummary ?? null,
           udito: raw?.udito ?? null,
+          // Debug: show all shipping-related fields
+          shippingDebug: {
+            shippingInfo: raw?.shippingInfo ?? null,
+            shippingAddress: raw?.shippingAddress ?? null,
+            deliveryAddress: raw?.deliveryAddress ?? null,
+            recipientInfo: raw?.recipientInfo ?? null,
+            billingInfo: raw?.billingInfo ?? null,
+          },
         };
       }
     }
@@ -94,9 +102,14 @@ export async function GET(request: Request) {
       LIMIT 20
     `;
 
+    // Include raw data if showRaw=true for debugging shipping address
+    const showRaw = url.searchParams.get("showRaw") === "true";
     return NextResponse.json({
       searchNumber,
-      searchResult: searchResult?.map(r => ({ ...r, raw: undefined })),
+      searchResult: searchResult?.map(r => ({
+        ...r,
+        raw: showRaw ? r.raw : undefined
+      })),
       orderDetails,
       totalCount: totalCount.rows[0],
       recentOrders: recentOrders.rows,
