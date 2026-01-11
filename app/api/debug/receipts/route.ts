@@ -10,9 +10,9 @@ export async function GET(request: Request) {
   try {
     // Get recent receipts
     const recentReceipts = await sql`
-      SELECT id, order_id, type, issued_at, created_at
+      SELECT id, order_id, type, issued_at
       FROM receipts
-      ORDER BY created_at DESC
+      ORDER BY issued_at DESC
       LIMIT 10
     `;
 
