@@ -299,6 +299,15 @@ async function handleOrderEvent(event: any) {
   // Get refund timestamp
   const refundTimestamp = refundActivity?.createdDate ?? eventTimestamp ?? null;
 
+  // DEBUG: Log receipt decision factors
+  console.log(`📊 Receipt decision for order ${mapped.number}:`, {
+    paymentStatus: mapped.paymentStatus,
+    isPaid,
+    status: mapped.status,
+    statusText,
+    isCancelled: statusText.includes("cancel"),
+  });
+
   if (
     isPaid &&
     !statusText.includes("cancel")
