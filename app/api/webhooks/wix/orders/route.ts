@@ -203,8 +203,9 @@ async function handleOrderEvent(event: any) {
     console.warn("⚠️ Order has no ID, skipping. Raw order:", JSON.stringify(baseOrder).substring(0, 200));
     return;
   }
-  console.log("✅ Order has ID, continuing...");
+  console.log("✅ Order has ID, continuing...", mapped.id);
 
+  console.log("🔄 Step 1: Checking siteId...");
   if (!mapped.siteId) {
     console.log("🔍 Looking for siteId in event metadata...");
     mapped.siteId =
@@ -221,6 +222,7 @@ async function handleOrderEvent(event: any) {
       console.warn("Wix get app instance failed", error);
     }
   }
+  console.log("🔄 Step 2: Saving tokens...");
   if (mapped.siteId || instanceId) {
     await saveWixTokens({
       businessId: null,
@@ -231,6 +233,7 @@ async function handleOrderEvent(event: any) {
       expiresAt: null,
     });
   }
+  console.log("🔄 Step 3: Calculating isPaid...");
   // Use event timestamp as paidAt when order is marked as PAID
   // This is more accurate than the payment record's createdDate
   const isPaid = (mapped.paymentStatus || "").toUpperCase() === "PAID";
@@ -255,7 +258,9 @@ async function handleOrderEvent(event: any) {
 
   console.log("✅ Order saved successfully:", mapped.number);
   const statusText = (mapped.status || "").toLowerCase();
-  const company = mapped.siteId ? await getCompanyBySite(mapped.siteId) : null;
+  // Look up company by either siteId or instanceId (whichever matches)
+  const company = (mapped.siteId || instanceId) ? await getCompanyBySite(mapped.siteId, instanceId) : null;
+  console.log("🏢 Company lookup:", { siteId: mapped.siteId, instanceId, found: !!company, fiscalStoreId: company?.fiscal_store_id });
 
   // Check if this is a COD (cash on delivery) payment
   const paymentMethodText = String(
