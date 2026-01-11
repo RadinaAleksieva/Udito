@@ -288,19 +288,21 @@ export async function initDb() {
   await sql`alter table receipts add column if not exists business_id text;`;
   await sql`create index if not exists receipts_business_id_idx on receipts (business_id);`;
 
-  // Migration: rename store_id to store_id (НАП уникален код на магазина)
+  // Migration: copy fiscal_store_id to store_id (НАП уникален код на магазина)
   await sql`alter table companies add column if not exists store_id text;`;
+  // Copy data from fiscal_store_id to store_id if store_id is null
   await sql`
     update companies
-    set store_id = store_id
-    where store_id is null and store_id is not null;
+    set store_id = fiscal_store_id
+    where store_id is null and fiscal_store_id is not null;
   `;
   await sql`alter table companies add column if not exists logo_url text;`;
   await sql`alter table business_profiles add column if not exists store_id text;`;
+  // Copy data from fiscal_store_id to store_id if store_id is null
   await sql`
     update business_profiles
-    set store_id = store_id
-    where store_id is null and store_id is not null;
+    set store_id = fiscal_store_id
+    where store_id is null and fiscal_store_id is not null;
   `;
   await sql`alter table business_profiles add column if not exists logo_url text;`;
 

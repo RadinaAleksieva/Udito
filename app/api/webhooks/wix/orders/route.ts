@@ -296,7 +296,11 @@ async function handleOrderEvent(event: any) {
   const receiptsStartDate = company?.receipts_start_date
     ? new Date(company.receipts_start_date)
     : new Date("2026-01-01T00:00:00Z");
-  const orderPaidAt = effectivePaidAt ? new Date(effectivePaidAt) : null;
+  // For paid orders, use effectivePaidAt or current time as fallback
+  // This ensures we can issue receipts even if timestamp is missing
+  const orderPaidAt = effectivePaidAt
+    ? new Date(effectivePaidAt)
+    : (isPaid ? new Date() : null);
   const isAfterStartDate = orderPaidAt && orderPaidAt >= receiptsStartDate;
 
   // Check for refund scenarios
@@ -339,19 +343,23 @@ async function handleOrderEvent(event: any) {
     const shouldIssueReceipt = isCOD ? shouldIssueCODReceipt : true;
 
     // Log all conditions for debugging
+    const paidAtSource = effectivePaidAt ? 'from event/order' : (isPaid ? 'using current time (fallback)' : 'not paid');
     console.log(`🧾 Receipt conditions for order ${mapped.number}:`, {
-      hasFiscalStoreId: !!company?.store_id,
+      hasStoreId: !!company?.store_id,
       storeId: company?.store_id ?? "MISSING",
       hasReceiptTxRef: !!receiptTxRef,
       receiptTxRef: receiptTxRef ?? "MISSING",
       isAfterStartDate,
       receiptsStartDate: company?.receipts_start_date ?? "default:2026-01-01",
-      effectivePaidAt,
+      orderPaidAt: orderPaidAt?.toISOString() ?? "null",
+      paidAtSource,
+      effectivePaidAt: effectivePaidAt ?? "null",
       hasValue,
       orderTotal,
       isCOD,
       shouldIssueReceipt,
       codReceiptsEnabled: company?.codReceiptsEnabled,
+      companyFound: !!company,
     });
 
     if (company?.store_id && receiptTxRef && isAfterStartDate && hasValue && shouldIssueReceipt) {
