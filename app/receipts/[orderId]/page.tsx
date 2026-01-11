@@ -225,11 +225,14 @@ function extractLineItems(raw: any): LineItem[] {
 
 function extractShipping(raw: any) {
   return (
+    raw?.shippingInfo?.logistics?.shippingDestination?.address ??
     raw?.shippingInfo?.shipmentDetails?.address ??
     raw?.shippingInfo?.shipmentDetails?.deliveryAddress ??
+    raw?.recipientInfo?.address ??
     raw?.shippingInfo?.shippingAddress ??
     raw?.shippingInfo?.deliveryAddress ??
     raw?.shippingInfo?.address ??
+    raw?.billingInfo?.address ??
     raw?.shippingAddress ??
     raw?.deliveryAddress ??
     raw?.address ??
@@ -272,16 +275,16 @@ function resolveShippingLines(shipping: any) {
   }
   return {
     line1:
+      shipping.addressLine ??
       shipping.addressLine1 ??
       shipping.streetAddress ??
       shipping.line1 ??
-      shipping.addressLine ??
       shipping.address ??
       "Липсва",
     line2: shipping.addressLine2 ?? shipping.line2 ?? "",
     city: shipping.city ?? shipping.town ?? shipping.locality ?? "",
     postalCode: shipping.postalCode ?? shipping.zipCode ?? shipping.postal ?? "",
-    country: shipping.country ?? "",
+    country: shipping.countryFullname ?? shipping.country ?? "",
   };
 }
 
