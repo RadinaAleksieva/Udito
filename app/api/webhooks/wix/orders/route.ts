@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AppStrategy, createClient } from "@wix/sdk";
 import { orders } from "@wix/ecom";
+import { sql } from "@vercel/postgres";
 import { getCompanyBySite, getLatestWixToken, getOrderById, initDb, saveWixTokens, upsertOrder } from "@/lib/db";
 import { issueReceipt, issueRefundReceipt, getSaleReceiptByOrderId } from "@/lib/receipts";
 import {
@@ -267,17 +268,31 @@ async function handleOrderEvent(event: any) {
   // Look up company by either siteId or instanceId (whichever matches)
   let company = (mapped.siteId || instanceId) ? await getCompanyBySite(mapped.siteId, instanceId) : null;
 
-  // Fallback: if no siteId/instanceId, try to get from the latest token
+  // Fallback 1: if no siteId/instanceId, try to get from the latest token
   if (!company) {
     const latestToken = await getLatestWixToken();
     if (latestToken) {
-      console.log("🔍 Fallback: trying company lookup from latest token:", {
+      console.log("🔍 Fallback 1: trying company lookup from latest token:", {
         tokenSiteId: latestToken.site_id,
         tokenInstanceId: latestToken.instance_id
       });
       company = await getCompanyBySite(latestToken.site_id, latestToken.instance_id);
     }
   }
+
+  // Fallback 2: if still no company, get the first company with store_id and cod_receipts_enabled
+  if (!company) {
+    console.log("🔍 Fallback 2: getting first configured company");
+    const fallbackResult = await sql`
+      SELECT site_id, instance_id, store_name, store_id, cod_receipts_enabled, receipts_start_date
+      FROM companies
+      WHERE store_id IS NOT NULL
+      ORDER BY cod_receipts_enabled DESC, updated_at DESC
+      LIMIT 1
+    `;
+    company = fallbackResult.rows[0] ?? null;
+  }
+
   console.log("🏢 Company lookup:", { siteId: mapped.siteId, instanceId, found: !!company, storeId: company?.store_id });
 
   // Check if this is a COD (cash on delivery) payment
