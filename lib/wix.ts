@@ -394,10 +394,13 @@ export function extractTransactionRef(raw: any): string | null {
     ? pickBestPaymentFromArray(txArray)
     : null;
 
+  // IMPORTANT: Prioritize Stripe IDs (pi_*, ch_*, pay_*) over Wix Payment IDs
+  // Stripe IDs are the actual payment provider transaction references
+  // Wix Payment IDs are internal identifiers that should only be used as fallback
   return (
-    explicit ??
     stripeFromExplicit ??
     stripeFromRaw ??
+    explicit ??
     raw?.providerTransactionId ??
     raw?.providerPaymentId ??
     raw?.stripePaymentId ??
