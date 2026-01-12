@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useEffect, useState } from "react";
 
 type CompanyFormState = {
@@ -10,9 +9,6 @@ type CompanyFormState = {
   vatNumber: string;
   bulstat: string;
   storeId: string;
-  logoUrl: string;
-  logoWidth: number | null;
-  logoHeight: number | null;
   addressLine1: string;
   addressLine2: string;
   city: string;
@@ -21,21 +17,7 @@ type CompanyFormState = {
   email: string;
   phone: string;
   mol: string;
-  receiptTemplate: string;
 };
-
-const templateOptions = [
-  {
-    value: "classic",
-    name: "Класически",
-    description: "Изчистен и строг, с акцент върху данните.",
-  },
-  {
-    value: "minimal",
-    name: "Минимален",
-    description: "Лек, въздушен и без излишни рамки.",
-  },
-];
 
 const emptyForm: CompanyFormState = {
   storeName: "",
@@ -44,9 +26,6 @@ const emptyForm: CompanyFormState = {
   vatNumber: "",
   bulstat: "",
   storeId: "",
-  logoUrl: "",
-  logoWidth: null,
-  logoHeight: null,
   addressLine1: "",
   addressLine2: "",
   city: "",
@@ -55,7 +34,6 @@ const emptyForm: CompanyFormState = {
   email: "",
   phone: "",
   mol: "",
-  receiptTemplate: "classic",
 };
 
 export default function CompanyForm() {
@@ -78,9 +56,6 @@ export default function CompanyForm() {
             vatNumber: data.company.vat_number || "",
             bulstat: data.company.bulstat || "",
             storeId: data.company.store_id || "",
-            logoUrl: data.company.logo_url || "",
-            logoWidth: data.company.logo_width || null,
-            logoHeight: data.company.logo_height || null,
             addressLine1: data.company.address_line1 || "",
             addressLine2: data.company.address_line2 || "",
             city: data.company.city || "",
@@ -89,7 +64,6 @@ export default function CompanyForm() {
             email: data.company.email || "",
             phone: data.company.phone || "",
             mol: data.company.mol || "",
-            receiptTemplate: data.company.receipt_template || "classic",
           });
         }
       } catch (error) {
@@ -132,64 +106,6 @@ export default function CompanyForm() {
 
   function updateField<K extends keyof CompanyFormState>(key: K, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }));
-  }
-
-  const [uploading, setUploading] = useState(false);
-
-  async function handleLogoChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    // Validate file
-    if (!file.type.startsWith("image/")) {
-      setStatus("Файлът трябва да е изображение");
-      return;
-    }
-    if (file.size > 2 * 1024 * 1024) {
-      setStatus("Файлът е твърде голям (макс. 2MB)");
-      return;
-    }
-
-    setUploading(true);
-    setStatus("");
-
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const response = await fetch("/api/upload/logo", {
-        method: "POST",
-        body: formData,
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setStatus(data.error || "Грешка при качване");
-        return;
-      }
-
-      // Delete old logo if exists and is from Vercel Blob
-      if (form.logoUrl && form.logoUrl.includes("vercel-storage.com")) {
-        fetch("/api/upload/logo", {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: form.logoUrl }),
-        }).catch(console.error);
-      }
-
-      setForm((prev) => ({
-        ...prev,
-        logoUrl: data.url,
-        logoWidth: data.width || null,
-        logoHeight: data.height || null,
-      }));
-    } catch (error) {
-      console.error("Upload error:", error);
-      setStatus("Грешка при качване на логото");
-    } finally {
-      setUploading(false);
-    }
   }
 
   return (
@@ -328,154 +244,13 @@ export default function CompanyForm() {
         </label>
       </div>
 
-      <section className="logo-upload">
-        <div>
-          <h3>Лого за електронни бележки</h3>
-          <p>По подразбиране бележките са без лого. Добавете ваше лого при нужда.</p>
-          <ul className="logo-requirements">
-            <li><strong>Формат:</strong> PNG или JPG (SVG не се поддържа)</li>
-            <li><strong>Размер:</strong> Препоръчителен размер 200-400px ширина</li>
-            <li><strong>Макс. размер:</strong> До 2MB</li>
-            <li><strong>Съвет:</strong> За най-добър резултат използвайте лого с прозрачен фон (PNG)</li>
-          </ul>
-        </div>
-        <div className="logo-upload__controls">
-          <input
-            id="logo-upload"
-            type="file"
-            accept="image/png,image/jpeg"
-            onChange={handleLogoChange}
-            className="logo-upload__input"
-            disabled={uploading}
-          />
-          <label className={`btn-secondary ${uploading ? "btn-disabled" : ""}`} htmlFor="logo-upload">
-            {uploading ? "Качване..." : "Добави своето лого"}
-          </label>
-          {form.logoUrl ? (
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={() => setForm((prev) => ({ ...prev, logoUrl: "", logoWidth: null, logoHeight: null }))}
-              disabled={uploading}
-            >
-              Премахни логото
-            </button>
-          ) : null}
-        </div>
-        {form.logoUrl ? (
-          <div className="logo-upload__preview">
-            <Image
-              src={form.logoUrl}
-              alt="Лого на магазина"
-              width={96}
-              height={96}
-              unoptimized
-            />
-          </div>
-        ) : null}
-      </section>
-
-      <section className="template-grid">
-        <div className="template-header">
-          <h3>Шаблон за бележка</h3>
-          <p>Изберете как да изглеждат електронните бележки.</p>
-        </div>
-        <div className="template-cards">
-          {templateOptions.map((template) => (
-            <button
-              type="button"
-              key={template.value}
-              className={
-                form.receiptTemplate === template.value
-                  ? "template-card active"
-                  : "template-card"
-              }
-              onClick={() => updateField("receiptTemplate", template.value)}
-            >
-              <div className="template-card__title">{template.name}</div>
-              <div className="template-card__desc">{template.description}</div>
-            </button>
-          ))}
-        </div>
-      </section>
-      <section className="receipt-preview" data-template={form.receiptTemplate}>
-        <div className="receipt-preview__header">
-          <h3>Преглед на бележка</h3>
-          <p>Примерен изглед с демо данни.</p>
-        </div>
-        <div className="receipt-preview__paper">
-          <div className="receipt-preview__top">
-            <div className="receipt-preview__title-wrap">
-              {form.logoUrl ? (
-                <Image
-                  src={form.logoUrl}
-                  alt="Лого на магазина"
-                  className="receipt-preview__logo"
-                  width={42}
-                  height={42}
-                  unoptimized
-                />
-              ) : null}
-              <div>
-                <strong className="receipt-preview__title">
-                  {form.legalName || "Фирма"}
-                </strong>
-                <div className="receipt-preview__meta">
-                  Бележка #10219 • 05.01.2026, 14:12
-                </div>
-              </div>
-            </div>
-            <div className="receipt-preview__qr">QR</div>
-          </div>
-          <div className="receipt-preview__cols">
-            <div>
-              <div className="receipt-preview__label">Клиент</div>
-              <div>Тест потребител</div>
-              <div className="receipt-preview__meta">
-                Град, улица 10
-              </div>
-              <div className="receipt-preview__meta">08XXXXXXXX</div>
-            </div>
-            <div>
-              <div className="receipt-preview__label">Плащане</div>
-              <div>Платено с карта</div>
-              <div className="receipt-preview__meta">Уникален код: pi_XXXX</div>
-            </div>
-          </div>
-          <table className="receipt-preview__items">
-            <thead>
-              <tr>
-                <th>Артикул</th>
-                <th>Кол.</th>
-                <th>Ед. цена</th>
-                <th>Данък</th>
-                <th>Общо</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>Тест продукт</td>
-                <td>1</td>
-                <td>10,00 €</td>
-                <td>20%</td>
-                <td>12,00 €</td>
-              </tr>
-            </tbody>
-          </table>
-          <div className="receipt-preview__totals">
-            <div>
-              <span>Междинна сума</span>
-              <strong>10,00 €</strong>
-            </div>
-            <div>
-              <span>Данъци</span>
-              <strong>2,00 €</strong>
-            </div>
-            <div className="receipt-preview__total">
-              <span>Обща сума</span>
-              <strong>12,00 €</strong>
-            </div>
-          </div>
+      <section className="settings-section settings-section--info">
+        <div className="settings-section__header">
+          <h3>Настройки на бележките</h3>
+          <p>
+            За настройки на външния вид на бележките (лого, шаблон, цветове), отидете на{" "}
+            <a href="/receipts/settings">Настройки на електронните бележки</a>.
+          </p>
         </div>
       </section>
     </form>
