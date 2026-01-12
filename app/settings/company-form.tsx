@@ -128,15 +128,57 @@ export default function CompanyForm() {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  function handleLogoChange(event: React.ChangeEvent<HTMLInputElement>) {
+  const [uploading, setUploading] = useState(false);
+
+  async function handleLogoChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = typeof reader.result === "string" ? reader.result : "";
-      updateField("logoUrl", result);
-    };
-    reader.readAsDataURL(file);
+
+    // Validate file
+    if (!file.type.startsWith("image/")) {
+      setStatus("Файлът трябва да е изображение");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setStatus("Файлът е твърде голям (макс. 2MB)");
+      return;
+    }
+
+    setUploading(true);
+    setStatus("");
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch("/api/upload/logo", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setStatus(data.error || "Грешка при качване");
+        return;
+      }
+
+      // Delete old logo if exists and is from Vercel Blob
+      if (form.logoUrl && form.logoUrl.includes("vercel-storage.com")) {
+        fetch("/api/upload/logo", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: form.logoUrl }),
+        }).catch(console.error);
+      }
+
+      updateField("logoUrl", data.url);
+    } catch (error) {
+      console.error("Upload error:", error);
+      setStatus("Грешка при качване на логото");
+    } finally {
+      setUploading(false);
+    }
   }
 
   return (
@@ -287,15 +329,17 @@ export default function CompanyForm() {
             accept="image/*"
             onChange={handleLogoChange}
             className="logo-upload__input"
+            disabled={uploading}
           />
-          <label className="btn-secondary" htmlFor="logo-upload">
-            Добави своето лого
+          <label className={`btn-secondary ${uploading ? "btn-disabled" : ""}`} htmlFor="logo-upload">
+            {uploading ? "Качване..." : "Добави своето лого"}
           </label>
           {form.logoUrl ? (
             <button
               type="button"
               className="btn-secondary"
               onClick={() => updateField("logoUrl", "")}
+              disabled={uploading}
             >
               Премахни логото
             </button>
