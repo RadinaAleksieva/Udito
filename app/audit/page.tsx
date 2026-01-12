@@ -1,7 +1,7 @@
 import TopNav from "../components/top-nav";
 import MonthFilter from "../components/month-filter";
 import { initDb } from "@/lib/db";
-import { listOrdersWithReceiptsForAudit } from "@/lib/receipts";
+import { listOrdersWithReceiptsForAudit, listRefundReceiptsForAudit } from "@/lib/receipts";
 import { getActiveWixToken } from "@/lib/wix-context";
 
 export const dynamic = "force-dynamic";
@@ -41,19 +41,33 @@ export default async function AuditPage({
     999
   );
   // Get sale receipts for audit file
-  // Refund receipts are included separately in the <rorder> section of the XML
-  const monthlyOrders = siteId
+  const monthlySales = siteId
     ? await listOrdersWithReceiptsForAudit(
         monthStart.toISOString(),
         monthEnd.toISOString(),
         siteId
       )
     : [];
-  // Filter out zero-value orders
-  const displayOrders = monthlyOrders.filter((order: any) => {
+  // Get refund receipts for audit file (rorder section)
+  const monthlyRefunds = siteId
+    ? await listRefundReceiptsForAudit(
+        monthStart.toISOString(),
+        monthEnd.toISOString(),
+        siteId
+      )
+    : [];
+  // Filter out zero-value sales and combine with refunds
+  const filteredSales = monthlySales.filter((order: any) => {
     const total = Number(order?.total) || 0;
     return total > 0;
   });
+  // Mark type and combine
+  const salesWithType = filteredSales.map((o: any) => ({ ...o, display_type: "sale" }));
+  const refundsWithType = monthlyRefunds.map((o: any) => ({ ...o, display_type: "refund" }));
+  // Combine and sort by receipt_id descending
+  const displayOrders = [...salesWithType, ...refundsWithType].sort(
+    (a: any, b: any) => (b.receipt_id || 0) - (a.receipt_id || 0)
+  );
   const monthLabel = `${selectedYear}-${String(selectedMonthIndex + 1).padStart(
     2,
     "0"
@@ -150,26 +164,40 @@ export default async function AuditPage({
             <div className="orders-table">
               <div className="orders-head orders-head--audit">
                 <span>Бележка №</span>
+                <span>Тип</span>
                 <span>Поръчка</span>
-                <span>Платена на</span>
-                <span>Общо</span>
-                <span>Валута</span>
+                <span>Издадена</span>
+                <span>Сума</span>
               </div>
-              {displayOrders.map((order) => (
-                <div className="orders-row orders-row--audit" key={order.id}>
-                  <span>{order.receipt_id || "—"}</span>
-                  <span>{order.number || order.id}</span>
-                  <span>
-                    {order.paid_at
-                      ? new Date(order.paid_at).toLocaleString("bg-BG", {
-                          timeZone: "Europe/Sofia",
-                        })
-                      : "—"}
-                  </span>
-                  <span>{formatMoney(order.total, order.currency)}</span>
-                  <span>{order.currency || "—"}</span>
-                </div>
-              ))}
+              {displayOrders.map((order) => {
+                const isRefund = order.display_type === "refund";
+                const amount = isRefund
+                  ? -Math.abs(Number(order.refund_amount || order.total || 0))
+                  : Number(order.total || 0);
+                const issueDate = order.receipt_issued_at || order.paid_at;
+                return (
+                  <div
+                    className={`orders-row orders-row--audit ${isRefund ? "refund-row" : ""}`}
+                    key={`${order.receipt_id}-${order.display_type}`}
+                  >
+                    <span>{order.receipt_id || "—"}</span>
+                    <span className={isRefund ? "type-refund" : "type-sale"}>
+                      {isRefund ? "Сторно" : "Продажба"}
+                    </span>
+                    <span>{order.number || order.id}</span>
+                    <span>
+                      {issueDate
+                        ? new Date(issueDate).toLocaleString("bg-BG", {
+                            timeZone: "Europe/Sofia",
+                          })
+                        : "—"}
+                    </span>
+                    <span className={isRefund ? "amount-negative" : ""}>
+                      {formatMoney(amount, order.currency)}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           )}
         </section>

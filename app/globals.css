@@ -1076,11 +1076,28 @@ main {
   grid-template-columns: 0.8fr 1fr 0.8fr 1fr 0.8fr 1.2fr 0.6fr 0.6fr;
 }
 
-/* Audit table (5 columns: Бележка №, Поръчка, Платена на, Общо, Валута) */
+/* Audit table (5 columns: Бележка №, Тип, Поръчка, Издадена, Сума) */
 .orders-head--audit,
 .orders-row--audit {
-  grid-template-columns: 90px 100px 180px 100px 70px;
+  grid-template-columns: 80px 90px 90px 170px 100px;
   gap: 12px;
+}
+
+.orders-row--audit.refund-row {
+  background: #fef2f2;
+}
+
+.orders-row--audit .type-refund {
+  color: #dc2626;
+  font-weight: 500;
+}
+
+.orders-row--audit .type-sale {
+  color: #059669;
+}
+
+.orders-row--audit .amount-negative {
+  color: #dc2626;
 }
 
 @media (max-width: 720px) {
