@@ -191,6 +191,10 @@ export async function GET(request: NextRequest) {
 
     const receiptRecord = await getReceiptByOrderIdAndType(orderId, receiptType);
     const company = await getCompanyBySite(siteId);
+
+    // Debug: log template being used
+    console.log("PDF Generation - Company template:", company?.receipt_template, "Accent:", company?.accent_color);
+
     const raw = (record.raw ?? {}) as any;
     const currency = record.currency || "BGN";
     const isRefund = receiptType === "refund";
