@@ -237,7 +237,7 @@ export default async function ReceiptsPage({
                     <span>
                       <a
                         className="status-link"
-                        href={`/receipts/${receipt.order_id}?type=${receipt.receipt_type || "sale"}&download=1`}
+                        href={`/api/receipts/pdf?orderId=${receipt.order_id}&type=${receipt.receipt_type || "sale"}`}
                       >
                         Изтегли
                       </a>

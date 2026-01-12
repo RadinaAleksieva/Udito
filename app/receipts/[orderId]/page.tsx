@@ -600,7 +600,7 @@ export default async function ReceiptPage({
   if (!storeId) {
     return (
       <div className="receipt-shell" data-template={template}>
-        <ReceiptActions orderId={orderId} receiptId={receiptRecord?.id ? Number(receiptRecord.id) : null} />
+        <ReceiptActions orderId={orderId} receiptId={receiptRecord?.id ? Number(receiptRecord.id) : null} receiptType={receiptType} />
         <main className="receipt">
           <h2>Липсва уникален код на магазина</h2>
           <p>
@@ -639,7 +639,7 @@ export default async function ReceiptPage({
         receiptId={receiptRecord?.id ? Number(receiptRecord.id) : null}
         orderId={orderId}
       />
-      <ReceiptActions orderId={orderId} receiptId={receiptRecord?.id ? Number(receiptRecord.id) : null} />
+      <ReceiptActions orderId={orderId} receiptId={receiptRecord?.id ? Number(receiptRecord.id) : null} receiptType={receiptType} />
       <main className="receipt">
         <header className="receipt-header">
           <div className="logo-block">
