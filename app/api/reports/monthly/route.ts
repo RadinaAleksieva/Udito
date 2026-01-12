@@ -56,6 +56,12 @@ function extractPaymentMethod(raw: any): { method: "card" | "cod"; label: string
     if (titleLower.includes("наложен") || titleLower.includes("cod") || titleLower.includes("cash")) {
       return { method: "cod", label: "Наложен платеж" };
     }
+
+    // Bulgarian couriers (Econt, Speedy) with no payment records = COD
+    // If there's a courier delivery but NO payment records, it's almost certainly COD
+    if (payments.length === 0 && (titleLower.includes("еконт") || titleLower.includes("econt") || titleLower.includes("спиди") || titleLower.includes("speedy"))) {
+      return { method: "cod", label: "Наложен платеж" };
+    }
   }
 
   // If we have payments with transaction ID, it's card
