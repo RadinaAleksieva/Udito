@@ -44,12 +44,13 @@ const templateOptions = [
 ];
 
 const accentColors = [
-  { value: "green", name: "Зелено", hex: "#059669" },
-  { value: "blue", name: "Синьо", hex: "#2563eb" },
-  { value: "orange", name: "Оранжево", hex: "#ea580c" },
-  { value: "pink", name: "Розово", hex: "#db2777" },
-  { value: "yellow", name: "Жълто", hex: "#ca8a04" },
-  { value: "purple", name: "Лилаво", hex: "#7c3aed" },
+  { value: "green", name: "Зелено", hex: "#10b981" },
+  { value: "blue", name: "Синьо", hex: "#3b82f6" },
+  { value: "orange", name: "Оранжево", hex: "#f97316" },
+  { value: "pink", name: "Розово", hex: "#ec4899" },
+  { value: "yellow", name: "Жълто", hex: "#eab308" },
+  { value: "purple", name: "Лилаво", hex: "#a855f7" },
+  { value: "white", name: "Неутрално", hex: "#6b7280" },
 ];
 
 const emptyForm: ReceiptSettingsState = {
