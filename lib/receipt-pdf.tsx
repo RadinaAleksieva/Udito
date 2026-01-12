@@ -39,10 +39,9 @@ const styles = StyleSheet.create({
   },
   logoBlock: {
     flexDirection: "row",
+    alignItems: "flex-start",
   },
-  logo: {
-    width: 80,
-  },
+  logo: {},
   logoFallback: {
     fontSize: 14,
     fontWeight: 600,
