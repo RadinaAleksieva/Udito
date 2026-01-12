@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import html2canvas from "html2canvas";
+import { jsPDF } from "jspdf";
 
 type Props = {
   orderId: string;
@@ -9,8 +11,58 @@ type Props = {
 };
 
 export default function ReceiptActions({ orderId, receiptType, receiptId }: Props) {
+  const [downloading, setDownloading] = useState(false);
   const [canceling, setCanceling] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+
+  const handleDownload = async () => {
+    const receiptElement = document.querySelector(".receipt") as HTMLElement;
+    if (!receiptElement) {
+      alert("Бележката не е намерена");
+      return;
+    }
+
+    setDownloading(true);
+    try {
+      // Hide action buttons temporarily
+      const actionsEl = document.querySelector(".receipt-actions") as HTMLElement;
+      if (actionsEl) actionsEl.style.display = "none";
+
+      const canvas = await html2canvas(receiptElement, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: "#ffffff",
+      });
+
+      // Restore action buttons
+      if (actionsEl) actionsEl.style.display = "";
+
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+      });
+
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = canvas.width;
+      const imgHeight = canvas.height;
+      const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+      const imgX = (pdfWidth - imgWidth * ratio) / 2;
+      const imgY = 10;
+
+      pdf.addImage(imgData, "PNG", imgX, imgY, imgWidth * ratio, imgHeight * ratio);
+      pdf.save(`belezhka-${receiptId || orderId}.pdf`);
+    } catch (error) {
+      console.error("PDF generation error:", error);
+      // Fallback to print
+      window.print();
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   const handleCancel = async () => {
     if (!receiptId) return;
@@ -49,9 +101,10 @@ export default function ReceiptActions({ orderId, receiptType, receiptId }: Prop
         </a>
         <button
           className="receipt-button primary"
-          onClick={() => window.print()}
+          onClick={handleDownload}
+          disabled={downloading}
         >
-          Изтегли PDF
+          {downloading ? "Генериране..." : "Изтегли PDF"}
         </button>
         {receiptId && (
           <button
