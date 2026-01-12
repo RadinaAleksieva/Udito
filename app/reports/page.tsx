@@ -13,6 +13,14 @@ type ReceiptDetail = {
   issuedAt: string;
 };
 
+type RefundDetail = {
+  receiptId: number;
+  orderNumber: string;
+  customerName: string;
+  amount: number;
+  issuedAt: string;
+};
+
 type MonthlyStats = {
   year: number;
   month: number;
@@ -34,6 +42,7 @@ type MonthlyStats = {
     amount: number;
   }>;
   receipts: ReceiptDetail[];
+  refunds: RefundDetail[];
 };
 
 const MONTHS = [
@@ -61,7 +70,7 @@ export default function ReportsPage() {
   const [stats, setStats] = useState<MonthlyStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [expandedMethod, setExpandedMethod] = useState<string | null>(null);
+  const [expandedSection, setExpandedSection] = useState<string | null>(null);
 
   const currentDate = new Date();
 
@@ -81,7 +90,7 @@ export default function ReportsPage() {
     async function loadStats() {
       setLoading(true);
       setError(null);
-      setExpandedMethod(null);
+      setExpandedSection(null);
       try {
         const response = await fetch(
           `/api/reports/monthly?year=${selectedYear}&month=${selectedMonth}`
@@ -110,8 +119,8 @@ export default function ReportsPage() {
     return stats.receipts.filter(r => r.paymentMethodKey === methodKey);
   };
 
-  const toggleMethod = (method: string) => {
-    setExpandedMethod(expandedMethod === method ? null : method);
+  const toggleSection = (section: string) => {
+    setExpandedSection(expandedSection === section ? null : section);
   };
 
   return (
@@ -165,137 +174,143 @@ export default function ReportsPage() {
 
       {stats && !loading && (
         <>
-          {/* Summary Cards */}
-          <div className="report-summary">
-            <div className="summary-card summary-card--primary">
-              <span className="summary-card__label">Общ оборот</span>
-              <span className="summary-card__value">{formatMoney(stats.totalRevenue, stats.currency)}</span>
-              <span className="summary-card__sub">{stats.totalReceipts} бележки</span>
-            </div>
+          {/* Final Revenue - Big and Prominent */}
+          <div className="final-revenue-card">
+            <span className="final-revenue-card__label">Финален оборот</span>
+            <span className="final-revenue-card__value">{formatMoney(stats.finalRevenue, stats.currency)}</span>
+            <span className="final-revenue-card__sub">{stats.totalReceipts} бележки • {MONTHS[selectedMonth - 1]} {selectedYear}</span>
+          </div>
 
-            <div className="summary-card">
-              <span className="summary-card__label">Нето (без ДДС)</span>
-              <span className="summary-card__value">{formatMoney(stats.netRevenue, stats.currency)}</span>
+          {/* Stats Grid */}
+          <div className="stats-row">
+            <div className="stat-item">
+              <span className="stat-item__label">Общ оборот</span>
+              <span className="stat-item__value">{formatMoney(stats.totalRevenue, stats.currency)}</span>
             </div>
-
-            <div className="summary-card">
-              <span className="summary-card__label">ДДС (20%)</span>
-              <span className="summary-card__value">{formatMoney(stats.totalTax, stats.currency)}</span>
+            <div className="stat-item">
+              <span className="stat-item__label">Нето (без ДДС)</span>
+              <span className="stat-item__value">{formatMoney(stats.netRevenue, stats.currency)}</span>
             </div>
-
-            <div className="summary-card">
-              <span className="summary-card__label">Средна поръчка</span>
-              <span className="summary-card__value">{formatMoney(stats.avgOrderValue, stats.currency)}</span>
+            <div className="stat-item">
+              <span className="stat-item__label">ДДС (20%)</span>
+              <span className="stat-item__value">{formatMoney(stats.totalTax, stats.currency)}</span>
+            </div>
+            <div className="stat-item">
+              <span className="stat-item__label">Средна поръчка</span>
+              <span className="stat-item__value">{formatMoney(stats.avgOrderValue, stats.currency)}</span>
             </div>
           </div>
 
-          {/* Additional Stats Row */}
-          <div className="report-details">
-            <div className="detail-item">
-              <span className="detail-item__label">Доставки</span>
-              <span className="detail-item__value">{formatMoney(stats.totalShipping, stats.currency)}</span>
+          {/* Additional Info */}
+          <div className="stats-row stats-row--secondary">
+            <div className="stat-item stat-item--small">
+              <span className="stat-item__label">Доставки</span>
+              <span className="stat-item__value">{formatMoney(stats.totalShipping, stats.currency)}</span>
             </div>
-            <div className="detail-item">
-              <span className="detail-item__label">Отстъпки</span>
-              <span className="detail-item__value detail-item__value--negative">-{formatMoney(stats.totalDiscounts, stats.currency)}</span>
-            </div>
-            {stats.totalRefunds > 0 && (
-              <div className="detail-item detail-item--warning">
-                <span className="detail-item__label">Сторно</span>
-                <span className="detail-item__value">-{formatMoney(stats.refundAmount, stats.currency)}</span>
-                <span className="detail-item__sub">{stats.totalRefunds} {stats.totalRefunds === 1 ? 'бележка' : 'бележки'}</span>
+            {stats.totalDiscounts > 0 && (
+              <div className="stat-item stat-item--small">
+                <span className="stat-item__label">Отстъпки</span>
+                <span className="stat-item__value stat-item__value--red">-{formatMoney(stats.totalDiscounts, stats.currency)}</span>
               </div>
             )}
-            <div className="detail-item detail-item--success">
-              <span className="detail-item__label">Финален оборот</span>
-              <span className="detail-item__value">{formatMoney(stats.finalRevenue, stats.currency)}</span>
-            </div>
           </div>
 
           {/* Payment Methods - Clickable Cards */}
-          {stats.paymentMethods.length > 0 && (
-            <section className="reports-section">
-              <h2>По метод на плащане</h2>
-              <div className="payment-methods">
-                {stats.paymentMethods.map((pm) => (
-                  <div key={pm.method} className="payment-method-group">
-                    <button
-                      className={`payment-method-card ${expandedMethod === pm.method ? 'payment-method-card--expanded' : ''}`}
-                      onClick={() => toggleMethod(pm.method)}
-                    >
-                      <div className="payment-method-card__info">
-                        <span className="payment-method-card__label">{pm.label}</span>
-                        <span className="payment-method-card__count">{pm.count} {pm.count === 1 ? 'бележка' : 'бележки'}</span>
-                      </div>
-                      <div className="payment-method-card__amount">
-                        {formatMoney(pm.amount, stats.currency)}
-                      </div>
-                      <span className="payment-method-card__arrow">
-                        {expandedMethod === pm.method ? '▲' : '▼'}
-                      </span>
-                    </button>
+          <section className="reports-section">
+            <h2>По метод на плащане</h2>
+            <div className="expandable-list">
+              {stats.paymentMethods.map((pm) => (
+                <div key={pm.method} className="expandable-group">
+                  <button
+                    className={`expandable-card ${expandedSection === pm.method ? 'expandable-card--expanded' : ''}`}
+                    onClick={() => toggleSection(pm.method)}
+                  >
+                    <div className="expandable-card__info">
+                      <span className="expandable-card__label">{pm.label}</span>
+                      <span className="expandable-card__count">{pm.count} {pm.count === 1 ? 'бележка' : 'бележки'}</span>
+                    </div>
+                    <div className="expandable-card__amount">
+                      {formatMoney(pm.amount, stats.currency)}
+                    </div>
+                    <span className="expandable-card__arrow">
+                      {expandedSection === pm.method ? '▲' : '▼'}
+                    </span>
+                  </button>
 
-                    {/* Expanded Receipts List */}
-                    {expandedMethod === pm.method && (
-                      <div className="payment-method-receipts">
-                        <table>
-                          <thead>
-                            <tr>
-                              <th>Дата</th>
-                              <th>Поръчка</th>
-                              <th>Клиент</th>
-                              <th>Сума</th>
+                  {expandedSection === pm.method && (
+                    <div className="expandable-content">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Дата</th>
+                            <th>Поръчка</th>
+                            <th>Клиент</th>
+                            <th>Сума</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {getReceiptsByMethod(pm.method).map((receipt) => (
+                            <tr key={receipt.receiptId}>
+                              <td>{formatDate(receipt.issuedAt)}</td>
+                              <td>#{receipt.orderNumber}</td>
+                              <td>{receipt.customerName}</td>
+                              <td>{formatMoney(receipt.total, stats.currency)}</td>
                             </tr>
-                          </thead>
-                          <tbody>
-                            {getReceiptsByMethod(pm.method).map((receipt) => (
-                              <tr key={receipt.receiptId}>
-                                <td>{formatDate(receipt.issuedAt)}</td>
-                                <td>#{receipt.orderNumber}</td>
-                                <td>{receipt.customerName}</td>
-                                <td>{formatMoney(receipt.total, stats.currency)}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              ))}
 
-          {/* All Receipts List */}
-          {stats.receipts && stats.receipts.length > 0 && (
-            <section className="reports-section">
-              <h2>Всички бележки ({stats.receipts.length})</h2>
-              <div className="all-receipts-table">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Дата</th>
-                      <th>Поръчка</th>
-                      <th>Клиент</th>
-                      <th>Метод</th>
-                      <th>Сума</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {stats.receipts.map((receipt) => (
-                      <tr key={receipt.receiptId}>
-                        <td>{formatDate(receipt.issuedAt)}</td>
-                        <td>#{receipt.orderNumber}</td>
-                        <td>{receipt.customerName}</td>
-                        <td>{receipt.paymentMethod}</td>
-                        <td>{formatMoney(receipt.total, stats.currency)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          )}
+              {/* Refunds Section */}
+              {stats.totalRefunds > 0 && (
+                <div className="expandable-group">
+                  <button
+                    className={`expandable-card expandable-card--refund ${expandedSection === 'refunds' ? 'expandable-card--expanded' : ''}`}
+                    onClick={() => toggleSection('refunds')}
+                  >
+                    <div className="expandable-card__info">
+                      <span className="expandable-card__label">Сторно</span>
+                      <span className="expandable-card__count">{stats.totalRefunds} {stats.totalRefunds === 1 ? 'бележка' : 'бележки'}</span>
+                    </div>
+                    <div className="expandable-card__amount expandable-card__amount--red">
+                      -{formatMoney(stats.refundAmount, stats.currency)}
+                    </div>
+                    <span className="expandable-card__arrow">
+                      {expandedSection === 'refunds' ? '▲' : '▼'}
+                    </span>
+                  </button>
+
+                  {expandedSection === 'refunds' && (
+                    <div className="expandable-content">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Дата</th>
+                            <th>Поръчка</th>
+                            <th>Клиент</th>
+                            <th>Сума</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {stats.refunds.map((refund) => (
+                            <tr key={refund.receiptId}>
+                              <td>{formatDate(refund.issuedAt)}</td>
+                              <td>#{refund.orderNumber}</td>
+                              <td>{refund.customerName}</td>
+                              <td className="amount-red">-{formatMoney(refund.amount, stats.currency)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </section>
 
           {/* Empty State */}
           {stats.totalReceipts === 0 && (

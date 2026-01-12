@@ -9,8 +9,8 @@ export const dynamic = "force-dynamic";
 const BGN_TO_EUR = 0.51129;
 
 // Helper to extract payment method from raw order data
-function extractPaymentMethod(raw: any): { method: "card" | "cod" | "other"; label: string } {
-  if (!raw) return { method: "other", label: "Друг" };
+function extractPaymentMethod(raw: any): { method: "card" | "cod"; label: string } {
+  if (!raw) return { method: "card", label: "Карта" }; // Default to card for online stores
 
   // Check orderTransactions payments first
   const payments = raw?.orderTransactions?.payments ?? raw?.payments ?? [];
@@ -27,10 +27,10 @@ function extractPaymentMethod(raw: any): { method: "card" | "cod" | "other"; lab
       payment?.method?.name ??
       "";
     const methodStr = String(method).toLowerCase();
-    if (methodStr.includes("offline") || methodStr.includes("cash") || methodStr.includes("cod") || methodStr.includes("наложен")) {
+    if (methodStr.includes("offline") || methodStr.includes("cash") || methodStr.includes("cod") || methodStr.includes("наложен") || methodStr.includes("delivery")) {
       return { method: "cod", label: "Наложен платеж" };
     }
-    if (methodStr.includes("card") || methodStr.includes("credit") || methodStr.includes("debit") || methodStr.includes("stripe") || methodStr.includes("карта")) {
+    if (methodStr.includes("card") || methodStr.includes("credit") || methodStr.includes("debit") || methodStr.includes("stripe") || methodStr.includes("карта") || methodStr.includes("paypal") || methodStr.includes("online")) {
       return { method: "card", label: "Карта" };
     }
   }
@@ -49,16 +49,29 @@ function extractPaymentMethod(raw: any): { method: "card" | "cod" | "other"; lab
     return { method: "cod", label: "Наложен платеж" };
   }
 
-  // If we have payments but couldn't identify method, default based on common patterns
+  // Check shippingInfo for COD indicators
+  const shippingTitle = raw?.shippingInfo?.title ?? raw?.shippingInfo?.shipmentDetails?.methodName ?? "";
+  if (typeof shippingTitle === "string") {
+    const titleLower = shippingTitle.toLowerCase();
+    if (titleLower.includes("наложен") || titleLower.includes("cod") || titleLower.includes("cash")) {
+      return { method: "cod", label: "Наложен платеж" };
+    }
+  }
+
+  // If we have payments with transaction ID, it's card
   if (payments.length > 0) {
-    // If there's a transaction with amount, likely it's card
-    const hasTransaction = payments.some((p: any) => p?.regularPaymentDetails?.providerTransactionId || p?.transactionId);
+    const hasTransaction = payments.some((p: any) =>
+      p?.regularPaymentDetails?.providerTransactionId ||
+      p?.transactionId ||
+      p?.id
+    );
     if (hasTransaction) {
       return { method: "card", label: "Карта" };
     }
   }
 
-  return { method: "other", label: "Друг" };
+  // For online stores, default to card (most common)
+  return { method: "card", label: "Карта" };
 }
 
 // Helper to extract customer name from raw order data
@@ -119,7 +132,7 @@ export async function GET(request: Request) {
       WHERE (o.site_id = ${siteId} OR o.site_id IS NULL)
         AND r.issued_at >= ${startDate.toISOString()}
         AND r.issued_at <= ${endDate.toISOString()}
-      ORDER BY r.issued_at ASC
+      ORDER BY r.issued_at DESC
     `;
 
     // Process receipts and calculate stats
@@ -134,7 +147,6 @@ export async function GET(request: Request) {
     const paymentMethodStats: Record<string, { count: number; amount: number }> = {
       card: { count: 0, amount: 0 },
       cod: { count: 0, amount: 0 },
-      other: { count: 0, amount: 0 },
     };
 
     // Build receipts list for detailed view
@@ -145,6 +157,15 @@ export async function GET(request: Request) {
       total: number;
       paymentMethod: string;
       paymentMethodKey: string;
+      issuedAt: string;
+    }> = [];
+
+    // Build refunds list
+    const refundsList: Array<{
+      receiptId: number;
+      orderNumber: string;
+      customerName: string;
+      amount: number;
       issuedAt: string;
     }> = [];
 
@@ -188,6 +209,15 @@ export async function GET(request: Request) {
         totalRefunds++;
         const refund = parseFloat(row.refund_amount) || 0;
         refundAmount += refund * rate;
+
+        // Add to refunds list
+        refundsList.push({
+          receiptId: row.id,
+          orderNumber: row.order_number || "—",
+          customerName: row.customer_name || extractCustomerName(row.raw),
+          amount: refund * rate,
+          issuedAt: row.issued_at,
+        });
       }
     }
 
@@ -217,10 +247,11 @@ export async function GET(request: Request) {
         paymentMethods: [
           { method: "card", label: "Карта", count: paymentMethodStats.card.count, amount: paymentMethodStats.card.amount },
           { method: "cod", label: "Наложен платеж", count: paymentMethodStats.cod.count, amount: paymentMethodStats.cod.amount },
-          ...(paymentMethodStats.other.count > 0 ? [{ method: "other", label: "Друг", count: paymentMethodStats.other.count, amount: paymentMethodStats.other.amount }] : []),
         ].filter(pm => pm.count > 0),
         // Detailed receipts list
         receipts: receiptsList,
+        // Refunds list
+        refunds: refundsList,
       },
     });
   } catch (error) {

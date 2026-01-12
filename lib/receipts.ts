@@ -353,7 +353,7 @@ export async function listOrdersWithReceiptsForAudit(
       sale_receipts.type as receipt_type
     from receipts as sale_receipts
     inner join orders on orders.id = sale_receipts.order_id
-    where orders.site_id = ${siteId}
+    where (orders.site_id = ${siteId} OR orders.site_id IS NULL)
       and sale_receipts.type = 'sale'
       and sale_receipts.issued_at between ${startIso} and ${endIso}
     order by sale_receipts.id desc;
@@ -386,7 +386,7 @@ export async function listRefundReceiptsForAudit(
       refund_receipts.return_payment_type
     from receipts as refund_receipts
     inner join orders on orders.id = refund_receipts.order_id
-    where orders.site_id = ${siteId}
+    where (orders.site_id = ${siteId} OR orders.site_id IS NULL)
       and refund_receipts.type = 'refund'
       and refund_receipts.issued_at between ${startIso} and ${endIso}
     order by refund_receipts.id asc;

@@ -2229,3 +2229,268 @@ main {
   color: var(--text-muted);
   margin-top: 6px;
 }
+
+/* ============================================
+   NEW REPORTS PAGE STYLES (Final Revenue, Expandable Cards)
+   ============================================ */
+
+/* Final Revenue Card - Big and Prominent */
+.final-revenue-card {
+  background: linear-gradient(135deg, #0a1e3f 0%, #1a365d 100%);
+  color: #fff;
+  border-radius: 16px;
+  padding: 32px;
+  margin-bottom: 24px;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(10, 30, 63, 0.25);
+}
+
+.final-revenue-card__label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.8);
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.final-revenue-card__value {
+  display: block;
+  font-size: 48px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.1;
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+.final-revenue-card__sub {
+  display: block;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+  margin-top: 12px;
+}
+
+/* Stats Row - Horizontal Grid */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.stats-row--secondary {
+  margin-bottom: 32px;
+}
+
+.stat-item {
+  background: #fff;
+  border: 1px solid rgba(10, 30, 63, 0.08);
+  border-radius: 12px;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.stat-item--small {
+  padding: 12px 16px;
+}
+
+.stat-item__label {
+  font-size: 12px;
+  color: #51607a;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.stat-item__value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ink);
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-item__value--red {
+  color: #dc2626;
+}
+
+/* Expandable List Container */
+.expandable-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Expandable Group (Card + Content) */
+.expandable-group {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Expandable Card (Clickable Header) */
+.expandable-card {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 16px 20px;
+  background: #f8f9fb;
+  border: 1px solid rgba(10, 30, 63, 0.1);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+  font-family: inherit;
+  gap: 16px;
+}
+
+.expandable-card:hover {
+  background: #f0f2f5;
+  border-color: rgba(10, 30, 63, 0.2);
+}
+
+.expandable-card--expanded {
+  border-radius: 10px 10px 0 0;
+  border-bottom: none;
+  background: #0a1e3f;
+  color: #fff;
+}
+
+.expandable-card--expanded:hover {
+  background: #0a1e3f;
+}
+
+.expandable-card--expanded .expandable-card__label,
+.expandable-card--expanded .expandable-card__count,
+.expandable-card--expanded .expandable-card__amount,
+.expandable-card--expanded .expandable-card__arrow {
+  color: #fff;
+}
+
+/* Refund Card Style */
+.expandable-card--refund {
+  background: #fef2f2;
+  border-color: rgba(220, 38, 38, 0.2);
+}
+
+.expandable-card--refund:hover {
+  background: #fee2e2;
+}
+
+.expandable-card--refund.expandable-card--expanded {
+  background: #dc2626;
+}
+
+.expandable-card__info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.expandable-card__label {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.expandable-card__count {
+  font-size: 12px;
+  color: #51607a;
+}
+
+.expandable-card__amount {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ink);
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+.expandable-card__amount--red {
+  color: #dc2626;
+}
+
+.expandable-card__arrow {
+  font-size: 12px;
+  color: #51607a;
+  width: 20px;
+  text-align: center;
+}
+
+/* Expandable Content (Receipts Table) */
+.expandable-content {
+  background: #fff;
+  border: 1px solid rgba(10, 30, 63, 0.1);
+  border-top: none;
+  border-radius: 0 0 10px 10px;
+  overflow-x: auto;
+}
+
+.expandable-content table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+}
+
+.expandable-content th,
+.expandable-content td {
+  padding: 10px 16px;
+  text-align: left;
+  border-bottom: 1px solid rgba(10, 30, 63, 0.06);
+}
+
+.expandable-content th {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #51607a;
+  background: #f8f9fb;
+}
+
+.expandable-content td {
+  font-size: 13px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.expandable-content tr:last-child td {
+  border-bottom: none;
+}
+
+.expandable-content tr:hover {
+  background: #f8f9fb;
+}
+
+/* Red Amount in Tables */
+.amount-red {
+  color: #dc2626;
+  font-weight: 500;
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+  .final-revenue-card {
+    padding: 24px 20px;
+  }
+
+  .final-revenue-card__value {
+    font-size: 36px;
+  }
+
+  .stats-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .expandable-card {
+    padding: 14px 16px;
+  }
+
+  .expandable-card__amount {
+    font-size: 16px;
+  }
+}
