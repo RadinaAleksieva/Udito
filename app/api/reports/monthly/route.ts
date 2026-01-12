@@ -9,15 +9,15 @@ export const dynamic = "force-dynamic";
 const BGN_TO_EUR = 0.51129;
 
 // Helper to extract payment method from raw order data
-function extractPaymentMethod(raw: any): "card" | "cod" | "other" {
-  if (!raw) return "other";
+function extractPaymentMethod(raw: any): { method: "card" | "cod" | "other"; label: string } {
+  if (!raw) return { method: "other", label: "Друг" };
 
-  // Check orderTransactions payments
+  // Check orderTransactions payments first
   const payments = raw?.orderTransactions?.payments ?? raw?.payments ?? [];
   for (const payment of payments) {
     // Check for offline payment (COD)
     if (payment?.regularPaymentDetails?.offlinePayment === true) {
-      return "cod";
+      return { method: "cod", label: "Наложен платеж" };
     }
     // Check payment method
     const method =
@@ -27,22 +27,50 @@ function extractPaymentMethod(raw: any): "card" | "cod" | "other" {
       payment?.method?.name ??
       "";
     const methodStr = String(method).toLowerCase();
-    if (methodStr.includes("offline") || methodStr.includes("cash") || methodStr.includes("cod")) {
-      return "cod";
+    if (methodStr.includes("offline") || methodStr.includes("cash") || methodStr.includes("cod") || methodStr.includes("наложен")) {
+      return { method: "cod", label: "Наложен платеж" };
     }
-    if (methodStr.includes("card") || methodStr.includes("credit") || methodStr.includes("debit") || methodStr.includes("stripe")) {
-      return "card";
+    if (methodStr.includes("card") || methodStr.includes("credit") || methodStr.includes("debit") || methodStr.includes("stripe") || methodStr.includes("карта")) {
+      return { method: "card", label: "Карта" };
     }
   }
 
-  // Fallback: check paymentStatus field patterns
+  // Fallback: check payment_status field from DB (stored as paymentStatus in raw)
   const paymentStatus = raw?.paymentStatus ?? "";
   if (typeof paymentStatus === "string") {
     const statusLower = paymentStatus.toLowerCase();
-    if (statusLower.includes("offline")) return "cod";
+    if (statusLower.includes("offline")) return { method: "cod", label: "Наложен платеж" };
   }
 
-  return "other";
+  // Check if there's any payment info that suggests offline
+  const channelInfo = raw?.channelInfo ?? {};
+  const externalOrderId = channelInfo?.externalOrderId ?? "";
+  if (externalOrderId && typeof externalOrderId === "string" && externalOrderId.toLowerCase().includes("cod")) {
+    return { method: "cod", label: "Наложен платеж" };
+  }
+
+  // If we have payments but couldn't identify method, default based on common patterns
+  if (payments.length > 0) {
+    // If there's a transaction with amount, likely it's card
+    const hasTransaction = payments.some((p: any) => p?.regularPaymentDetails?.providerTransactionId || p?.transactionId);
+    if (hasTransaction) {
+      return { method: "card", label: "Карта" };
+    }
+  }
+
+  return { method: "other", label: "Друг" };
+}
+
+// Helper to extract customer name from raw order data
+function extractCustomerName(raw: any): string {
+  const buyer = raw?.buyerInfo ?? raw?.buyer ?? raw?.customerInfo ?? raw?.customer ?? {};
+  const billing = raw?.billingInfo?.contactDetails ?? raw?.billingInfo?.address ?? raw?.billingInfo ?? {};
+  const recipient = raw?.recipientInfo?.contactDetails ?? raw?.recipientInfo ?? {};
+
+  const first = buyer?.firstName ?? buyer?.givenName ?? billing?.firstName ?? recipient?.firstName ?? "";
+  const last = buyer?.lastName ?? buyer?.familyName ?? billing?.lastName ?? recipient?.lastName ?? "";
+  const full = `${first} ${last}`.trim();
+  return full || "—";
 }
 
 export async function GET(request: Request) {
@@ -77,6 +105,9 @@ export async function GET(request: Request) {
         r.id,
         r.type,
         r.refund_amount,
+        r.issued_at,
+        o.number as order_number,
+        o.customer_name,
         o.total,
         o.tax_total,
         o.shipping_total,
@@ -88,6 +119,7 @@ export async function GET(request: Request) {
       WHERE o.site_id = ${siteId}
         AND r.issued_at >= ${startDate.toISOString()}
         AND r.issued_at <= ${endDate.toISOString()}
+      ORDER BY r.issued_at ASC
     `;
 
     // Process receipts and calculate stats
@@ -105,6 +137,16 @@ export async function GET(request: Request) {
       other: { count: 0, amount: 0 },
     };
 
+    // Build receipts list for detailed view
+    const receiptsList: Array<{
+      receiptId: number;
+      orderNumber: string;
+      customerName: string;
+      total: number;
+      paymentMethod: string;
+      issuedAt: string;
+    }> = [];
+
     for (const row of receiptsResult.rows) {
       const orderTotal = parseFloat(row.total) || 0;
       const orderTax = parseFloat(row.tax_total) || 0;
@@ -118,6 +160,9 @@ export async function GET(request: Request) {
       const reverseRate = orderCurrency === "EUR" && displayCurrency === "BGN" ? 1 / BGN_TO_EUR : 1;
       const rate = orderCurrency === displayCurrency ? 1 : (orderCurrency === "BGN" ? conversionRate : reverseRate);
 
+      // Extract payment method from raw data
+      const { method: paymentMethodKey, label: paymentMethodLabel } = extractPaymentMethod(row.raw);
+
       if (row.type === "sale") {
         totalReceipts++;
         totalRevenue += orderTotal * rate;
@@ -125,10 +170,18 @@ export async function GET(request: Request) {
         totalShipping += orderShipping * rate;
         totalDiscounts += orderDiscount * rate;
 
-        // Extract payment method from raw data
-        const paymentMethod = extractPaymentMethod(row.raw);
-        paymentMethodStats[paymentMethod].count++;
-        paymentMethodStats[paymentMethod].amount += orderTotal * rate;
+        paymentMethodStats[paymentMethodKey].count++;
+        paymentMethodStats[paymentMethodKey].amount += orderTotal * rate;
+
+        // Add to receipts list
+        receiptsList.push({
+          receiptId: row.id,
+          orderNumber: row.order_number || "—",
+          customerName: row.customer_name || extractCustomerName(row.raw),
+          total: orderTotal * rate,
+          paymentMethod: paymentMethodLabel,
+          issuedAt: row.issued_at,
+        });
       } else if (row.type === "refund") {
         totalRefunds++;
         const refund = parseFloat(row.refund_amount) || 0;
@@ -164,6 +217,8 @@ export async function GET(request: Request) {
           { method: "cod", label: "Наложен платеж", count: paymentMethodStats.cod.count, amount: paymentMethodStats.cod.amount },
           ...(paymentMethodStats.other.count > 0 ? [{ method: "other", label: "Друг", count: paymentMethodStats.other.count, amount: paymentMethodStats.other.amount }] : []),
         ].filter(pm => pm.count > 0),
+        // Detailed receipts list
+        receipts: receiptsList,
       },
     });
   } catch (error) {

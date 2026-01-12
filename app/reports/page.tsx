@@ -1,6 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+
+type ReceiptDetail = {
+  receiptId: number;
+  orderNumber: string;
+  customerName: string;
+  total: number;
+  paymentMethod: string;
+  issuedAt: string;
+};
 
 type MonthlyStats = {
   year: number;
@@ -22,6 +32,7 @@ type MonthlyStats = {
     count: number;
     amount: number;
   }>;
+  receipts: ReceiptDetail[];
 };
 
 const MONTHS = [
@@ -37,14 +48,32 @@ function formatMoney(amount: number, currency: string = "EUR"): string {
   }).format(amount);
 }
 
+function formatDate(dateStr: string): string {
+  const date = new Date(dateStr);
+  return date.toLocaleDateString("bg-BG", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
 export default function ReportsPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const [stats, setStats] = useState<MonthlyStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const currentDate = new Date();
-  const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
-  const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth() + 1);
+
+  // Read from URL params, fallback to current month
+  const selectedYear = parseInt(searchParams.get("year") || String(currentDate.getFullYear()));
+  const selectedMonth = parseInt(searchParams.get("month") || String(currentDate.getMonth() + 1));
+
+  // Update URL when selection changes
+  const updateSelection = (year: number, month: number) => {
+    const params = new URLSearchParams();
+    params.set("year", String(year));
+    params.set("month", String(month));
+    router.push(`/reports?${params.toString()}`);
+  };
 
   useEffect(() => {
     async function loadStats() {
@@ -86,7 +115,7 @@ export default function ReportsPage() {
           <select
             id="month-select"
             value={selectedMonth}
-            onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+            onChange={(e) => updateSelection(selectedYear, parseInt(e.target.value))}
             className="reports-select"
           >
             {MONTHS.map((name, idx) => (
@@ -99,7 +128,7 @@ export default function ReportsPage() {
           <select
             id="year-select"
             value={selectedYear}
-            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+            onChange={(e) => updateSelection(parseInt(e.target.value), selectedMonth)}
             className="reports-select"
           >
             {years.map((year) => (
@@ -197,6 +226,37 @@ export default function ReportsPage() {
                         <td>{pm.label}</td>
                         <td>{pm.count}</td>
                         <td>{formatMoney(pm.amount, stats.currency)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+
+          {/* Detailed Receipts List */}
+          {stats.receipts && stats.receipts.length > 0 && (
+            <section className="reports-section">
+              <h2>Списък бележки</h2>
+              <div className="receipts-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Дата</th>
+                      <th>Поръчка</th>
+                      <th>Клиент</th>
+                      <th>Метод</th>
+                      <th>Сума</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stats.receipts.map((receipt) => (
+                      <tr key={receipt.receiptId}>
+                        <td>{formatDate(receipt.issuedAt)}</td>
+                        <td>#{receipt.orderNumber}</td>
+                        <td>{receipt.customerName}</td>
+                        <td>{receipt.paymentMethod}</td>
+                        <td>{formatMoney(receipt.total, stats.currency)}</td>
                       </tr>
                     ))}
                   </tbody>
