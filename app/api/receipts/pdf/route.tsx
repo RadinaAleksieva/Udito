@@ -293,7 +293,11 @@ export async function GET(request: NextRequest) {
       vatNumber: company?.vat_number || "—",
       contactEmail: company?.email || "Липсва",
       contactPhone: company?.phone || "Липсва",
-      logoUrl: company?.logo_url || undefined,
+      logoUrl: company?.logo_url
+        ? (company.logo_url.startsWith("data:")
+            ? company.logo_url
+            : `data:image/png;base64,${company.logo_url}`)
+        : undefined,
       customerName: extractCustomerName(record, raw),
       customerEmail: extractCustomerEmail(record, raw),
       customerPhone: extractPhone(raw) || undefined,
