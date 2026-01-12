@@ -218,3 +218,39 @@ export function determinePaymentType(paymentMethod: string | null | undefined): 
   // Default: online card payment
   return 4;
 }
+
+/**
+ * Determine return payment type based on original payment method
+ * 1 - Връщане в брой
+ * 2 - Връщане по банкова сметка
+ * 3 - Връщане в друга форма на плащане
+ * 4 - Друго
+ */
+export function determineReturnPaymentType(paymentMethod: string | null | undefined): number {
+  if (!paymentMethod) return 2; // Default to bank transfer
+
+  const method = paymentMethod.toLowerCase();
+
+  // Cash refunds
+  if (method.includes("в брой") || method.includes("cash register")) {
+    return 1; // Връщане в брой
+  }
+
+  // COD refunds are typically bank transfers
+  if (
+    method.includes("cod") ||
+    method.includes("наложен") ||
+    method.includes("cash on delivery") ||
+    method.includes("offline")
+  ) {
+    return 2; // Връщане по банкова сметка
+  }
+
+  // Card refunds go back to card (bank)
+  if (method.includes("card") || method.includes("stripe") || method.includes("карта")) {
+    return 2; // Връщане по банкова сметка
+  }
+
+  // Default: bank transfer
+  return 2;
+}

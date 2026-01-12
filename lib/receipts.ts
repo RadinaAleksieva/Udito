@@ -326,14 +326,8 @@ export async function listReceiptsWithOrdersForPeriodForBusiness(
 }
 
 /**
- * Get orders with receipts for audit file generation.
- *
- * IMPORTANT RULES FOR AUDIT FILE:
- * 1. Only include SALE receipts (never refund receipts - those are for internal accounting only)
- * 2. Exclude sales that have been refunded in the SAME month (they cancel out)
- * 3. Sales refunded in a LATER month still appear in their original month's audit file
- *
- * Refunds are handled via bank transfer, not as part of the audit file.
+ * Get orders with SALE receipts for audit file generation.
+ * Sales go in the <order> section of the audit XML.
  */
 export async function listOrdersWithReceiptsForAudit(
   startIso: string,
@@ -360,14 +354,39 @@ export async function listOrdersWithReceiptsForAudit(
     where orders.site_id = ${siteId}
       and sale_receipts.type = 'sale'
       and sale_receipts.issued_at between ${startIso} and ${endIso}
-      -- Exclude orders that have a refund receipt in the SAME month
-      and not exists (
-        select 1 from receipts as refund_receipts
-        where refund_receipts.order_id = sale_receipts.order_id
-          and refund_receipts.type = 'refund'
-          and refund_receipts.issued_at between ${startIso} and ${endIso}
-      )
     order by sale_receipts.id asc;
+  `;
+  return result.rows;
+}
+
+/**
+ * Get REFUND receipts for audit file generation.
+ * Refunds go in the <rorder> section of the audit XML.
+ */
+export async function listRefundReceiptsForAudit(
+  startIso: string,
+  endIso: string,
+  siteId: string
+) {
+  const result = await sql`
+    select
+      orders.id,
+      orders.number,
+      orders.created_at,
+      orders.paid_at,
+      orders.total,
+      orders.currency,
+      orders.raw,
+      refund_receipts.id as receipt_id,
+      refund_receipts.issued_at as receipt_issued_at,
+      refund_receipts.refund_amount,
+      refund_receipts.reference_receipt_id
+    from receipts as refund_receipts
+    inner join orders on orders.id = refund_receipts.order_id
+    where orders.site_id = ${siteId}
+      and refund_receipts.type = 'refund'
+      and refund_receipts.issued_at between ${startIso} and ${endIso}
+    order by refund_receipts.id asc;
   `;
   return result.rows;
 }

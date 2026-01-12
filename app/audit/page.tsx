@@ -41,8 +41,7 @@ export default async function AuditPage({
     999
   );
   // Get sale receipts for audit file
-  // NOTE: Refunded orders in the same month are automatically excluded
-  // Refund receipts never appear in the audit file (they're bank transfers)
+  // Refund receipts are included separately in the <rorder> section of the XML
   const monthlyOrders = siteId
     ? await listOrdersWithReceiptsForAudit(
         monthStart.toISOString(),
@@ -124,9 +123,8 @@ export default async function AuditPage({
           <div className="hero-card">
             <h2>Какво влиза в одиторския файл</h2>
             <p>
-              Само платени поръчки с издадена електронна бележка и стойност над нула.
-              Поръчки със сторно (възстановени суми) в същия месец не влизат в отчета.
-              Сторно бележките не влизат в одиторския файл — те са за вътрешно счетоводство.
+              Платени поръчки с издадена електронна бележка влизат в секция „Продажби".
+              Сторно бележките влизат в секция „Връщания" за месеца, в който са издадени.
             </p>
             <div className="grid">
               <div className="card">

@@ -2,11 +2,13 @@ import { NextResponse } from "next/server";
 import {
   buildAuditXml,
   determinePaymentType,
+  determineReturnPaymentType,
   type AuditOrder,
   type AuditLineItem,
+  type AuditReturn,
 } from "@/lib/auditXml";
 import { getCompanyBySite, initDb, getOrderByIdForSite } from "@/lib/db";
-import { listOrdersWithReceiptsForAudit } from "@/lib/receipts";
+import { listOrdersWithReceiptsForAudit, listRefundReceiptsForAudit } from "@/lib/receipts";
 import { getActiveWixToken } from "@/lib/wix-context";
 import { extractTransactionRef } from "@/lib/wix";
 
@@ -322,6 +324,38 @@ export async function GET(request: Request) {
     });
   }
 
+  // Get refund receipts for the period
+  const refundRows = await listRefundReceiptsForAudit(startIso, endIso, siteId);
+
+  // Build audit returns (сторна)
+  const auditReturns: AuditReturn[] = [];
+
+  for (const refund of refundRows) {
+    const raw = (refund.raw ?? {}) as any;
+    const refundIssuedAt = refund.receipt_issued_at
+      ? new Date(refund.receipt_issued_at)
+      : new Date();
+
+    // Get the refund amount (positive value)
+    const refundAmount = Math.abs(Number(refund.refund_amount) || Number(refund.total) || 0);
+
+    // Check if EUR conversion is needed (January 2026+)
+    const currency = refund.currency || "BGN";
+    const needsEurConversion = requiresEurConversion(refundIssuedAt) && currency === "BGN";
+    const finalAmount = needsEurConversion ? convertBgnToEur(refundAmount) : refundAmount;
+
+    // Get payment method for return type
+    const paymentMethod = extractPaymentMethod(raw);
+    const returnPaymentType = determineReturnPaymentType(paymentMethod);
+
+    auditReturns.push({
+      orderNumber: String(refund.number || refund.id).padStart(10, "0"),
+      amount: finalAmount,
+      returnDate: formatDate(refundIssuedAt),
+      returnPaymentType,
+    });
+  }
+
   // Build the XML
   const xml = buildAuditXml({
     eik: company.bulstat,
@@ -332,7 +366,7 @@ export async function GET(request: Request) {
     month: monthStr,
     year,
     orders: auditOrders,
-    returns: [], // TODO: Handle returns when implemented
+    returns: auditReturns,
   });
 
   // Create filename
