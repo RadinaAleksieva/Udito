@@ -9,38 +9,8 @@ type Props = {
 };
 
 export default function ReceiptActions({ orderId, receiptType, receiptId }: Props) {
-  const [downloading, setDownloading] = useState(false);
   const [canceling, setCanceling] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-
-  const handleDownload = async () => {
-    setDownloading(true);
-    try {
-      const response = await fetch(
-        `/api/receipts/pdf?orderId=${orderId}&type=${receiptType}`
-      );
-
-      if (!response.ok) {
-        throw new Error("PDF generation failed");
-      }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `receipt-${orderId}-${receiptType}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch (error) {
-      console.error("Download error:", error);
-      // Fallback to print if PDF generation fails
-      window.print();
-    } finally {
-      setDownloading(false);
-    }
-  };
 
   const handleCancel = async () => {
     if (!receiptId) return;
@@ -79,10 +49,9 @@ export default function ReceiptActions({ orderId, receiptType, receiptId }: Prop
         </a>
         <button
           className="receipt-button primary"
-          onClick={handleDownload}
-          disabled={downloading}
+          onClick={() => window.print()}
         >
-          {downloading ? "Генериране..." : "Изтегли PDF"}
+          Изтегли PDF
         </button>
         {receiptId && (
           <button
