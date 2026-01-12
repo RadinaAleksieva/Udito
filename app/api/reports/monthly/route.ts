@@ -116,7 +116,7 @@ export async function GET(request: Request) {
         o.raw
       FROM receipts r
       JOIN orders o ON r.order_id = o.id
-      WHERE o.site_id = ${siteId}
+      WHERE (o.site_id = ${siteId} OR o.site_id IS NULL)
         AND r.issued_at >= ${startDate.toISOString()}
         AND r.issued_at <= ${endDate.toISOString()}
       ORDER BY r.issued_at ASC
@@ -144,6 +144,7 @@ export async function GET(request: Request) {
       customerName: string;
       total: number;
       paymentMethod: string;
+      paymentMethodKey: string;
       issuedAt: string;
     }> = [];
 
@@ -180,6 +181,7 @@ export async function GET(request: Request) {
           customerName: row.customer_name || extractCustomerName(row.raw),
           total: orderTotal * rate,
           paymentMethod: paymentMethodLabel,
+          paymentMethodKey: paymentMethodKey,
           issuedAt: row.issued_at,
         });
       } else if (row.type === "refund") {
