@@ -38,14 +38,10 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   logoBlock: {
-    width: 100,
-    height: 60,
-    justifyContent: "center",
+    flexDirection: "row",
   },
   logo: {
-    objectFit: "contain",
-    maxWidth: 100,
-    maxHeight: 60,
+    width: 80,
   },
   logoFallback: {
     fontSize: 14,
