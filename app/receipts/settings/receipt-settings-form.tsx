@@ -223,65 +223,11 @@ export default function ReceiptSettingsForm() {
 
       {status ? <p className="form-status">{status}</p> : null}
 
-      {/* Template Selection */}
-      <section className="settings-section">
-        <div className="settings-section__header">
-          <h3>Шаблон за бележка</h3>
-          <p>Изберете как да изглеждат вашите електронни бележки.</p>
-        </div>
-        <div className="template-cards">
-          {templateOptions.map((template) => (
-            <button
-              type="button"
-              key={template.value}
-              className={
-                form.receiptTemplate === template.value
-                  ? "template-card active"
-                  : "template-card"
-              }
-              onClick={() => setForm((prev) => ({ ...prev, receiptTemplate: template.value }))}
-            >
-              <div className="template-card__title">{template.name}</div>
-              <div className="template-card__desc">{template.description}</div>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      {/* Accent Color (only for modern template) */}
-      {form.receiptTemplate === "modern" && (
-        <section className="settings-section">
-          <div className="settings-section__header">
-            <h3>Акцентен цвят</h3>
-            <p>Изберете цвят за акцентите в бележката.</p>
-          </div>
-          <div className="color-picker">
-            {accentColors.map((color) => (
-              <button
-                type="button"
-                key={color.value}
-                className={
-                  form.accentColor === color.value
-                    ? "color-option active"
-                    : "color-option"
-                }
-                style={{ "--color": color.hex } as React.CSSProperties}
-                onClick={() => setForm((prev) => ({ ...prev, accentColor: color.value }))}
-                title={color.name}
-              >
-                <span className="color-swatch" />
-                <span className="color-name">{color.name}</span>
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
-
       {/* Logo Upload */}
       <section className="settings-section">
         <div className="settings-section__header">
           <h3>Лого за бележки</h3>
-          <p>По подразбиране бележките са без лого. Добавете ваше лого при нужда.</p>
+          <p>По подразбиране се показва името на магазина. Добавете ваше лого при нужда.</p>
         </div>
         <ul className="logo-requirements">
           <li><strong>Формат:</strong> PNG или JPG (SVG не се поддържа)</li>
@@ -325,6 +271,60 @@ export default function ReceiptSettingsForm() {
         ) : null}
       </section>
 
+      {/* Template Selection */}
+      <section className="settings-section">
+        <div className="settings-section__header">
+          <h3>Шаблон за бележка</h3>
+          <p>Изберете как да изглеждат вашите електронни бележки.</p>
+        </div>
+        <div className="template-cards">
+          {templateOptions.map((template) => (
+            <button
+              type="button"
+              key={template.value}
+              className={
+                form.receiptTemplate === template.value
+                  ? "template-card active"
+                  : "template-card"
+              }
+              onClick={() => setForm((prev) => ({ ...prev, receiptTemplate: template.value }))}
+            >
+              <div className="template-card__title">{template.name}</div>
+              <div className="template-card__desc">{template.description}</div>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {/* Accent Color (for modern and playful templates) */}
+      {(form.receiptTemplate === "modern" || form.receiptTemplate === "playful") && (
+        <section className="settings-section">
+          <div className="settings-section__header">
+            <h3>Акцентен цвят</h3>
+            <p>Изберете цвят за акцентите в бележката.</p>
+          </div>
+          <div className="color-picker">
+            {accentColors.map((color) => (
+              <button
+                type="button"
+                key={color.value}
+                className={
+                  form.accentColor === color.value
+                    ? "color-option active"
+                    : "color-option"
+                }
+                style={{ "--color": color.hex } as React.CSSProperties}
+                onClick={() => setForm((prev) => ({ ...prev, accentColor: color.value }))}
+                title={color.name}
+              >
+                <span className="color-swatch" />
+                <span className="color-name">{color.name}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Receipt Preview */}
       <section className="settings-section">
         <div className="settings-section__header">
@@ -345,7 +345,7 @@ export default function ReceiptSettingsForm() {
             <DarkPreview logoUrl={form.logoUrl} />
           )}
           {form.receiptTemplate === "playful" && (
-            <PlayfulPreview logoUrl={form.logoUrl} />
+            <PlayfulPreview logoUrl={form.logoUrl} accentColor={selectedColor.hex} />
           )}
         </div>
       </section>
@@ -528,9 +528,9 @@ function DarkPreview({ logoUrl }: { logoUrl: string }) {
   );
 }
 
-function PlayfulPreview({ logoUrl }: { logoUrl: string }) {
+function PlayfulPreview({ logoUrl, accentColor }: { logoUrl: string; accentColor: string }) {
   return (
-    <div className="preview-playful">
+    <div className="preview-playful" style={{ "--accent": accentColor } as React.CSSProperties}>
       <div className="preview-playful__header">
         <div className="preview-playful__badge">Бележка</div>
         <strong>ДИЗАЙНС БАЙ ПО ЕООД</strong>

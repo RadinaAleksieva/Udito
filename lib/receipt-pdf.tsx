@@ -336,6 +336,10 @@ export type ReceiptPdfData = {
   // EUR display (for 2026+)
   showEurPrimary?: boolean;
   isPartialRefund?: boolean;
+
+  // Template settings
+  receiptTemplate?: "classic" | "modern" | "dark" | "playful";
+  accentColor?: string;
 };
 
 export function ReceiptPdf({ data }: { data: ReceiptPdfData }) {
