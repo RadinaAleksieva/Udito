@@ -40,8 +40,11 @@ const styles = StyleSheet.create({
   logoBlock: {
     flexDirection: "row",
     alignItems: "flex-start",
+    justifyContent: "flex-start",
   },
-  logo: {},
+  logo: {
+    marginTop: 0,
+  },
   logoFallback: {
     fontSize: 14,
     fontWeight: 600,
@@ -348,8 +351,8 @@ export function ReceiptPdf({ data }: { data: ReceiptPdfData }) {
 
   // Calculate logo dimensions - always scale to fit within max bounds
   const getLogoStyle = () => {
-    const maxHeight = 70;
-    const maxWidth = 140;
+    const maxHeight = 50;
+    const maxWidth = 100;
 
     if (data.logoWidth && data.logoHeight) {
       const aspectRatio = data.logoWidth / data.logoHeight;
@@ -371,7 +374,7 @@ export function ReceiptPdf({ data }: { data: ReceiptPdfData }) {
     }
 
     // Fallback if no dimensions stored
-    return { width: 100 };
+    return { width: 80 };
   };
 
   return (
