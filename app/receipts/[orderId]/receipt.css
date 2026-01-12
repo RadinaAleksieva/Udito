@@ -349,6 +349,19 @@
   cursor: not-allowed;
 }
 
+/* Cancel section - below receipt */
+.cancel-section {
+  max-width: 760px;
+  margin: 24px auto 0;
+  display: flex;
+  justify-content: center;
+}
+
+.cancel-section .receipt-button.danger {
+  padding: 10px 24px;
+  font-size: 14px;
+}
+
 /* Confirm dialog */
 .confirm-overlay {
   position: fixed;
@@ -452,7 +465,8 @@
     display: block;
   }
 
-  .receipt-actions {
+  .receipt-actions,
+  .cancel-section {
     display: none;
   }
 

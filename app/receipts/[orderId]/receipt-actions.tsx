@@ -6,14 +6,11 @@ import { jsPDF } from "jspdf";
 
 type Props = {
   orderId: string;
-  receiptType: string;
   receiptId: number | null;
 };
 
-export default function ReceiptActions({ orderId, receiptType, receiptId }: Props) {
+export default function ReceiptActions({ orderId, receiptId }: Props) {
   const [downloading, setDownloading] = useState(false);
-  const [canceling, setCanceling] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
 
   const handleDownload = async () => {
     const receiptElement = document.querySelector(".receipt") as HTMLElement;
@@ -27,6 +24,8 @@ export default function ReceiptActions({ orderId, receiptType, receiptId }: Prop
       // Hide action buttons and remove border for clean PDF
       const actionsEl = document.querySelector(".receipt-actions") as HTMLElement;
       if (actionsEl) actionsEl.style.display = "none";
+      const cancelEl = document.querySelector(".cancel-section") as HTMLElement;
+      if (cancelEl) cancelEl.style.display = "none";
 
       const originalBorder = receiptElement.style.border;
       const originalBoxShadow = receiptElement.style.boxShadow;
@@ -45,6 +44,7 @@ export default function ReceiptActions({ orderId, receiptType, receiptId }: Prop
 
       // Restore action buttons and styles
       if (actionsEl) actionsEl.style.display = "";
+      if (cancelEl) cancelEl.style.display = "";
       receiptElement.style.border = originalBorder;
       receiptElement.style.boxShadow = originalBoxShadow;
 
@@ -74,91 +74,18 @@ export default function ReceiptActions({ orderId, receiptType, receiptId }: Prop
     }
   };
 
-  const handleCancel = async () => {
-    if (!receiptId) return;
-
-    setCanceling(true);
-    try {
-      const response = await fetch("/api/receipts/cancel", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ receiptId }),
-      });
-
-      const data = await response.json();
-
-      if (!data.ok) {
-        alert(data.error || "Грешка при анулиране");
-        return;
-      }
-
-      // Redirect to receipts list after successful cancellation
-      window.location.href = "/receipts";
-    } catch (error) {
-      console.error("Cancel error:", error);
-      alert("Грешка при връзка със сървъра");
-    } finally {
-      setCanceling(false);
-      setShowConfirm(false);
-    }
-  };
-
   return (
-    <>
-      <div className="receipt-actions">
-        <a className="receipt-button" href="/receipts">
-          Назад
-        </a>
-        <button
-          className="receipt-button primary"
-          onClick={handleDownload}
-          disabled={downloading}
-        >
-          {downloading ? "Генериране..." : "Изтегли PDF"}
-        </button>
-        {receiptId && (
-          <button
-            className="receipt-button danger"
-            onClick={() => setShowConfirm(true)}
-            disabled={canceling}
-          >
-            Анулирай
-          </button>
-        )}
-      </div>
-
-      {showConfirm && (
-        <div className="confirm-overlay">
-          <div className="confirm-dialog">
-            <h3>Анулиране на бележка</h3>
-            <p>
-              Сигурни ли сте, че искате да анулирате тази бележка?
-              Тя ще бъде изтрита от системата и няма да може да бъде възстановена.
-            </p>
-            {receiptType === "sale" && (
-              <p className="confirm-warning">
-                Внимание: Ако има сторно бележка към тази продажба, тя също ще бъде изтрита.
-              </p>
-            )}
-            <div className="confirm-actions">
-              <button
-                className="receipt-button"
-                onClick={() => setShowConfirm(false)}
-                disabled={canceling}
-              >
-                Отказ
-              </button>
-              <button
-                className="receipt-button danger"
-                onClick={handleCancel}
-                disabled={canceling}
-              >
-                {canceling ? "Анулиране..." : "Да, анулирай"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
+    <div className="receipt-actions">
+      <a className="receipt-button" href="/receipts">
+        Назад
+      </a>
+      <button
+        className="receipt-button primary"
+        onClick={handleDownload}
+        disabled={downloading}
+      >
+        {downloading ? "Генериране..." : "Изтегли PDF"}
+      </button>
+    </div>
   );
 }

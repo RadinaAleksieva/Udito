@@ -20,6 +20,7 @@ import { getReceiptByOrderIdAndType } from "@/lib/receipts";
 import PrintTrigger from "./print-trigger";
 import DownloadTrigger from "./download-trigger";
 import ReceiptActions from "./receipt-actions";
+import CancelReceiptButton from "./cancel-receipt-button";
 import ReturnPaymentEditor from "./return-payment-editor";
 import "./receipt.css";
 import { notFound } from "next/navigation";
@@ -599,7 +600,7 @@ export default async function ReceiptPage({
   if (!storeId) {
     return (
       <div className="receipt-shell" data-template={template}>
-        <ReceiptActions orderId={orderId} receiptType={receiptType} receiptId={receiptRecord?.id ? Number(receiptRecord.id) : null} />
+        <ReceiptActions orderId={orderId} receiptId={receiptRecord?.id ? Number(receiptRecord.id) : null} />
         <main className="receipt">
           <h2>Липсва уникален код на магазина</h2>
           <p>
@@ -638,7 +639,7 @@ export default async function ReceiptPage({
         receiptId={receiptRecord?.id ? Number(receiptRecord.id) : null}
         orderId={orderId}
       />
-      <ReceiptActions orderId={orderId} receiptType={receiptType} receiptId={receiptRecord?.id ? Number(receiptRecord.id) : null} />
+      <ReceiptActions orderId={orderId} receiptId={receiptRecord?.id ? Number(receiptRecord.id) : null} />
       <main className="receipt">
         <header className="receipt-header">
           <div className="logo-block">
@@ -884,6 +885,12 @@ export default async function ReceiptPage({
           Този документ е потвърждение за регистрирана продажба и е предоставен на клиента по електронен път.
         </p>
       </main>
+      {receiptRecord?.id && (
+        <CancelReceiptButton
+          receiptId={Number(receiptRecord.id)}
+          receiptType={receiptType}
+        />
+      )}
     </div>
   );
 }
