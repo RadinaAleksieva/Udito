@@ -11,6 +11,8 @@ type CompanyFormState = {
   bulstat: string;
   storeId: string;
   logoUrl: string;
+  logoWidth: number | null;
+  logoHeight: number | null;
   addressLine1: string;
   addressLine2: string;
   city: string;
@@ -43,6 +45,8 @@ const emptyForm: CompanyFormState = {
   bulstat: "",
   storeId: "",
   logoUrl: "",
+  logoWidth: null,
+  logoHeight: null,
   addressLine1: "",
   addressLine2: "",
   city: "",
@@ -75,6 +79,8 @@ export default function CompanyForm() {
             bulstat: data.company.bulstat || "",
             storeId: data.company.store_id || "",
             logoUrl: data.company.logo_url || "",
+            logoWidth: data.company.logo_width || null,
+            logoHeight: data.company.logo_height || null,
             addressLine1: data.company.address_line1 || "",
             addressLine2: data.company.address_line2 || "",
             city: data.company.city || "",
@@ -172,7 +178,12 @@ export default function CompanyForm() {
         }).catch(console.error);
       }
 
-      updateField("logoUrl", data.url);
+      setForm((prev) => ({
+        ...prev,
+        logoUrl: data.url,
+        logoWidth: data.width || null,
+        logoHeight: data.height || null,
+      }));
     } catch (error) {
       console.error("Upload error:", error);
       setStatus("Грешка при качване на логото");
@@ -321,6 +332,12 @@ export default function CompanyForm() {
         <div>
           <h3>Лого за електронни бележки</h3>
           <p>По подразбиране бележките са без лого. Добавете ваше лого при нужда.</p>
+          <ul className="logo-requirements">
+            <li><strong>Формат:</strong> PNG или JPG (SVG не се поддържа)</li>
+            <li><strong>Размер:</strong> Препоръчителен размер 200-400px ширина</li>
+            <li><strong>Макс. размер:</strong> До 2MB</li>
+            <li><strong>Съвет:</strong> За най-добър резултат използвайте лого с прозрачен фон (PNG)</li>
+          </ul>
         </div>
         <div className="logo-upload__controls">
           <input
@@ -338,7 +355,7 @@ export default function CompanyForm() {
             <button
               type="button"
               className="btn-secondary"
-              onClick={() => updateField("logoUrl", "")}
+              onClick={() => setForm((prev) => ({ ...prev, logoUrl: "", logoWidth: null, logoHeight: null }))}
               disabled={uploading}
             >
               Премахни логото

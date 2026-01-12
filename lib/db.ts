@@ -30,6 +30,8 @@ export type BusinessProfile = {
   bulstat: string | null;
   storeId?: string | null;
   logoUrl?: string | null;
+  logoWidth?: number | null;
+  logoHeight?: number | null;
   addressLine1: string | null;
   addressLine2: string | null;
   city: string | null;
@@ -54,6 +56,8 @@ export type CompanyProfile = {
   bulstat: string | null;
   storeId?: string | null;
   logoUrl?: string | null;
+  logoWidth?: number | null;
+  logoHeight?: number | null;
   addressLine1: string | null;
   addressLine2: string | null;
   city: string | null;
@@ -302,6 +306,8 @@ export async function initDb() {
     // fiscal_store_id column might not exist, which is fine
   }
   await sql`alter table companies add column if not exists logo_url text;`;
+  await sql`alter table companies add column if not exists logo_width integer;`;
+  await sql`alter table companies add column if not exists logo_height integer;`;
   await sql`alter table business_profiles add column if not exists store_id text;`;
   // Copy data from fiscal_store_id to store_id if applicable (safe: ignore if fiscal_store_id doesn't exist)
   try {
@@ -1041,6 +1047,8 @@ export async function getCompanyBySite(siteId: string | null, instanceId?: strin
       bulstat,
       store_id,
       logo_url,
+      logo_width,
+      logo_height,
       address_line1,
       address_line2,
       city,
@@ -1135,6 +1143,8 @@ export async function upsertCompany(profile: CompanyProfile) {
       bulstat,
       store_id,
       logo_url,
+      logo_width,
+      logo_height,
       address_line1,
       address_line2,
       city,
@@ -1158,6 +1168,8 @@ export async function upsertCompany(profile: CompanyProfile) {
       ${profile.bulstat},
       ${profile.storeId ?? null},
       ${profile.logoUrl ?? null},
+      ${profile.logoWidth ?? null},
+      ${profile.logoHeight ?? null},
       ${profile.addressLine1},
       ${profile.addressLine2},
       ${profile.city},
@@ -1181,6 +1193,8 @@ export async function upsertCompany(profile: CompanyProfile) {
       bulstat = excluded.bulstat,
       store_id = excluded.store_id,
       logo_url = excluded.logo_url,
+      logo_width = excluded.logo_width,
+      logo_height = excluded.logo_height,
       address_line1 = excluded.address_line1,
       address_line2 = excluded.address_line2,
       city = excluded.city,

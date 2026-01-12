@@ -291,6 +291,8 @@ export type ReceiptPdfData = {
   contactEmail: string;
   contactPhone: string;
   logoUrl?: string;
+  logoWidth?: number | null;
+  logoHeight?: number | null;
 
   // Customer info
   customerName: string;
@@ -344,6 +346,34 @@ export function ReceiptPdf({ data }: { data: ReceiptPdfData }) {
     return formatMoney(amount, data.currency);
   };
 
+  // Calculate logo dimensions - always scale to fit within max bounds
+  const getLogoStyle = () => {
+    const maxHeight = 70;
+    const maxWidth = 140;
+
+    if (data.logoWidth && data.logoHeight) {
+      const aspectRatio = data.logoWidth / data.logoHeight;
+
+      // Always scale to fit within bounds
+      let width, height;
+
+      // Try fitting by height first
+      height = maxHeight;
+      width = maxHeight * aspectRatio;
+
+      // If width exceeds max, fit by width instead
+      if (width > maxWidth) {
+        width = maxWidth;
+        height = maxWidth / aspectRatio;
+      }
+
+      return { width, height };
+    }
+
+    // Fallback if no dimensions stored
+    return { width: 100 };
+  };
+
   return (
     <Document>
       <Page size="A4" style={styles.page}>
@@ -351,7 +381,7 @@ export function ReceiptPdf({ data }: { data: ReceiptPdfData }) {
         <View style={styles.header}>
           <View style={styles.logoBlock}>
             {data.logoUrl ? (
-              <Image src={data.logoUrl} style={styles.logo} />
+              <Image src={data.logoUrl} style={getLogoStyle()} />
             ) : (
               <Text style={styles.logoFallback}>{data.storeName}</Text>
             )}

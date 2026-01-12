@@ -56,6 +56,8 @@ export async function POST(request: Request) {
     bulstat: body?.bulstat ?? null,
     storeId: body?.storeId ?? null,
     logoUrl: body?.logoUrl ?? null,
+    logoWidth: body?.logoWidth ?? null,
+    logoHeight: body?.logoHeight ?? null,
     addressLine1: body?.addressLine1 ?? null,
     addressLine2: body?.addressLine2 ?? null,
     city: body?.city ?? null,

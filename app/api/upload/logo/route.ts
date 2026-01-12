@@ -1,6 +1,7 @@
 import { put, del } from "@vercel/blob";
 import { NextRequest, NextResponse } from "next/server";
 import { getActiveWixToken } from "@/lib/wix-context";
+import sizeOf from "image-size";
 
 export const dynamic = "force-dynamic";
 
@@ -33,13 +34,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "File too large (max 2MB)" }, { status: 400 });
     }
 
+    // Get image dimensions
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const dimensions = sizeOf(buffer);
+
+    const width = dimensions.width || 100;
+    const height = dimensions.height || 100;
+
     // Upload to Vercel Blob with site-specific path
-    const blob = await put(`logos/${siteId}/${file.name}`, file, {
+    const blob = await put(`logos/${siteId}/${file.name}`, buffer, {
       access: "public",
       addRandomSuffix: true, // Prevent caching issues
     });
 
-    return NextResponse.json({ url: blob.url });
+    return NextResponse.json({
+      url: blob.url,
+      width,
+      height,
+    });
   } catch (error) {
     console.error("Logo upload error:", error);
     return NextResponse.json(
