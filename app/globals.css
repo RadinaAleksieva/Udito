@@ -1079,8 +1079,8 @@ main {
 /* Audit table (5 columns: Бележка №, Тип, Поръчка, Издадена, Сума) */
 .orders-head--audit,
 .orders-row--audit {
-  grid-template-columns: 80px 90px 90px 170px 100px;
-  gap: 12px;
+  grid-template-columns: 1fr 1fr 1fr 1.5fr 1fr;
+  gap: 16px;
 }
 
 .orders-row--audit.refund-row {
