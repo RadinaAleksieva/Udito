@@ -2494,3 +2494,656 @@ main {
     font-size: 16px;
   }
 }
+
+/* ============================================
+   LANDING PAGE STYLES
+   ============================================ */
+
+.landing {
+  min-height: 100vh;
+  background: linear-gradient(180deg, #fdf9f4 0%, #f0f4ff 50%, #e6f0ff 100%);
+}
+
+/* Landing Navigation */
+.landing-nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(10, 30, 63, 0.08);
+}
+
+.landing-nav-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.landing-logo {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--ink);
+}
+
+.landing-nav-links {
+  display: flex;
+  gap: 32px;
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+  font-size: 15px;
+}
+
+.landing-nav-links a {
+  color: var(--ink);
+  transition: color 0.2s;
+}
+
+.landing-nav-links a:hover {
+  color: var(--blue);
+}
+
+.btn-login {
+  background: var(--blue);
+  color: #fff;
+  padding: 10px 24px;
+  border-radius: 999px;
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  transition: box-shadow 0.2s, transform 0.2s;
+}
+
+.btn-login:hover {
+  box-shadow: 0 8px 20px rgba(31, 92, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+/* Landing Container */
+.landing-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+/* Hero Section */
+.landing-hero {
+  padding: 140px 24px 80px;
+  text-align: center;
+  background: radial-gradient(ellipse at top, rgba(31, 92, 255, 0.08) 0%, transparent 60%);
+}
+
+.landing-hero-content {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.landing-hero-badge {
+  display: inline-block;
+  margin-bottom: 24px;
+}
+
+.landing-hero-badge span {
+  background: linear-gradient(135deg, var(--blue) 0%, #4f46e5 100%);
+  color: #fff;
+  padding: 8px 20px;
+  border-radius: 999px;
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.landing-hero h1 {
+  font-size: clamp(36px, 5vw, 56px);
+  line-height: 1.15;
+  margin: 0 0 24px;
+  color: var(--ink);
+}
+
+.landing-hero-subtitle {
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+  font-size: clamp(18px, 2.5vw, 22px);
+  line-height: 1.6;
+  color: #51607a;
+  margin: 0 0 36px;
+}
+
+.landing-hero-cta {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.btn-large {
+  padding: 16px 32px;
+  font-size: 16px;
+}
+
+.landing-hero-note {
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+  font-size: 14px;
+  color: #6b7a8c;
+  margin: 0;
+}
+
+/* Section Titles */
+.landing-section-title {
+  font-size: clamp(28px, 4vw, 40px);
+  text-align: center;
+  margin: 0 0 12px;
+  color: var(--ink);
+}
+
+.landing-section-subtitle {
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+  font-size: 18px;
+  text-align: center;
+  color: #51607a;
+  margin: 0 0 48px;
+}
+
+/* Benefits Section */
+.landing-benefits {
+  padding: 80px 0;
+  background: #fff;
+}
+
+.landing-benefits-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 24px;
+}
+
+.landing-benefit-card {
+  background: #f8f9fb;
+  border-radius: 20px;
+  padding: 32px;
+  text-align: center;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.landing-benefit-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(10, 30, 63, 0.1);
+}
+
+.landing-benefit-icon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 20px;
+  background: linear-gradient(135deg, var(--blue) 0%, #4f46e5 100%);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.landing-benefit-icon svg {
+  width: 32px;
+  height: 32px;
+  color: #fff;
+}
+
+.landing-benefit-card h3 {
+  font-size: 20px;
+  margin: 0 0 12px;
+  color: var(--ink);
+}
+
+.landing-benefit-card p {
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  color: #51607a;
+  margin: 0;
+}
+
+/* How It Works Section */
+.landing-how-it-works {
+  padding: 80px 0;
+  background: linear-gradient(180deg, #f8f9fb 0%, #fff 100%);
+}
+
+.landing-steps {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.landing-step {
+  flex: 1;
+  min-width: 220px;
+  max-width: 300px;
+  text-align: center;
+}
+
+.landing-step-number {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 20px;
+  background: var(--blue);
+  color: #fff;
+  border-radius: 50%;
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.landing-step h3 {
+  font-size: 18px;
+  margin: 0 0 12px;
+  color: var(--ink);
+}
+
+.landing-step p {
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  color: #51607a;
+  margin: 0;
+}
+
+.landing-step-arrow {
+  font-size: 32px;
+  color: #c4cdd8;
+  padding-top: 12px;
+}
+
+/* Features Section */
+.landing-features {
+  padding: 80px 0;
+  background: #fff;
+}
+
+.landing-feature-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 60px;
+  align-items: center;
+  margin-bottom: 80px;
+}
+
+.landing-feature-row:last-child {
+  margin-bottom: 0;
+}
+
+.landing-feature-row-reverse {
+  direction: rtl;
+}
+
+.landing-feature-row-reverse > * {
+  direction: ltr;
+}
+
+.landing-feature-text h2 {
+  font-size: 32px;
+  margin: 0 0 16px;
+  color: var(--ink);
+}
+
+.landing-feature-text p {
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+  font-size: 17px;
+  line-height: 1.7;
+  color: #51607a;
+  margin: 0 0 24px;
+}
+
+.landing-feature-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+}
+
+.landing-feature-list li {
+  position: relative;
+  padding-left: 28px;
+  margin-bottom: 12px;
+  font-size: 15px;
+  color: #3a4a62;
+}
+
+.landing-feature-list li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: var(--blue);
+  font-weight: 700;
+}
+
+/* Receipt Preview */
+.landing-receipt-preview {
+  background: #fff;
+  border: 1px solid rgba(10, 30, 63, 0.1);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 20px 60px rgba(10, 30, 63, 0.1);
+  font-family: "Courier New", monospace;
+  max-width: 300px;
+  margin: 0 auto;
+}
+
+.receipt-header {
+  text-align: center;
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.receipt-number {
+  text-align: center;
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 16px;
+}
+
+.receipt-line {
+  height: 1px;
+  background: #ddd;
+  margin: 12px 0;
+}
+
+.receipt-item {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.receipt-total {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+/* XML Preview */
+.landing-xml-preview {
+  background: #1a1a2e;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 20px 60px rgba(10, 30, 63, 0.15);
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.landing-xml-preview code {
+  font-family: "Courier New", monospace;
+  font-size: 13px;
+  color: #a5d6ff;
+  white-space: pre;
+  display: block;
+  line-height: 1.6;
+}
+
+/* Pricing Section */
+.landing-pricing {
+  padding: 80px 0;
+  background: linear-gradient(180deg, #f8f9fb 0%, #fff 100%);
+}
+
+.landing-pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.landing-pricing-card {
+  background: #fff;
+  border: 1px solid rgba(10, 30, 63, 0.1);
+  border-radius: 24px;
+  padding: 32px;
+  text-align: center;
+  position: relative;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.landing-pricing-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 48px rgba(10, 30, 63, 0.12);
+}
+
+.landing-pricing-featured {
+  border-color: var(--blue);
+  box-shadow: 0 8px 32px rgba(31, 92, 255, 0.15);
+}
+
+.landing-pricing-badge {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--blue);
+  color: #fff;
+  padding: 6px 16px;
+  border-radius: 999px;
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.landing-pricing-name {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 16px;
+  color: var(--ink);
+}
+
+.landing-pricing-price {
+  margin-bottom: 24px;
+}
+
+.landing-pricing-amount {
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+  font-size: 48px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.landing-pricing-currency {
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+  font-size: 16px;
+  color: #51607a;
+}
+
+.landing-pricing-features {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 28px;
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+  text-align: left;
+}
+
+.landing-pricing-features li {
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(10, 30, 63, 0.06);
+  font-size: 15px;
+  color: #3a4a62;
+}
+
+.landing-pricing-features li:last-child {
+  border-bottom: none;
+}
+
+.landing-pricing-card .btn-primary,
+.landing-pricing-card .btn-secondary {
+  width: 100%;
+  padding: 14px 24px;
+}
+
+/* CTA Section */
+.landing-cta {
+  padding: 80px 24px;
+  background: linear-gradient(135deg, var(--blue) 0%, #4f46e5 100%);
+  text-align: center;
+}
+
+.landing-cta h2 {
+  font-size: clamp(28px, 4vw, 36px);
+  color: #fff;
+  margin: 0 0 12px;
+}
+
+.landing-cta p {
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+  font-size: 18px;
+  color: rgba(255, 255, 255, 0.9);
+  margin: 0 0 32px;
+}
+
+.landing-cta .btn-primary {
+  background: #fff;
+  color: var(--blue);
+}
+
+.landing-cta .btn-primary:hover {
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+}
+
+/* Contact Section */
+.landing-contact {
+  padding: 80px 0;
+  background: #fff;
+}
+
+.landing-contact-info {
+  display: flex;
+  gap: 48px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.landing-contact-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+  font-size: 18px;
+  color: var(--ink);
+}
+
+.landing-contact-item svg {
+  width: 24px;
+  height: 24px;
+  color: var(--blue);
+}
+
+/* Footer */
+.landing-footer {
+  background: #0a1e3f;
+  color: #fff;
+  padding: 48px 24px 32px;
+}
+
+.landing-footer-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 32px;
+  flex-wrap: wrap;
+  margin-bottom: 32px;
+}
+
+.landing-footer-brand p {
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+  margin: 8px 0 0;
+}
+
+.landing-footer-links {
+  display: flex;
+  gap: 32px;
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+  font-size: 15px;
+}
+
+.landing-footer-links a {
+  color: rgba(255, 255, 255, 0.8);
+  transition: color 0.2s;
+}
+
+.landing-footer-links a:hover {
+  color: #fff;
+}
+
+.landing-footer-bottom {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 24px;
+  text-align: center;
+}
+
+.landing-footer-bottom p {
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.6);
+  margin: 0;
+}
+
+/* Landing Page Responsive */
+@media (max-width: 900px) {
+  .landing-feature-row {
+    grid-template-columns: 1fr;
+    gap: 40px;
+  }
+
+  .landing-feature-row-reverse {
+    direction: ltr;
+  }
+
+  .landing-step-arrow {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .landing-nav-links {
+    display: none;
+  }
+
+  .landing-hero {
+    padding: 120px 24px 60px;
+  }
+
+  .landing-benefits,
+  .landing-how-it-works,
+  .landing-features,
+  .landing-pricing,
+  .landing-contact {
+    padding: 60px 0;
+  }
+
+  .landing-pricing-grid {
+    grid-template-columns: 1fr;
+    max-width: 400px;
+  }
+
+  .landing-footer-content {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .landing-footer-links {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 16px 24px;
+  }
+}
