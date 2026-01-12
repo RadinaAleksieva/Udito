@@ -159,7 +159,8 @@ export default async function OverviewPage({
     ?.label;
   const hasConnection = Boolean(siteId);
   const hasInstance = Boolean(token?.instance_id);
-  const domainLabel = siteLabel || company?.store_domain || null;
+  // Prioritize company.store_domain if set (user's preference), then Wix API, then fallback
+  const domainLabel = company?.store_domain || siteLabel || null;
   const activeStoreLabel = domainLabel || siteId || "Неизбран";
   const displayOrders = orders.filter((order) => {
     const raw = (order as any).raw ?? null;
