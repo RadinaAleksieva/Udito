@@ -12,6 +12,12 @@ type ReceiptSettingsState = {
   logoHeight: number | null;
   receiptTemplate: string;
   accentColor: string;
+  // Company data for preview
+  storeName: string;
+  legalName: string;
+  city: string;
+  bulstat: string;
+  vatNumber: string;
 };
 
 const templateOptions = [
@@ -54,6 +60,11 @@ const emptyForm: ReceiptSettingsState = {
   logoHeight: null,
   receiptTemplate: "modern",
   accentColor: "green",
+  storeName: "",
+  legalName: "",
+  city: "",
+  bulstat: "",
+  vatNumber: "",
 };
 
 export default function ReceiptSettingsForm() {
@@ -84,6 +95,11 @@ export default function ReceiptSettingsForm() {
             logoHeight: companyData?.company?.logo_height || null,
             receiptTemplate: companyData?.company?.receipt_template || "modern",
             accentColor: companyData?.company?.accent_color || "green",
+            storeName: companyData?.company?.store_name || "",
+            legalName: companyData?.company?.legal_name || "",
+            city: companyData?.company?.city || "",
+            bulstat: companyData?.company?.bulstat || "",
+            vatNumber: companyData?.company?.vat_number || "",
           });
         }
       } catch (error) {
@@ -329,23 +345,44 @@ export default function ReceiptSettingsForm() {
       <section className="settings-section">
         <div className="settings-section__header">
           <h3>Преглед</h3>
-          <p>Примерен изглед с демо данни.</p>
+          <p>Примерен изглед с вашите данни.</p>
         </div>
         <div
           className={`receipt-preview receipt-preview--${form.receiptTemplate}`}
-          style={form.receiptTemplate === "modern" ? { "--accent": selectedColor.hex } as React.CSSProperties : undefined}
+          style={(form.receiptTemplate === "modern" || form.receiptTemplate === "playful") ? { "--accent": selectedColor.hex } as React.CSSProperties : undefined}
         >
           {form.receiptTemplate === "classic" && (
-            <ClassicPreview logoUrl={form.logoUrl} />
+            <ClassicPreview
+              logoUrl={form.logoUrl}
+              storeName={form.storeName}
+              legalName={form.legalName}
+              city={form.city}
+              bulstat={form.bulstat}
+              vatNumber={form.vatNumber}
+            />
           )}
           {form.receiptTemplate === "modern" && (
-            <ModernPreview logoUrl={form.logoUrl} accentColor={selectedColor.hex} />
+            <ModernPreview
+              logoUrl={form.logoUrl}
+              accentColor={selectedColor.hex}
+              storeName={form.storeName}
+              legalName={form.legalName}
+            />
           )}
           {form.receiptTemplate === "dark" && (
-            <DarkPreview logoUrl={form.logoUrl} />
+            <DarkPreview
+              logoUrl={form.logoUrl}
+              storeName={form.storeName}
+              legalName={form.legalName}
+            />
           )}
           {form.receiptTemplate === "playful" && (
-            <PlayfulPreview logoUrl={form.logoUrl} accentColor={selectedColor.hex} />
+            <PlayfulPreview
+              logoUrl={form.logoUrl}
+              accentColor={selectedColor.hex}
+              storeName={form.storeName}
+              legalName={form.legalName}
+            />
           )}
         </div>
       </section>
@@ -408,14 +445,34 @@ export default function ReceiptSettingsForm() {
 }
 
 // Preview Components
-function ClassicPreview({ logoUrl }: { logoUrl: string }) {
+type PreviewProps = {
+  logoUrl: string;
+  storeName?: string;
+  legalName?: string;
+  city?: string;
+  bulstat?: string;
+  vatNumber?: string;
+  accentColor?: string;
+};
+
+function getInitials(name: string): string {
+  if (!name) return "??";
+  return name.split(" ").map(w => w[0]).join("").slice(0, 3).toUpperCase();
+}
+
+function ClassicPreview({ logoUrl, storeName, legalName, city, bulstat, vatNumber }: PreviewProps) {
+  const displayName = legalName || storeName || "Вашата фирма";
+  const displayCity = city ? `гр. ${city}` : "гр. София";
+  const displayBulstat = bulstat || "000000000";
+  const displayVat = vatNumber || "";
+
   return (
     <div className="preview-classic">
       <div className="preview-classic__header">
-        <strong>ДИЗАЙНС БАЙ ПО ЕООД</strong>
-        <div>гр. София, ул. Примерна 10</div>
-        <div>ЕИК: 207357583</div>
-        <div>ДДС: BG207357583</div>
+        <strong>{displayName}</strong>
+        <div>{displayCity}</div>
+        <div>ЕИК: {displayBulstat}</div>
+        {displayVat && <div>ДДС: {displayVat}</div>}
       </div>
       <div className="preview-classic__divider">- - - - - - - - - - - - - - -</div>
       <div className="preview-classic__info">
@@ -439,39 +496,30 @@ function ClassicPreview({ logoUrl }: { logoUrl: string }) {
       <div className="preview-classic__footer">
         <div>Платено с карта</div>
         <div className="preview-classic__qr">[ QR ]</div>
-        <div>Благодарим Ви!</div>
       </div>
     </div>
   );
 }
 
-function ModernPreview({ logoUrl, accentColor }: { logoUrl: string; accentColor: string }) {
+function ModernPreview({ logoUrl, accentColor, storeName, legalName }: PreviewProps) {
+  const displayName = legalName || storeName || "Вашата фирма";
+  const initials = getInitials(storeName || legalName || "");
+
   return (
     <div className="preview-modern">
       <div className="preview-modern__header">
         <div className="preview-modern__logo">
           {logoUrl ? (
-            <Image src={logoUrl} alt="Logo" width={40} height={40} unoptimized />
+            <Image src={logoUrl} alt="Logo" width={40} height={40} unoptimized style={{ objectFit: "contain" }} />
           ) : (
-            <div className="preview-modern__logo-text">ДБП</div>
+            <div className="preview-modern__logo-text">{initials}</div>
           )}
           <div>
-            <strong>ДИЗАЙНС БАЙ ПО ЕООД</strong>
+            <strong>{displayName}</strong>
             <div className="preview-modern__meta">Бележка #10219 • 12.01.2026</div>
           </div>
         </div>
         <div className="preview-modern__qr">QR</div>
-      </div>
-      <div className="preview-modern__grid">
-        <div>
-          <div className="preview-modern__label">КЛИЕНТ</div>
-          <div><strong>Тест Потребител</strong></div>
-          <div className="preview-modern__small">гр. София</div>
-        </div>
-        <div>
-          <div className="preview-modern__label">ПЛАЩАНЕ</div>
-          <div><strong>Платено с карта</strong></div>
-        </div>
       </div>
       <table className="preview-modern__table">
         <thead>
@@ -493,7 +541,7 @@ function ModernPreview({ logoUrl, accentColor }: { logoUrl: string; accentColor:
       </table>
       <div className="preview-modern__totals" style={{ backgroundColor: `${accentColor}15` }}>
         <div><span>Междинна сума</span><strong>10,00€</strong></div>
-        <div><span>Данъци</span><strong>2,00€</strong></div>
+        <div><span>ДДС (20%)</span><strong>2,00€</strong></div>
         <div className="preview-modern__total" style={{ borderTopColor: accentColor }}>
           <span>Обща сума</span><strong style={{ color: accentColor }}>12,00€</strong>
         </div>
@@ -502,11 +550,13 @@ function ModernPreview({ logoUrl, accentColor }: { logoUrl: string; accentColor:
   );
 }
 
-function DarkPreview({ logoUrl }: { logoUrl: string }) {
+function DarkPreview({ logoUrl, storeName, legalName }: PreviewProps) {
+  const displayName = legalName || storeName || "Вашата фирма";
+
   return (
     <div className="preview-dark">
       <div className="preview-dark__header">
-        <strong>ДИЗАЙНС БАЙ ПО ЕООД</strong>
+        <strong>{displayName}</strong>
         <div>Бележка #10219 • 12.01.2026</div>
       </div>
       <div className="preview-dark__content">
@@ -528,12 +578,14 @@ function DarkPreview({ logoUrl }: { logoUrl: string }) {
   );
 }
 
-function PlayfulPreview({ logoUrl, accentColor }: { logoUrl: string; accentColor: string }) {
+function PlayfulPreview({ logoUrl, accentColor, storeName, legalName }: PreviewProps) {
+  const displayName = legalName || storeName || "Вашата фирма";
+
   return (
     <div className="preview-playful" style={{ "--accent": accentColor } as React.CSSProperties}>
       <div className="preview-playful__header">
         <div className="preview-playful__badge">Бележка</div>
-        <strong>ДИЗАЙНС БАЙ ПО ЕООД</strong>
+        <strong>{displayName}</strong>
         <div>#10219 • 12.01.2026</div>
       </div>
       <div className="preview-playful__card">
