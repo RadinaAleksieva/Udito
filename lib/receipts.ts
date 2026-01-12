@@ -1,5 +1,14 @@
 import { sql } from "@vercel/postgres";
 
+/**
+ * Get the next receipt ID (MAX + 1, not using sequence)
+ * This ensures deleted receipt numbers can be reused
+ */
+async function getNextReceiptId(): Promise<number> {
+  const result = await sql`SELECT COALESCE(MAX(id), 0) + 1 as next_id FROM receipts`;
+  return result.rows[0].next_id;
+}
+
 export async function issueReceipt(params: {
   orderId: string;
   payload: unknown;
@@ -24,9 +33,13 @@ export async function issueReceipt(params: {
     return;
   }
 
+  // Get next ID (MAX + 1) instead of using sequence
+  const nextId = await getNextReceiptId();
+
   await sql`
-    insert into receipts (order_id, business_id, issued_at, status, payload, type)
+    insert into receipts (id, order_id, business_id, issued_at, status, payload, type)
     values (
+      ${nextId},
       ${params.orderId},
       ${businessId},
       ${issuedAt},
@@ -82,9 +95,13 @@ export async function issueRefundReceipt(params: {
     originalReceiptId: referenceReceiptId,
   };
 
-  const result = await sql`
-    insert into receipts (order_id, business_id, issued_at, status, payload, type, reference_receipt_id, refund_amount)
+  // Get next ID (MAX + 1) instead of using sequence
+  const nextId = await getNextReceiptId();
+
+  await sql`
+    insert into receipts (id, order_id, business_id, issued_at, status, payload, type, reference_receipt_id, refund_amount)
     values (
+      ${nextId},
       ${params.orderId},
       ${businessId},
       ${issuedAt},
@@ -93,11 +110,10 @@ export async function issueRefundReceipt(params: {
       ${"refund"},
       ${referenceReceiptId},
       ${-Math.abs(params.refundAmount)}
-    )
-    returning id;
+    );
   `;
 
-  return { created: true, receiptId: result.rows[0]?.id ?? null };
+  return { created: true, receiptId: nextId };
 }
 
 /**
