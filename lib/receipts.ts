@@ -117,6 +117,24 @@ export async function issueRefundReceipt(params: {
 }
 
 /**
+ * Count receipts for a period and site
+ */
+export async function countReceiptsForPeriodForSite(
+  startIso: string,
+  endIso: string,
+  siteId: string
+): Promise<number> {
+  const result = await sql`
+    SELECT COUNT(*) as total
+    FROM receipts r
+    LEFT JOIN orders o ON o.id = r.order_id
+    WHERE (o.site_id = ${siteId} OR o.site_id IS NULL)
+      AND r.issued_at BETWEEN ${startIso} AND ${endIso}
+  `;
+  return Number(result.rows[0]?.total ?? 0);
+}
+
+/**
  * Check if a refund receipt already exists for an order.
  */
 export async function hasRefundReceipt(orderId: string): Promise<boolean> {

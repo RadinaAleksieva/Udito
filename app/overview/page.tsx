@@ -18,6 +18,7 @@ import {
   deriveOrderNumber,
   isArchivedOrder,
 } from "@/lib/order-display";
+import { countReceiptsForPeriodForSite } from "@/lib/receipts";
 import ConnectionCheck from "./connection-check";
 import AutoSync from "./auto-sync";
 
@@ -147,6 +148,13 @@ export default async function OverviewPage({
         effectiveSiteId
       )
     : 0;
+  const monthReceiptsCount = effectiveSiteId
+    ? await countReceiptsForPeriodForSite(
+        monthStart.toISOString(),
+        monthEnd.toISOString(),
+        effectiveSiteId
+      )
+    : 0;
   const monthLabelText = monthOptions.find((option) => option.value === monthLabel)
     ?.label;
   const hasConnection = Boolean(siteId);
@@ -214,8 +222,8 @@ export default async function OverviewPage({
                 <strong>{totalOrdersCount}</strong>
                 <span className="status-meta">
                   {monthLabelText
-                    ? `За ${monthLabelText}: ${monthOrdersCount}`
-                    : `${monthOrdersCount} за месеца`}
+                    ? `За ${monthLabelText}: ${monthOrdersCount} поръчки, ${monthReceiptsCount} бележки`
+                    : `${monthOrdersCount} поръчки, ${monthReceiptsCount} бележки`}
                 </span>
                 <MonthFilter
                   value={monthLabel}
