@@ -21,19 +21,29 @@ export default function DownloadTrigger({ enabled, receiptId, orderId }: Props) 
         if (!receiptElement) return;
 
         try {
-          // Hide action buttons
+          // Hide action buttons and remove border for clean PDF
           const actionsEl = document.querySelector(".receipt-actions") as HTMLElement;
           if (actionsEl) actionsEl.style.display = "none";
+
+          const originalBorder = receiptElement.style.border;
+          const originalBoxShadow = receiptElement.style.boxShadow;
+          receiptElement.style.border = "none";
+          receiptElement.style.boxShadow = "none";
 
           const canvas = await html2canvas(receiptElement, {
             scale: 2,
             useCORS: true,
+            allowTaint: true,
             logging: false,
             backgroundColor: "#ffffff",
+            removeContainer: true,
+            imageTimeout: 5000,
           });
 
-          // Restore action buttons
+          // Restore action buttons and styles
           if (actionsEl) actionsEl.style.display = "";
+          receiptElement.style.border = originalBorder;
+          receiptElement.style.boxShadow = originalBoxShadow;
 
           const imgData = canvas.toDataURL("image/png");
           const pdf = new jsPDF({
