@@ -148,14 +148,16 @@ export default async function AuditPage({
             <p>Няма поръчки за избрания период.</p>
           ) : (
             <div className="orders-table">
-              <div className="orders-head">
+              <div className="orders-head orders-head--audit">
+                <span>Бележка №</span>
                 <span>Поръчка</span>
                 <span>Платена на</span>
                 <span>Общо</span>
                 <span>Валута</span>
               </div>
               {displayOrders.map((order) => (
-                <div className="orders-row" key={order.id}>
+                <div className="orders-row orders-row--audit" key={order.id}>
+                  <span>{order.receipt_id || "—"}</span>
                   <span>{order.number || order.id}</span>
                   <span>
                     {order.paid_at

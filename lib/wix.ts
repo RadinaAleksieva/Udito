@@ -1276,27 +1276,27 @@ export function pickOrderFields(raw: any, source: "webhook" | "backfill") {
   };
 
   const customerName =
-    buyer?.name ??
-    [buyer?.firstName, buyer?.lastName].filter(Boolean).join(" ") ??
-    [buyer?.givenName, buyer?.familyName].filter(Boolean).join(" ") ??
+    buyer?.name ||
+    [buyer?.firstName, buyer?.lastName].filter(Boolean).join(" ") ||
+    [buyer?.givenName, buyer?.familyName].filter(Boolean).join(" ") ||
     [billingContact?.firstName, billingContact?.lastName]
       .filter(Boolean)
-      .join(" ") ??
+      .join(" ") ||
     [billingContact?.givenName, billingContact?.familyName]
       .filter(Boolean)
-      .join(" ") ??
+      .join(" ") ||
     [recipientContact?.firstName, recipientContact?.lastName]
       .filter(Boolean)
-      .join(" ") ??
+      .join(" ") ||
     [recipientContact?.givenName, recipientContact?.familyName]
       .filter(Boolean)
-      .join(" ") ??
+      .join(" ") ||
     [raw?.contactDetails?.firstName, raw?.contactDetails?.lastName]
       .filter(Boolean)
-      .join(" ") ??
+      .join(" ") ||
     [raw?.contact?.firstName, raw?.contact?.lastName]
       .filter(Boolean)
-      .join(" ") ??
+      .join(" ") ||
     null;
 
   const customerEmail =

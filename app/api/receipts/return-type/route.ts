@@ -22,9 +22,9 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!returnPaymentType || ![1, 2, 3, 4].includes(returnPaymentType)) {
+    if (!returnPaymentType || ![1, 2, 3].includes(returnPaymentType)) {
       return NextResponse.json(
-        { ok: false, error: "Невалиден тип на връщане (1-4)" },
+        { ok: false, error: "Невалиден тип на връщане (1-3)" },
         { status: 400 }
       );
     }

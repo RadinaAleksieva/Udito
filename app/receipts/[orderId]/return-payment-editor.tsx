@@ -6,7 +6,6 @@ const RETURN_PAYMENT_TYPES = [
   { value: 1, label: "В брой" },
   { value: 2, label: "По банкова сметка" },
   { value: 3, label: "Друга форма на плащане" },
-  { value: 4, label: "Друго" },
 ];
 
 type Props = {

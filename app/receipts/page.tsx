@@ -23,6 +23,7 @@ type ReceiptRow = {
   receipt_type?: string | null;
   reference_receipt_id?: number | null;
   refund_amount?: string | number | null;
+  order_raw?: any;
 };
 
 function extractCustomerName(raw: any, fallback: string | null | undefined) {
@@ -146,11 +147,10 @@ export default async function ReceiptsPage({
 
   const dbReceipts = receipts as ReceiptRow[];
 
-  // Use customer names from the JOIN query - no need for separate lookups
-  // The listReceiptsWithOrdersForSite already joins with orders table
+  // Use customer names from the JOIN query, with fallback to raw JSON extraction
   const displayReceipts = dbReceipts.map((receipt) => ({
     ...receipt,
-    customer_name: receipt.customer_name || "—",
+    customer_name: extractCustomerName(receipt.order_raw, receipt.customer_name),
   }));
 
   return (
@@ -237,7 +237,7 @@ export default async function ReceiptsPage({
                     <span>
                       <a
                         className="status-link"
-                        href={`/receipts/${receipt.order_id}?type=${receipt.receipt_type || "sale"}&print=1&month=${monthValue}`}
+                        href={`/api/receipts/pdf?orderId=${receipt.order_id}&type=${receipt.receipt_type || "sale"}`}
                       >
                         Изтегли
                       </a>

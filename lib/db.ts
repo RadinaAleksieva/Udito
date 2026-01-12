@@ -1554,3 +1554,28 @@ export async function getReceiptById(receiptId: number) {
   `;
   return result.rows[0] ?? null;
 }
+
+export async function getReceiptWithSiteById(receiptId: number) {
+  const result = await sql`
+    select r.id, r.order_id, r.type, o.site_id
+    from receipts r
+    left join orders o on o.id = r.order_id
+    where r.id = ${receiptId}
+    limit 1;
+  `;
+  return result.rows[0] ?? null;
+}
+
+export async function deleteReceiptById(receiptId: number) {
+  await sql`
+    delete from receipts
+    where id = ${receiptId};
+  `;
+}
+
+export async function deleteRefundReceiptsByReference(referenceReceiptId: number) {
+  await sql`
+    delete from receipts
+    where reference_receipt_id = ${referenceReceiptId};
+  `;
+}

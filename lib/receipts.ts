@@ -207,7 +207,8 @@ export async function listReceiptsWithOrdersForSite(
       orders.number as order_number,
       orders.customer_name,
       orders.total,
-      orders.currency
+      orders.currency,
+      orders.raw as order_raw
     from receipts
     left join orders on orders.id = receipts.order_id
     where orders.site_id = ${siteId} OR orders.site_id IS NULL
@@ -287,7 +288,8 @@ export async function listReceiptsWithOrdersForPeriodForSite(
       orders.number as order_number,
       orders.customer_name,
       orders.total,
-      orders.currency
+      orders.currency,
+      orders.raw as order_raw
     from receipts
     left join orders on orders.id = receipts.order_id
     where (orders.site_id = ${siteId} OR orders.site_id IS NULL)
@@ -354,7 +356,7 @@ export async function listOrdersWithReceiptsForAudit(
     where orders.site_id = ${siteId}
       and sale_receipts.type = 'sale'
       and sale_receipts.issued_at between ${startIso} and ${endIso}
-    order by sale_receipts.id asc;
+    order by sale_receipts.id desc;
   `;
   return result.rows;
 }
