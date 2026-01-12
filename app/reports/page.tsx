@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 type MonthlyStats = {
   year: number;
   month: number;
+  currency: string;
   totalReceipts: number;
   totalRevenue: number;
   totalTax: number;
@@ -17,13 +18,9 @@ type MonthlyStats = {
   finalRevenue: number;
   paymentMethods: Array<{
     method: string;
+    label: string;
     count: number;
     amount: number;
-  }>;
-  dailyBreakdown: Array<{
-    date: string;
-    receipts: number;
-    revenue: number;
   }>;
 };
 
@@ -32,22 +29,12 @@ const MONTHS = [
   "Юли", "Август", "Септември", "Октомври", "Ноември", "Декември"
 ];
 
-function formatMoney(amount: number): string {
+function formatMoney(amount: number, currency: string = "EUR"): string {
   return new Intl.NumberFormat("bg-BG", {
     style: "currency",
-    currency: "EUR",
+    currency: currency,
     maximumFractionDigits: 2,
   }).format(amount);
-}
-
-function formatPaymentMethod(method: string): string {
-  const methods: Record<string, string> = {
-    creditCard: "Карта",
-    offline: "Наложен платеж",
-    payPal: "PayPal",
-    unknown: "Неизвестен",
-  };
-  return methods[method] || method;
 }
 
 export default function ReportsPage() {
@@ -140,7 +127,7 @@ export default function ReportsPage() {
           <div className="stats-grid">
             <div className="stat-card stat-card--primary">
               <div className="stat-card__label">Общ оборот</div>
-              <div className="stat-card__value">{formatMoney(stats.totalRevenue)}</div>
+              <div className="stat-card__value">{formatMoney(stats.totalRevenue, stats.currency)}</div>
               <div className="stat-card__sub">
                 {stats.totalReceipts} бележки
               </div>
@@ -148,17 +135,17 @@ export default function ReportsPage() {
 
             <div className="stat-card">
               <div className="stat-card__label">Нето (без ДДС)</div>
-              <div className="stat-card__value">{formatMoney(stats.netRevenue)}</div>
+              <div className="stat-card__value">{formatMoney(stats.netRevenue, stats.currency)}</div>
             </div>
 
             <div className="stat-card">
               <div className="stat-card__label">ДДС (20%)</div>
-              <div className="stat-card__value">{formatMoney(stats.totalTax)}</div>
+              <div className="stat-card__value">{formatMoney(stats.totalTax, stats.currency)}</div>
             </div>
 
             <div className="stat-card">
               <div className="stat-card__label">Средна поръчка</div>
-              <div className="stat-card__value">{formatMoney(stats.avgOrderValue)}</div>
+              <div className="stat-card__value">{formatMoney(stats.avgOrderValue, stats.currency)}</div>
             </div>
           </div>
 
@@ -166,13 +153,13 @@ export default function ReportsPage() {
           <div className="stats-grid stats-grid--secondary">
             <div className="stat-card">
               <div className="stat-card__label">Доставки</div>
-              <div className="stat-card__value">{formatMoney(stats.totalShipping)}</div>
+              <div className="stat-card__value">{formatMoney(stats.totalShipping, stats.currency)}</div>
             </div>
 
             <div className="stat-card">
               <div className="stat-card__label">Отстъпки</div>
               <div className="stat-card__value stat-card__value--discount">
-                -{formatMoney(stats.totalDiscounts)}
+                -{formatMoney(stats.totalDiscounts, stats.currency)}
               </div>
             </div>
 
@@ -180,13 +167,13 @@ export default function ReportsPage() {
               <div className="stat-card__label">Сторно бележки</div>
               <div className="stat-card__value">{stats.totalRefunds}</div>
               <div className="stat-card__sub">
-                -{formatMoney(stats.refundAmount)}
+                -{formatMoney(stats.refundAmount, stats.currency)}
               </div>
             </div>
 
             <div className="stat-card stat-card--success">
               <div className="stat-card__label">Финален оборот</div>
-              <div className="stat-card__value">{formatMoney(stats.finalRevenue)}</div>
+              <div className="stat-card__value">{formatMoney(stats.finalRevenue, stats.currency)}</div>
               <div className="stat-card__sub">След сторно</div>
             </div>
           </div>
@@ -207,39 +194,13 @@ export default function ReportsPage() {
                   <tbody>
                     {stats.paymentMethods.map((pm) => (
                       <tr key={pm.method}>
-                        <td>{formatPaymentMethod(pm.method)}</td>
+                        <td>{pm.label}</td>
                         <td>{pm.count}</td>
-                        <td>{formatMoney(pm.amount)}</td>
+                        <td>{formatMoney(pm.amount, stats.currency)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-              </div>
-            </section>
-          )}
-
-          {/* Daily Breakdown */}
-          {stats.dailyBreakdown.length > 0 && (
-            <section className="reports-section">
-              <h2>По дни</h2>
-              <div className="daily-breakdown">
-                <div className="daily-chart">
-                  {stats.dailyBreakdown.map((day) => {
-                    const maxRevenue = Math.max(...stats.dailyBreakdown.map(d => d.revenue));
-                    const heightPercent = maxRevenue > 0 ? (day.revenue / maxRevenue) * 100 : 0;
-                    const date = new Date(day.date);
-                    return (
-                      <div key={day.date} className="daily-chart__bar-container">
-                        <div
-                          className="daily-chart__bar"
-                          style={{ height: `${Math.max(heightPercent, 2)}%` }}
-                          title={`${formatMoney(day.revenue)} (${day.receipts} бел.)`}
-                        />
-                        <div className="daily-chart__label">{date.getDate()}</div>
-                      </div>
-                    );
-                  })}
-                </div>
               </div>
             </section>
           )}

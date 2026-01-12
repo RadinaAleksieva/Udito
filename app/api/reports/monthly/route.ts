@@ -8,6 +8,43 @@ export const dynamic = "force-dynamic";
 // Official EUR/BGN conversion rate
 const BGN_TO_EUR = 0.51129;
 
+// Helper to extract payment method from raw order data
+function extractPaymentMethod(raw: any): "card" | "cod" | "other" {
+  if (!raw) return "other";
+
+  // Check orderTransactions payments
+  const payments = raw?.orderTransactions?.payments ?? raw?.payments ?? [];
+  for (const payment of payments) {
+    // Check for offline payment (COD)
+    if (payment?.regularPaymentDetails?.offlinePayment === true) {
+      return "cod";
+    }
+    // Check payment method
+    const method =
+      payment?.regularPaymentDetails?.paymentMethod ??
+      payment?.paymentMethod ??
+      payment?.method?.type ??
+      payment?.method?.name ??
+      "";
+    const methodStr = String(method).toLowerCase();
+    if (methodStr.includes("offline") || methodStr.includes("cash") || methodStr.includes("cod")) {
+      return "cod";
+    }
+    if (methodStr.includes("card") || methodStr.includes("credit") || methodStr.includes("debit") || methodStr.includes("stripe")) {
+      return "card";
+    }
+  }
+
+  // Fallback: check paymentStatus field patterns
+  const paymentStatus = raw?.paymentStatus ?? "";
+  if (typeof paymentStatus === "string") {
+    const statusLower = paymentStatus.toLowerCase();
+    if (statusLower.includes("offline")) return "cod";
+  }
+
+  return "other";
+}
+
 export async function GET(request: Request) {
   await initDb();
 
@@ -29,124 +66,104 @@ export async function GET(request: Request) {
   const startDate = new Date(year, month - 1, 1);
   const endDate = new Date(year, month, 0, 23, 59, 59, 999);
 
+  // Determine currency based on date (Bulgaria adopted EUR on Jan 1, 2026)
+  const isEurPeriod = year > 2025 || (year === 2025 && month === 12); // Actually Jan 2026+
+  const displayCurrency = year >= 2026 ? "EUR" : "BGN";
+
   try {
-    // Get sale receipts stats by joining with orders (convert BGN to EUR)
-    const salesResult = await sql`
+    // Get all receipts with order data for the period
+    const receiptsResult = await sql`
       SELECT
-        COUNT(*) as total_receipts,
-        COALESCE(SUM(
-          CASE WHEN o.currency = 'BGN' THEN o.total * ${BGN_TO_EUR} ELSE o.total END
-        ), 0) as total_revenue,
-        COALESCE(SUM(
-          CASE WHEN o.currency = 'BGN' THEN o.tax_total * ${BGN_TO_EUR} ELSE o.tax_total END
-        ), 0) as total_tax,
-        COALESCE(SUM(
-          CASE WHEN o.currency = 'BGN' THEN o.shipping_total * ${BGN_TO_EUR} ELSE o.shipping_total END
-        ), 0) as total_shipping,
-        COALESCE(SUM(
-          CASE WHEN o.currency = 'BGN' THEN o.discount_total * ${BGN_TO_EUR} ELSE o.discount_total END
-        ), 0) as total_discounts,
-        COALESCE(AVG(
-          CASE WHEN o.currency = 'BGN' THEN o.total * ${BGN_TO_EUR} ELSE o.total END
-        ), 0) as avg_order_value
+        r.id,
+        r.type,
+        r.refund_amount,
+        o.total,
+        o.tax_total,
+        o.shipping_total,
+        o.discount_total,
+        o.currency,
+        o.raw
       FROM receipts r
       JOIN orders o ON r.order_id = o.id
       WHERE o.site_id = ${siteId}
-        AND r.type = 'sale'
         AND r.issued_at >= ${startDate.toISOString()}
         AND r.issued_at <= ${endDate.toISOString()}
     `;
 
-    // Get refund receipts stats (convert BGN to EUR)
-    const refundsResult = await sql`
-      SELECT
-        COUNT(*) as total_refunds,
-        COALESCE(SUM(
-          CASE WHEN o.currency = 'BGN' THEN r.refund_amount * ${BGN_TO_EUR} ELSE r.refund_amount END
-        ), 0) as refund_amount
-      FROM receipts r
-      JOIN orders o ON r.order_id = o.id
-      WHERE o.site_id = ${siteId}
-        AND r.type = 'refund'
-        AND r.issued_at >= ${startDate.toISOString()}
-        AND r.issued_at <= ${endDate.toISOString()}
-    `;
+    // Process receipts and calculate stats
+    let totalReceipts = 0;
+    let totalRevenue = 0;
+    let totalTax = 0;
+    let totalShipping = 0;
+    let totalDiscounts = 0;
+    let totalRefunds = 0;
+    let refundAmount = 0;
 
-    // Get payment method breakdown from orders (convert BGN to EUR)
-    const paymentMethodsResult = await sql`
-      SELECT
-        COALESCE(o.payment_status, 'unknown') as method,
-        COUNT(*) as count,
-        COALESCE(SUM(
-          CASE WHEN o.currency = 'BGN' THEN o.total * ${BGN_TO_EUR} ELSE o.total END
-        ), 0) as amount
-      FROM receipts r
-      JOIN orders o ON r.order_id = o.id
-      WHERE o.site_id = ${siteId}
-        AND r.type = 'sale'
-        AND r.issued_at >= ${startDate.toISOString()}
-        AND r.issued_at <= ${endDate.toISOString()}
-      GROUP BY o.payment_status
-      ORDER BY amount DESC
-    `;
+    const paymentMethodStats: Record<string, { count: number; amount: number }> = {
+      card: { count: 0, amount: 0 },
+      cod: { count: 0, amount: 0 },
+      other: { count: 0, amount: 0 },
+    };
 
-    // Get daily breakdown for chart (convert BGN to EUR)
-    const dailyResult = await sql`
-      SELECT
-        DATE(r.issued_at) as date,
-        COUNT(*) as receipts,
-        COALESCE(SUM(
-          CASE WHEN o.currency = 'BGN' THEN o.total * ${BGN_TO_EUR} ELSE o.total END
-        ), 0) as revenue
-      FROM receipts r
-      JOIN orders o ON r.order_id = o.id
-      WHERE o.site_id = ${siteId}
-        AND r.type = 'sale'
-        AND r.issued_at >= ${startDate.toISOString()}
-        AND r.issued_at <= ${endDate.toISOString()}
-      GROUP BY DATE(r.issued_at)
-      ORDER BY date
-    `;
+    for (const row of receiptsResult.rows) {
+      const orderTotal = parseFloat(row.total) || 0;
+      const orderTax = parseFloat(row.tax_total) || 0;
+      const orderShipping = parseFloat(row.shipping_total) || 0;
+      const orderDiscount = parseFloat(row.discount_total) || 0;
+      const orderCurrency = row.currency || "EUR";
 
-    const sales = salesResult.rows[0];
-    const refunds = refundsResult.rows[0];
+      // Convert BGN to EUR if needed for display consistency
+      const conversionRate = orderCurrency === "BGN" && displayCurrency === "EUR" ? BGN_TO_EUR : 1;
+      // Convert EUR to BGN if displaying in BGN
+      const reverseRate = orderCurrency === "EUR" && displayCurrency === "BGN" ? 1 / BGN_TO_EUR : 1;
+      const rate = orderCurrency === displayCurrency ? 1 : (orderCurrency === "BGN" ? conversionRate : reverseRate);
 
-    const totalRevenue = parseFloat(sales.total_revenue) || 0;
-    const totalTax = parseFloat(sales.total_tax) || 0;
-    const totalShipping = parseFloat(sales.total_shipping) || 0;
-    const totalDiscounts = parseFloat(sales.total_discounts) || 0;
-    const refundAmount = parseFloat(refunds.refund_amount) || 0;
+      if (row.type === "sale") {
+        totalReceipts++;
+        totalRevenue += orderTotal * rate;
+        totalTax += orderTax * rate;
+        totalShipping += orderShipping * rate;
+        totalDiscounts += orderDiscount * rate;
+
+        // Extract payment method from raw data
+        const paymentMethod = extractPaymentMethod(row.raw);
+        paymentMethodStats[paymentMethod].count++;
+        paymentMethodStats[paymentMethod].amount += orderTotal * rate;
+      } else if (row.type === "refund") {
+        totalRefunds++;
+        const refund = parseFloat(row.refund_amount) || 0;
+        refundAmount += refund * rate;
+      }
+    }
+
+    const avgOrderValue = totalReceipts > 0 ? totalRevenue / totalReceipts : 0;
 
     return NextResponse.json({
       ok: true,
       stats: {
         year,
         month,
+        currency: displayCurrency,
         // Sales
-        totalReceipts: parseInt(sales.total_receipts) || 0,
+        totalReceipts,
         totalRevenue,
         totalTax,
         totalShipping,
         totalDiscounts,
-        avgOrderValue: parseFloat(sales.avg_order_value) || 0,
+        avgOrderValue,
         // Net (without tax)
         netRevenue: totalRevenue - totalTax,
         // Refunds
-        totalRefunds: parseInt(refunds.total_refunds) || 0,
+        totalRefunds,
         refundAmount,
         // Final
         finalRevenue: totalRevenue - refundAmount,
-        // Breakdowns
-        paymentMethods: paymentMethodsResult.rows.map(row => ({
-          method: row.method,
-          count: parseInt(row.count),
-          amount: parseFloat(row.amount) || 0,
-        })),
-        dailyBreakdown: dailyResult.rows.map(row => ({
-          date: row.date,
-          receipts: parseInt(row.receipts),
-          revenue: parseFloat(row.revenue) || 0,
-        })),
+        // Payment methods breakdown
+        paymentMethods: [
+          { method: "card", label: "Карта", count: paymentMethodStats.card.count, amount: paymentMethodStats.card.amount },
+          { method: "cod", label: "Наложен платеж", count: paymentMethodStats.cod.count, amount: paymentMethodStats.cod.amount },
+          ...(paymentMethodStats.other.count > 0 ? [{ method: "other", label: "Друг", count: paymentMethodStats.other.count, amount: paymentMethodStats.other.amount }] : []),
+        ].filter(pm => pm.count > 0),
       },
     });
   } catch (error) {
