@@ -1664,6 +1664,29 @@ main {
 }
 
 /* Reports Page */
+.reports-page {
+  padding: 32px 40px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.reports-page .page-header {
+  margin-bottom: 32px;
+}
+
+.reports-page .page-header h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--primary);
+  margin: 0 0 8px;
+}
+
+.reports-page .page-header p {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
 .reports-filters {
   display: flex;
   gap: 16px;
@@ -1696,7 +1719,7 @@ main {
 .reports-select:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1);
+  box-shadow: 0 0 0 3px rgba(10, 30, 63, 0.1);
 }
 
 .reports-loading,
@@ -1733,7 +1756,7 @@ main {
 }
 
 .stat-card--primary {
-  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  background: linear-gradient(135deg, #0a1e3f 0%, #1a365d 100%);
   color: #fff;
   border: none;
 }
@@ -1752,8 +1775,8 @@ main {
 }
 
 .stat-card--success {
-  border-color: #059669;
-  background: #ecfdf5;
+  border-color: #0a1e3f;
+  background: #eef2f7;
 }
 
 .stat-card__label {
@@ -1776,7 +1799,7 @@ main {
 }
 
 .stat-card__value--discount {
-  color: #059669;
+  color: #0a1e3f;
 }
 
 .stat-card__sub {
@@ -1860,7 +1883,7 @@ main {
 .daily-chart__bar {
   width: 100%;
   max-width: 30px;
-  background: linear-gradient(180deg, #059669 0%, #047857 100%);
+  background: linear-gradient(180deg, #0a1e3f 0%, #1a365d 100%);
   border-radius: 4px 4px 0 0;
   margin-top: auto;
   cursor: pointer;

@@ -86,12 +86,10 @@ export default function ReportsPage() {
   const years = [currentDate.getFullYear(), currentDate.getFullYear() - 1, currentDate.getFullYear() - 2];
 
   return (
-    <main className="main-content">
+    <main className="reports-page">
       <div className="page-header">
-        <div>
-          <h1>Отчети</h1>
-          <p>Месечна статистика за продажбите</p>
-        </div>
+        <h1>Отчети</h1>
+        <p>Месечна статистика за продажбите</p>
       </div>
 
       {/* Month/Year Selector */}

@@ -5,6 +5,9 @@ import { getActiveWixToken } from "@/lib/wix-context";
 
 export const dynamic = "force-dynamic";
 
+// Official EUR/BGN conversion rate
+const BGN_TO_EUR = 0.51129;
+
 export async function GET(request: Request) {
   await initDb();
 
@@ -27,15 +30,25 @@ export async function GET(request: Request) {
   const endDate = new Date(year, month, 0, 23, 59, 59, 999);
 
   try {
-    // Get sale receipts stats by joining with orders
+    // Get sale receipts stats by joining with orders (convert BGN to EUR)
     const salesResult = await sql`
       SELECT
         COUNT(*) as total_receipts,
-        COALESCE(SUM(o.total), 0) as total_revenue,
-        COALESCE(SUM(o.tax_total), 0) as total_tax,
-        COALESCE(SUM(o.shipping_total), 0) as total_shipping,
-        COALESCE(SUM(o.discount_total), 0) as total_discounts,
-        COALESCE(AVG(o.total), 0) as avg_order_value
+        COALESCE(SUM(
+          CASE WHEN o.currency = 'BGN' THEN o.total * ${BGN_TO_EUR} ELSE o.total END
+        ), 0) as total_revenue,
+        COALESCE(SUM(
+          CASE WHEN o.currency = 'BGN' THEN o.tax_total * ${BGN_TO_EUR} ELSE o.tax_total END
+        ), 0) as total_tax,
+        COALESCE(SUM(
+          CASE WHEN o.currency = 'BGN' THEN o.shipping_total * ${BGN_TO_EUR} ELSE o.shipping_total END
+        ), 0) as total_shipping,
+        COALESCE(SUM(
+          CASE WHEN o.currency = 'BGN' THEN o.discount_total * ${BGN_TO_EUR} ELSE o.discount_total END
+        ), 0) as total_discounts,
+        COALESCE(AVG(
+          CASE WHEN o.currency = 'BGN' THEN o.total * ${BGN_TO_EUR} ELSE o.total END
+        ), 0) as avg_order_value
       FROM receipts r
       JOIN orders o ON r.order_id = o.id
       WHERE o.site_id = ${siteId}
@@ -44,11 +57,13 @@ export async function GET(request: Request) {
         AND r.issued_at <= ${endDate.toISOString()}
     `;
 
-    // Get refund receipts stats
+    // Get refund receipts stats (convert BGN to EUR)
     const refundsResult = await sql`
       SELECT
         COUNT(*) as total_refunds,
-        COALESCE(SUM(r.refund_amount), 0) as refund_amount
+        COALESCE(SUM(
+          CASE WHEN o.currency = 'BGN' THEN r.refund_amount * ${BGN_TO_EUR} ELSE r.refund_amount END
+        ), 0) as refund_amount
       FROM receipts r
       JOIN orders o ON r.order_id = o.id
       WHERE o.site_id = ${siteId}
@@ -57,12 +72,14 @@ export async function GET(request: Request) {
         AND r.issued_at <= ${endDate.toISOString()}
     `;
 
-    // Get payment method breakdown from orders
+    // Get payment method breakdown from orders (convert BGN to EUR)
     const paymentMethodsResult = await sql`
       SELECT
         COALESCE(o.payment_status, 'unknown') as method,
         COUNT(*) as count,
-        COALESCE(SUM(o.total), 0) as amount
+        COALESCE(SUM(
+          CASE WHEN o.currency = 'BGN' THEN o.total * ${BGN_TO_EUR} ELSE o.total END
+        ), 0) as amount
       FROM receipts r
       JOIN orders o ON r.order_id = o.id
       WHERE o.site_id = ${siteId}
@@ -73,12 +90,14 @@ export async function GET(request: Request) {
       ORDER BY amount DESC
     `;
 
-    // Get daily breakdown for chart
+    // Get daily breakdown for chart (convert BGN to EUR)
     const dailyResult = await sql`
       SELECT
         DATE(r.issued_at) as date,
         COUNT(*) as receipts,
-        COALESCE(SUM(o.total), 0) as revenue
+        COALESCE(SUM(
+          CASE WHEN o.currency = 'BGN' THEN o.total * ${BGN_TO_EUR} ELSE o.total END
+        ), 0) as revenue
       FROM receipts r
       JOIN orders o ON r.order_id = o.id
       WHERE o.site_id = ${siteId}
