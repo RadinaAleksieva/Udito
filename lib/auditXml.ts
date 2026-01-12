@@ -194,11 +194,16 @@ export function determinePaymentType(paymentMethod: string | null | undefined): 
 
   const method = paymentMethod.toLowerCase();
 
-  if (method.includes("cod") || method.includes("наложен") || method.includes("cash on delivery")) {
-    return 2; // Наложен платеж
+  if (
+    method.includes("cod") ||
+    method.includes("наложен") ||
+    method.includes("cash on delivery") ||
+    method.includes("offline")  // Wix offlinePayment = наложен платеж
+  ) {
+    return 2; // Наложен платеж - куриерска услуга
   }
 
-  if (method.includes("offline") || method.includes("cash") || method.includes("в брой")) {
+  if (method.includes("в брой") || method.includes("cash register")) {
     return 6; // Касов апарат
   }
 
