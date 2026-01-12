@@ -5,13 +5,26 @@ import {
   Text,
   Image,
   StyleSheet,
+  Font,
 } from "@react-pdf/renderer";
+import path from "path";
 
-// Using built-in Helvetica font to avoid loading issues on serverless
+// Register Roboto font with Cyrillic support
+// Use local files for serverless compatibility
+const fontPath = path.join(process.cwd(), "public/fonts");
+
+Font.register({
+  family: "Roboto",
+  fonts: [
+    { src: `${fontPath}/Roboto-Regular.ttf`, fontWeight: 400 },
+    { src: `${fontPath}/Roboto-Bold.ttf`, fontWeight: 700 },
+  ],
+});
+
 const styles = StyleSheet.create({
   page: {
     padding: 40,
-    fontFamily: "Helvetica",
+    fontFamily: "Roboto",
     fontSize: 10,
     color: "#1a1a1a",
     backgroundColor: "#ffffff",
