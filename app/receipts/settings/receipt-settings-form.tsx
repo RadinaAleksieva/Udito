@@ -453,7 +453,7 @@ function ModernPreview({ logoUrl, accentColor }: { logoUrl: string; accentColor:
           {logoUrl ? (
             <Image src={logoUrl} alt="Logo" width={40} height={40} unoptimized />
           ) : (
-            <div className="preview-modern__logo-placeholder">Logo</div>
+            <div className="preview-modern__logo-text">ДБП</div>
           )}
           <div>
             <strong>ДИЗАЙНС БАЙ ПО ЕООД</strong>
