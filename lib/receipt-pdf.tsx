@@ -5,36 +5,13 @@ import {
   Text,
   Image,
   StyleSheet,
-  Font,
 } from "@react-pdf/renderer";
 
-// Register IBM Plex Sans font
-Font.register({
-  family: "IBM Plex Sans",
-  fonts: [
-    {
-      src: "https://fonts.gstatic.com/s/ibmplexsans/v19/zYXgKVElMYYaJe8bpLHnCwDKhdHeFaxOedc.ttf",
-      fontWeight: 400,
-    },
-    {
-      src: "https://fonts.gstatic.com/s/ibmplexsans/v19/zYX9KVElMYYaJe8bpLHnCwDKjSL9AIFsdP3pBms.ttf",
-      fontWeight: 500,
-    },
-    {
-      src: "https://fonts.gstatic.com/s/ibmplexsans/v19/zYX9KVElMYYaJe8bpLHnCwDKjQ76AIFsdP3pBms.ttf",
-      fontWeight: 600,
-    },
-    {
-      src: "https://fonts.gstatic.com/s/ibmplexsans/v19/zYX9KVElMYYaJe8bpLHnCwDKjWr7AIFsdP3pBms.ttf",
-      fontWeight: 700,
-    },
-  ],
-});
-
+// Using built-in Helvetica font to avoid loading issues on serverless
 const styles = StyleSheet.create({
   page: {
     padding: 40,
-    fontFamily: "IBM Plex Sans",
+    fontFamily: "Helvetica",
     fontSize: 10,
     color: "#1a1a1a",
     backgroundColor: "#ffffff",
