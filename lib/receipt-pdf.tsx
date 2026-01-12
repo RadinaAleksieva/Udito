@@ -54,6 +54,16 @@ const ACCENT_COLORS: Record<string, string> = {
   purple: "#7c3aed",
 };
 
+// Pastel gradient colors for Playful template (Revolut-style)
+const PLAYFUL_GRADIENTS: Record<string, { bg: string; accent: string; light: string }> = {
+  green: { bg: "#e6f7f2", accent: "#10b981", light: "#d1fae5" },
+  blue: { bg: "#e0f2fe", accent: "#3b82f6", light: "#dbeafe" },
+  orange: { bg: "#fff7ed", accent: "#f97316", light: "#ffedd5" },
+  pink: { bg: "#fdf2f8", accent: "#ec4899", light: "#fce7f3" },
+  yellow: { bg: "#fefce8", accent: "#eab308", light: "#fef9c3" },
+  purple: { bg: "#f3e8ff", accent: "#a855f7", light: "#e9d5ff" },
+};
+
 export type ReceiptPdfData = {
   // Receipt info
   receiptNumber: string;
@@ -1233,78 +1243,87 @@ function DarkTemplate({ data }: { data: ReceiptPdfData }) {
 }
 
 // ============================================
-// PLAYFUL TEMPLATE
+// PLAYFUL TEMPLATE (Revolut-style gradient)
 // ============================================
 const playfulStyles = StyleSheet.create({
   page: {
-    padding: 35,
+    padding: 0,
     fontFamily: "Roboto",
     fontSize: 10,
     color: "#1a1a1a",
-    backgroundColor: "#ffffff",
   },
-  headerBand: {
-    padding: 20,
-    marginBottom: 20,
-    borderRadius: 12,
+  // Full page gradient background simulation
+  gradientTop: {
+    padding: 30,
+    paddingBottom: 20,
   },
-  headerContent: {
+  gradientBottom: {
+    padding: 30,
+    paddingTop: 20,
+    flexGrow: 1,
+  },
+  // Header
+  header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
+    marginBottom: 24,
   },
   logoBlock: {
     flexDirection: "row",
     alignItems: "center",
   },
   logoFallback: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 700,
-    color: "#fff",
+  },
+  headerRight: {
+    alignItems: "flex-end",
   },
   receiptBadge: {
-    backgroundColor: "rgba(255,255,255,0.2)",
     paddingVertical: 6,
     paddingHorizontal: 14,
     borderRadius: 20,
+    marginBottom: 8,
   },
   receiptBadgeText: {
     color: "#fff",
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: 700,
   },
-  receiptMeta: {
-    marginTop: 16,
-    flexDirection: "row",
-    gap: 20,
-  },
-  metaItem: {
-    color: "rgba(255,255,255,0.9)",
+  metaText: {
     fontSize: 9,
+    marginBottom: 2,
   },
-  refundBanner: {
-    backgroundColor: "#fef2f2",
-    borderLeftWidth: 4,
-    borderLeftColor: "#dc2626",
-    padding: 10,
-    marginBottom: 16,
-    borderRadius: 4,
+  // Big amount display (Revolut-style)
+  amountSection: {
+    alignItems: "center",
+    marginBottom: 30,
+    paddingVertical: 20,
   },
-  refundText: {
-    color: "#dc2626",
-    fontSize: 10,
+  amountLabel: {
+    fontSize: 11,
+    marginBottom: 6,
+  },
+  amountValue: {
+    fontSize: 42,
     fontWeight: 700,
   },
+  amountSubtext: {
+    fontSize: 10,
+    marginTop: 8,
+  },
+  // Info cards
   infoCards: {
     flexDirection: "row",
-    gap: 16,
+    gap: 12,
     marginBottom: 20,
   },
   infoCard: {
     flex: 1,
-    backgroundColor: "#f9fafb",
+    backgroundColor: "#ffffff",
     padding: 14,
-    borderRadius: 10,
+    borderRadius: 12,
   },
   cardTitle: {
     fontSize: 8,
@@ -1317,30 +1336,35 @@ const playfulStyles = StyleSheet.create({
     fontSize: 11,
     fontWeight: 700,
     marginBottom: 4,
+    color: "#1a1a1a",
   },
   cardText: {
     fontSize: 9,
     color: "#6b7280",
     marginBottom: 2,
   },
+  // Items
   itemsSection: {
-    marginBottom: 20,
+    backgroundColor: "#ffffff",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
   },
   sectionTitle: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: 700,
     textTransform: "uppercase",
     letterSpacing: 1,
     marginBottom: 12,
+    color: "#6b7280",
   },
-  itemCard: {
-    backgroundColor: "#f9fafb",
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 8,
+  itemRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f3f4f6",
   },
   itemLeft: {
     flex: 1,
@@ -1349,19 +1373,23 @@ const playfulStyles = StyleSheet.create({
     fontSize: 10,
     fontWeight: 700,
     marginBottom: 2,
+    color: "#1a1a1a",
   },
   itemDetails: {
     fontSize: 8,
-    color: "#6b7280",
+    color: "#9ca3af",
   },
   itemPrice: {
     fontSize: 11,
     fontWeight: 700,
+    color: "#1a1a1a",
   },
-  totalsCard: {
-    padding: 16,
+  // Totals
+  totalsSection: {
+    backgroundColor: "#ffffff",
     borderRadius: 12,
-    marginBottom: 20,
+    padding: 16,
+    marginBottom: 16,
   },
   totalRow: {
     flexDirection: "row",
@@ -1370,80 +1398,92 @@ const playfulStyles = StyleSheet.create({
   },
   totalLabel: {
     fontSize: 10,
-    color: "rgba(255,255,255,0.8)",
+    color: "#6b7280",
   },
   totalValue: {
     fontSize: 10,
     fontWeight: 700,
-    color: "#fff",
+    color: "#1a1a1a",
   },
   totalRowFinal: {
     flexDirection: "row",
     justifyContent: "space-between",
     borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.3)",
+    borderTopColor: "#e5e7eb",
     paddingTop: 10,
     marginTop: 6,
   },
   totalLabelFinal: {
     fontSize: 12,
     fontWeight: 700,
-    color: "#fff",
+    color: "#1a1a1a",
   },
   totalValueFinal: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 700,
-    color: "#fff",
   },
+  // Payment badge
   paymentBadge: {
-    alignSelf: "flex-start",
-    backgroundColor: "#ecfdf5",
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
+    alignSelf: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 25,
     marginBottom: 20,
   },
   paymentText: {
-    fontSize: 10,
-    color: "#059669",
+    fontSize: 11,
+    color: "#fff",
     fontWeight: 700,
   },
+  // Footer
   footer: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-end",
-    borderTopWidth: 1,
-    borderTopColor: "#e5e7eb",
-    paddingTop: 16,
+    marginTop: "auto",
   },
   contactBlock: {},
   contactText: {
     fontSize: 9,
-    color: "#6b7280",
     marginBottom: 2,
   },
   qrBlock: {
     alignItems: "flex-end",
+    backgroundColor: "#ffffff",
+    padding: 10,
+    borderRadius: 12,
   },
   qrImage: {
-    width: 70,
-    height: 70,
+    width: 65,
+    height: 65,
   },
   transactionCode: {
     fontSize: 7,
-    color: "#9ca3af",
     marginTop: 4,
     textAlign: "right",
   },
   negativeAmount: {
     color: "#dc2626",
   },
+  refundBanner: {
+    backgroundColor: "#fef2f2",
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 16,
+    alignItems: "center",
+  },
+  refundText: {
+    color: "#dc2626",
+    fontSize: 10,
+    fontWeight: 700,
+  },
 });
 
 function PlayfulTemplate({ data }: { data: ReceiptPdfData }) {
   const isRefund = data.receiptType === "refund";
   const showEur = data.showEurPrimary && data.currency === "BGN";
-  const accentHex = ACCENT_COLORS[data.accentColor || "purple"] || ACCENT_COLORS.purple;
+  const colorKey = data.accentColor || "purple";
+  const gradient = PLAYFUL_GRADIENTS[colorKey] || PLAYFUL_GRADIENTS.purple;
 
   const formatAmount = (amount: number) => {
     if (showEur) {
@@ -1460,128 +1500,144 @@ function PlayfulTemplate({ data }: { data: ReceiptPdfData }) {
     return lineTotal - lineTotal / (1 + taxPercent / 100);
   };
 
-  // Create darker shade for gradient
-  const darkerAccent = accentHex;
-
   return (
     <Document>
-      <Page size="A4" style={playfulStyles.page}>
-        {/* Header Band */}
-        <View style={[playfulStyles.headerBand, { backgroundColor: accentHex }]}>
-          <View style={playfulStyles.headerContent}>
+      <Page size="A4" style={[playfulStyles.page, { backgroundColor: gradient.bg }]}>
+        {/* Top gradient section */}
+        <View style={[playfulStyles.gradientTop, { backgroundColor: gradient.light }]}>
+          {/* Header */}
+          <View style={playfulStyles.header}>
             <View style={playfulStyles.logoBlock}>
               {data.logoUrl ? (
-                <Image src={data.logoUrl} style={getLogoStyle(data.logoWidth, data.logoHeight, 45, 90)} />
+                <Image src={data.logoUrl} style={getLogoStyle(data.logoWidth, data.logoHeight, 50, 100)} />
               ) : (
-                <Text style={playfulStyles.logoFallback}>{data.storeName}</Text>
+                <Text style={[playfulStyles.logoFallback, { color: gradient.accent }]}>{data.storeName}</Text>
               )}
             </View>
-            <View style={playfulStyles.receiptBadge}>
-              <Text style={playfulStyles.receiptBadgeText}>
-                {isRefund ? "СТОРНО" : "БЕЛЕЖКА"} #{data.receiptNumber}
+            <View style={playfulStyles.headerRight}>
+              <View style={[playfulStyles.receiptBadge, { backgroundColor: gradient.accent }]}>
+                <Text style={playfulStyles.receiptBadgeText}>
+                  {isRefund ? "СТОРНО" : "БЕЛЕЖКА"} #{data.receiptNumber}
+                </Text>
+              </View>
+              <Text style={[playfulStyles.metaText, { color: gradient.accent }]}>{data.issuedDate}</Text>
+              <Text style={[playfulStyles.metaText, { color: gradient.accent }]}>Поръчка: {data.orderNumber}</Text>
+            </View>
+          </View>
+
+          {/* Big Amount Display (Revolut-style) */}
+          <View style={playfulStyles.amountSection}>
+            <Text style={[playfulStyles.amountLabel, { color: gradient.accent }]}>
+              {isRefund ? "Възстановена сума" : "Обща сума"}
+            </Text>
+            <Text style={[playfulStyles.amountValue, { color: gradient.accent }]}>
+              {formatAmount(Math.abs(data.total))}
+            </Text>
+            <Text style={[playfulStyles.amountSubtext, { color: gradient.accent }]}>
+              {data.paymentLabel}
+            </Text>
+          </View>
+
+          {/* Refund Banner */}
+          {isRefund && data.referenceReceiptId && (
+            <View style={playfulStyles.refundBanner}>
+              <Text style={playfulStyles.refundText}>Сторно към бележка #{data.referenceReceiptId}</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Bottom content section */}
+        <View style={[playfulStyles.gradientBottom, { backgroundColor: gradient.bg }]}>
+          {/* Info Cards */}
+          <View style={playfulStyles.infoCards}>
+            <View style={playfulStyles.infoCard}>
+              <Text style={[playfulStyles.cardTitle, { color: gradient.accent }]}>Търговец</Text>
+              <Text style={playfulStyles.cardName}>{data.storeName}</Text>
+              <Text style={playfulStyles.cardText}>{data.legalName}</Text>
+              <Text style={playfulStyles.cardText}>{data.addressLine1}</Text>
+              <Text style={playfulStyles.cardText}>{data.postalCode} {data.city}</Text>
+              <Text style={playfulStyles.cardText}>ЕИК: {data.bulstat}</Text>
+              {data.vatNumber && <Text style={playfulStyles.cardText}>ДДС: {data.vatNumber}</Text>}
+            </View>
+            <View style={playfulStyles.infoCard}>
+              <Text style={[playfulStyles.cardTitle, { color: gradient.accent }]}>Клиент</Text>
+              <Text style={playfulStyles.cardName}>{data.customerName}</Text>
+              <Text style={playfulStyles.cardText}>{data.shippingLine1}</Text>
+              <Text style={playfulStyles.cardText}>{data.shippingPostalCode} {data.shippingCity}</Text>
+              <Text style={playfulStyles.cardText}>{data.customerEmail}</Text>
+              {data.customerPhone && <Text style={playfulStyles.cardText}>{data.customerPhone}</Text>}
+            </View>
+          </View>
+
+          {/* Items */}
+          <View style={playfulStyles.itemsSection}>
+            <Text style={[playfulStyles.sectionTitle, { color: gradient.accent }]}>Артикули</Text>
+            {data.items.map((item, idx) => {
+              const netPrice = getNetPrice(item.unitPrice, item.taxPercent);
+              const vatAmount = getVatAmount(item.lineTotal, item.taxPercent);
+              const qty = isRefund ? -item.quantity : item.quantity;
+              const total = isRefund ? -item.lineTotal : item.lineTotal;
+              return (
+                <View style={playfulStyles.itemRow} key={idx}>
+                  <View style={playfulStyles.itemLeft}>
+                    <Text style={playfulStyles.itemName}>{item.name}</Text>
+                    <Text style={playfulStyles.itemDetails}>
+                      {qty} x {formatAmount(netPrice)} + ДДС {formatAmount(Math.abs(vatAmount))}
+                    </Text>
+                  </View>
+                  <Text style={isRefund ? [playfulStyles.itemPrice, playfulStyles.negativeAmount] : playfulStyles.itemPrice}>
+                    {formatAmount(total)}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+
+          {/* Totals */}
+          <View style={playfulStyles.totalsSection}>
+            <View style={playfulStyles.totalRow}>
+              <Text style={playfulStyles.totalLabel}>Междинна сума</Text>
+              <Text style={playfulStyles.totalValue}>{formatAmount(data.subtotal)}</Text>
+            </View>
+            {data.discountAmount && data.discountAmount > 0 && !isRefund && (
+              <View style={playfulStyles.totalRow}>
+                <Text style={playfulStyles.totalLabel}>Отстъпка{data.discountCode ? ` (${data.discountCode})` : ""}</Text>
+                <Text style={[playfulStyles.totalValue, { color: gradient.accent }]}>-{formatAmount(data.discountAmount)}</Text>
+              </View>
+            )}
+            {!data.isPartialRefund && (
+              <View style={playfulStyles.totalRow}>
+                <Text style={playfulStyles.totalLabel}>Доставка</Text>
+                <Text style={playfulStyles.totalValue}>{formatAmount(data.shippingTotal)}</Text>
+              </View>
+            )}
+            <View style={playfulStyles.totalRow}>
+              <Text style={playfulStyles.totalLabel}>ДДС (20%)</Text>
+              <Text style={playfulStyles.totalValue}>{formatAmount(data.taxTotal)}</Text>
+            </View>
+            <View style={playfulStyles.totalRowFinal}>
+              <Text style={playfulStyles.totalLabelFinal}>Обща сума</Text>
+              <Text style={isRefund ? [playfulStyles.totalValueFinal, playfulStyles.negativeAmount] : [playfulStyles.totalValueFinal, { color: gradient.accent }]}>
+                {formatAmount(data.total)}
               </Text>
             </View>
           </View>
-          <View style={playfulStyles.receiptMeta}>
-            <Text style={playfulStyles.metaItem}>{data.issuedDate}</Text>
-            <Text style={playfulStyles.metaItem}>Поръчка: {data.orderNumber}</Text>
-          </View>
-        </View>
 
-        {/* Refund Banner */}
-        {isRefund && data.referenceReceiptId && (
-          <View style={playfulStyles.refundBanner}>
-            <Text style={playfulStyles.refundText}>Сторно към бележка #{data.referenceReceiptId}</Text>
+          {/* Payment Badge */}
+          <View style={[playfulStyles.paymentBadge, { backgroundColor: gradient.accent }]}>
+            <Text style={playfulStyles.paymentText}>{data.paymentLabel} • {data.paymentDate}</Text>
           </View>
-        )}
 
-        {/* Info Cards */}
-        <View style={playfulStyles.infoCards}>
-          <View style={playfulStyles.infoCard}>
-            <Text style={[playfulStyles.cardTitle, { color: accentHex }]}>Търговец</Text>
-            <Text style={playfulStyles.cardName}>{data.storeName}</Text>
-            <Text style={playfulStyles.cardText}>{data.legalName}</Text>
-            <Text style={playfulStyles.cardText}>{data.addressLine1}</Text>
-            <Text style={playfulStyles.cardText}>{data.postalCode} {data.city}</Text>
-            <Text style={playfulStyles.cardText}>ЕИК: {data.bulstat}</Text>
-          </View>
-          <View style={playfulStyles.infoCard}>
-            <Text style={[playfulStyles.cardTitle, { color: accentHex }]}>Клиент</Text>
-            <Text style={playfulStyles.cardName}>{data.customerName}</Text>
-            <Text style={playfulStyles.cardText}>{data.shippingLine1}</Text>
-            <Text style={playfulStyles.cardText}>{data.shippingPostalCode} {data.shippingCity}</Text>
-            <Text style={playfulStyles.cardText}>{data.customerEmail}</Text>
-          </View>
-        </View>
-
-        {/* Items */}
-        <View style={playfulStyles.itemsSection}>
-          <Text style={[playfulStyles.sectionTitle, { color: accentHex }]}>Артикули</Text>
-          {data.items.map((item, idx) => {
-            const netPrice = getNetPrice(item.unitPrice, item.taxPercent);
-            const vatAmount = getVatAmount(item.lineTotal, item.taxPercent);
-            const qty = isRefund ? -item.quantity : item.quantity;
-            const total = isRefund ? -item.lineTotal : item.lineTotal;
-            return (
-              <View style={playfulStyles.itemCard} key={idx}>
-                <View style={playfulStyles.itemLeft}>
-                  <Text style={playfulStyles.itemName}>{item.name}</Text>
-                  <Text style={playfulStyles.itemDetails}>
-                    {qty} x {formatAmount(netPrice)} + ДДС {formatAmount(Math.abs(vatAmount))}
-                  </Text>
-                </View>
-                <Text style={isRefund ? [playfulStyles.itemPrice, playfulStyles.negativeAmount] : playfulStyles.itemPrice}>
-                  {formatAmount(total)}
-                </Text>
-              </View>
-            );
-          })}
-        </View>
-
-        {/* Totals */}
-        <View style={[playfulStyles.totalsCard, { backgroundColor: accentHex }]}>
-          <View style={playfulStyles.totalRow}>
-            <Text style={playfulStyles.totalLabel}>Междинна сума</Text>
-            <Text style={playfulStyles.totalValue}>{formatAmount(data.subtotal)}</Text>
-          </View>
-          {data.discountAmount && data.discountAmount > 0 && !isRefund && (
-            <View style={playfulStyles.totalRow}>
-              <Text style={playfulStyles.totalLabel}>Отстъпка</Text>
-              <Text style={playfulStyles.totalValue}>-{formatAmount(data.discountAmount)}</Text>
+          {/* Footer */}
+          <View style={playfulStyles.footer}>
+            <View style={playfulStyles.contactBlock}>
+              <Text style={[playfulStyles.contactText, { color: gradient.accent }]}>{data.contactEmail}</Text>
+              <Text style={[playfulStyles.contactText, { color: gradient.accent }]}>{data.contactPhone}</Text>
+              <Text style={[playfulStyles.transactionCode, { color: gradient.accent }]}>Код: {data.transactionCode}</Text>
             </View>
-          )}
-          {!data.isPartialRefund && (
-            <View style={playfulStyles.totalRow}>
-              <Text style={playfulStyles.totalLabel}>Доставка</Text>
-              <Text style={playfulStyles.totalValue}>{formatAmount(data.shippingTotal)}</Text>
+            <View style={playfulStyles.qrBlock}>
+              {data.qrDataUrl && <Image src={data.qrDataUrl} style={playfulStyles.qrImage} />}
             </View>
-          )}
-          <View style={playfulStyles.totalRow}>
-            <Text style={playfulStyles.totalLabel}>ДДС (20%)</Text>
-            <Text style={playfulStyles.totalValue}>{formatAmount(data.taxTotal)}</Text>
-          </View>
-          <View style={playfulStyles.totalRowFinal}>
-            <Text style={playfulStyles.totalLabelFinal}>Обща сума</Text>
-            <Text style={isRefund ? [playfulStyles.totalValueFinal, { color: "#fecaca" }] : playfulStyles.totalValueFinal}>
-              {formatAmount(data.total)}
-            </Text>
-          </View>
-        </View>
-
-        {/* Payment Badge */}
-        <View style={playfulStyles.paymentBadge}>
-          <Text style={playfulStyles.paymentText}>{data.paymentLabel} • {data.paymentDate}</Text>
-        </View>
-
-        {/* Footer */}
-        <View style={playfulStyles.footer}>
-          <View style={playfulStyles.contactBlock}>
-            <Text style={playfulStyles.contactText}>{data.contactEmail}</Text>
-            <Text style={playfulStyles.contactText}>{data.contactPhone}</Text>
-          </View>
-          <View style={playfulStyles.qrBlock}>
-            {data.qrDataUrl && <Image src={data.qrDataUrl} style={playfulStyles.qrImage} />}
-            <Text style={playfulStyles.transactionCode}>Код: {data.transactionCode}</Text>
           </View>
         </View>
       </Page>
