@@ -20,9 +20,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
 
-    // Validate file type
-    if (!file.type.startsWith("image/")) {
-      return NextResponse.json({ error: "File must be an image" }, { status: 400 });
+    // Validate file type - only PNG and JPG (SVG not supported by PDF renderer)
+    const allowedTypes = ["image/png", "image/jpeg", "image/jpg"];
+    if (!allowedTypes.includes(file.type)) {
+      return NextResponse.json({
+        error: "Само PNG и JPG формати са позволени (SVG не се поддържа)"
+      }, { status: 400 });
     }
 
     // Validate file size (max 2MB)

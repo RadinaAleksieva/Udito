@@ -326,7 +326,7 @@ export default function CompanyForm() {
           <input
             id="logo-upload"
             type="file"
-            accept="image/*"
+            accept="image/png,image/jpeg"
             onChange={handleLogoChange}
             className="logo-upload__input"
             disabled={uploading}
