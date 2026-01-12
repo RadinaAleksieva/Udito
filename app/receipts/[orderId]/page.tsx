@@ -18,6 +18,7 @@ import {
 } from "@/lib/wix";
 import { getReceiptByOrderIdAndType } from "@/lib/receipts";
 import PrintTrigger from "./print-trigger";
+import DownloadTrigger from "./download-trigger";
 import ReceiptActions from "./receipt-actions";
 import ReturnPaymentEditor from "./return-payment-editor";
 import "./receipt.css";
@@ -392,7 +393,7 @@ export default async function ReceiptPage({
   searchParams,
 }: {
   params: { orderId: string };
-  searchParams?: { print?: string; type?: string };
+  searchParams?: { print?: string; type?: string; download?: string };
 }) {
   await initDb();
   const orderId = params.orderId;
@@ -632,6 +633,11 @@ export default async function ReceiptPage({
   return (
     <div className="receipt-shell" data-template={template}>
       <PrintTrigger enabled={searchParams?.print === "1"} />
+      <DownloadTrigger
+        enabled={searchParams?.download === "1"}
+        receiptId={receiptRecord?.id ? Number(receiptRecord.id) : null}
+        orderId={orderId}
+      />
       <ReceiptActions orderId={orderId} receiptType={receiptType} receiptId={receiptRecord?.id ? Number(receiptRecord.id) : null} />
       <main className="receipt">
         <header className="receipt-header">
