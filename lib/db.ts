@@ -149,6 +149,7 @@ export async function initDb() {
   await sql`alter table receipts add column if not exists type text default 'sale';`;
   await sql`alter table receipts add column if not exists reference_receipt_id bigint;`;
   await sql`alter table receipts add column if not exists refund_amount numeric;`;
+  await sql`alter table receipts add column if not exists return_payment_type integer default 2;`; // 1=cash, 2=bank, 3=other form, 4=other
 
   // Drop old unique constraint on order_id (if exists) to allow both sale and refund for same order
   await sql`
@@ -1522,6 +1523,33 @@ export async function getReceiptSettings(siteId: string) {
     select receipt_number_start, cod_receipts_enabled
     from companies
     where site_id = ${siteId}
+    limit 1;
+  `;
+  return result.rows[0] ?? null;
+}
+
+/**
+ * Update return payment type for a refund receipt
+ * @param receiptId - The receipt ID
+ * @param returnPaymentType - 1=cash, 2=bank, 3=other form, 4=other
+ */
+export async function updateReturnPaymentType(receiptId: number, returnPaymentType: number) {
+  await sql`
+    update receipts
+    set return_payment_type = ${returnPaymentType}
+    where id = ${receiptId}
+      and type = 'refund';
+  `;
+}
+
+/**
+ * Get receipt by ID
+ */
+export async function getReceiptById(receiptId: number) {
+  const result = await sql`
+    select id, order_id, type, return_payment_type, refund_amount, reference_receipt_id, issued_at
+    from receipts
+    where id = ${receiptId}
     limit 1;
   `;
   return result.rows[0] ?? null;

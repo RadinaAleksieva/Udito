@@ -344,9 +344,12 @@ export async function GET(request: Request) {
     const needsEurConversion = requiresEurConversion(refundIssuedAt) && currency === "BGN";
     const finalAmount = needsEurConversion ? convertBgnToEur(refundAmount) : refundAmount;
 
-    // Get payment method for return type
-    const paymentMethod = extractPaymentMethod(raw);
-    const returnPaymentType = determineReturnPaymentType(paymentMethod);
+    // Use stored return payment type, or calculate from payment method as fallback
+    let returnPaymentType = Number(refund.return_payment_type) || 0;
+    if (!returnPaymentType) {
+      const paymentMethod = extractPaymentMethod(raw);
+      returnPaymentType = determineReturnPaymentType(paymentMethod);
+    }
 
     auditReturns.push({
       orderNumber: String(refund.number || refund.id).padStart(10, "0"),

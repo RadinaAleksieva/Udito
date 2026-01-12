@@ -19,6 +19,7 @@ import {
 import { getReceiptByOrderIdAndType } from "@/lib/receipts";
 import PrintTrigger from "./print-trigger";
 import ReceiptActions from "./receipt-actions";
+import ReturnPaymentEditor from "./return-payment-editor";
 import "./receipt.css";
 import { notFound } from "next/navigation";
 
@@ -663,6 +664,12 @@ export default async function ReceiptPage({
             </p>
             <p className="meta-label">Уникален код на транзакцията:</p>
             <p className="transaction-code">{transactionCode}</p>
+            {isRefund && receiptRecord?.id && (
+              <ReturnPaymentEditor
+                receiptId={receiptRecord.id}
+                currentType={receiptRecord.return_payment_type || 2}
+              />
+            )}
           </div>
         </header>
 

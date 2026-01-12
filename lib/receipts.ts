@@ -139,7 +139,7 @@ export async function getReceiptByOrderId(orderId: string) {
 
 export async function getReceiptByOrderIdAndType(orderId: string, type: string) {
   const result = await sql`
-    select id, issued_at, payload, type, refund_amount, reference_receipt_id
+    select id, issued_at, payload, type, refund_amount, reference_receipt_id, return_payment_type
     from receipts
     where order_id = ${orderId}
       and type = ${type}
@@ -380,7 +380,8 @@ export async function listRefundReceiptsForAudit(
       refund_receipts.id as receipt_id,
       refund_receipts.issued_at as receipt_issued_at,
       refund_receipts.refund_amount,
-      refund_receipts.reference_receipt_id
+      refund_receipts.reference_receipt_id,
+      refund_receipts.return_payment_type
     from receipts as refund_receipts
     inner join orders on orders.id = refund_receipts.order_id
     where orders.site_id = ${siteId}
