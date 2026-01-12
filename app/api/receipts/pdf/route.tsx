@@ -294,6 +294,8 @@ export async function GET(request: NextRequest) {
       contactEmail: company?.email || "Липсва",
       contactPhone: company?.phone || "Липсва",
       logoUrl: company?.logo_url || undefined,
+      logoWidth: company?.logo_width ?? null,
+      logoHeight: company?.logo_height ?? null,
       customerName: extractCustomerName(record, raw),
       customerEmail: extractCustomerEmail(record, raw),
       customerPhone: extractPhone(raw) || undefined,
@@ -318,6 +320,8 @@ export async function GET(request: NextRequest) {
       qrDataUrl,
       showEurPrimary,
       isPartialRefund,
+      receiptTemplate: (company?.receipt_template as "classic" | "modern" | "dark" | "playful") || "modern",
+      accentColor: company?.accent_color || "green",
     };
 
     // Generate PDF
