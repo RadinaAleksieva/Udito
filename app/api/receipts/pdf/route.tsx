@@ -293,11 +293,16 @@ export async function GET(request: NextRequest) {
       vatNumber: company?.vat_number || "—",
       contactEmail: company?.email || "Липсва",
       contactPhone: company?.phone || "Липсва",
-      logoUrl: company?.logo_url
-        ? (company.logo_url.startsWith("data:")
-            ? company.logo_url
-            : `data:image/png;base64,${company.logo_url}`)
-        : undefined,
+      // Debug: log logo info
+      logoUrl: (() => {
+        const logo = company?.logo_url;
+        if (!logo) {
+          console.log("PDF: No logo found");
+          return undefined;
+        }
+        console.log("PDF: Logo length:", logo.length, "starts with:", logo.substring(0, 50));
+        return logo.startsWith("data:") ? logo : `data:image/png;base64,${logo}`;
+      })(),
       customerName: extractCustomerName(record, raw),
       customerEmail: extractCustomerEmail(record, raw),
       customerPhone: extractPhone(raw) || undefined,
