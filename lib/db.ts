@@ -332,6 +332,7 @@ export async function initDb() {
   await sql`alter table companies add column if not exists receipt_number_start bigint;`;
   await sql`alter table companies add column if not exists cod_receipts_enabled boolean default false;`;
   await sql`alter table companies add column if not exists receipts_start_date timestamptz;`;
+  await sql`alter table companies add column if not exists accent_color text default 'green';`;
 
   await sql`
     create unique index if not exists store_connections_site_id_key
@@ -1060,6 +1061,7 @@ export async function getCompanyBySite(siteId: string | null, instanceId?: strin
       bank_name,
       mol,
       receipt_template,
+      accent_color,
       receipt_number_start,
       cod_receipts_enabled,
       receipts_start_date,
