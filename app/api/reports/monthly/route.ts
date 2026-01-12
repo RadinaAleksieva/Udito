@@ -27,61 +27,65 @@ export async function GET(request: Request) {
   const endDate = new Date(year, month, 0, 23, 59, 59, 999);
 
   try {
-    // Get sale receipts stats
+    // Get sale receipts stats by joining with orders
     const salesResult = await sql`
       SELECT
         COUNT(*) as total_receipts,
-        COALESCE(SUM(total_amount), 0) as total_revenue,
-        COALESCE(SUM(tax_amount), 0) as total_tax,
-        COALESCE(SUM(shipping_amount), 0) as total_shipping,
-        COALESCE(SUM(discount_amount), 0) as total_discounts,
-        COALESCE(AVG(total_amount), 0) as avg_order_value
-      FROM receipts
-      WHERE site_id = ${siteId}
-        AND receipt_type = 'sale'
-        AND issued_at >= ${startDate.toISOString()}
-        AND issued_at <= ${endDate.toISOString()}
+        COALESCE(SUM(o.total), 0) as total_revenue,
+        COALESCE(SUM(o.tax_total), 0) as total_tax,
+        COALESCE(SUM(o.shipping_total), 0) as total_shipping,
+        COALESCE(SUM(o.discount_total), 0) as total_discounts,
+        COALESCE(AVG(o.total), 0) as avg_order_value
+      FROM receipts r
+      JOIN orders o ON r.order_id = o.id
+      WHERE o.site_id = ${siteId}
+        AND r.type = 'sale'
+        AND r.issued_at >= ${startDate.toISOString()}
+        AND r.issued_at <= ${endDate.toISOString()}
     `;
 
     // Get refund receipts stats
     const refundsResult = await sql`
       SELECT
         COUNT(*) as total_refunds,
-        COALESCE(SUM(total_amount), 0) as refund_amount
-      FROM receipts
-      WHERE site_id = ${siteId}
-        AND receipt_type = 'refund'
-        AND issued_at >= ${startDate.toISOString()}
-        AND issued_at <= ${endDate.toISOString()}
+        COALESCE(SUM(r.refund_amount), 0) as refund_amount
+      FROM receipts r
+      JOIN orders o ON r.order_id = o.id
+      WHERE o.site_id = ${siteId}
+        AND r.type = 'refund'
+        AND r.issued_at >= ${startDate.toISOString()}
+        AND r.issued_at <= ${endDate.toISOString()}
     `;
 
-    // Get payment method breakdown
+    // Get payment method breakdown from orders
     const paymentMethodsResult = await sql`
       SELECT
-        COALESCE(payment_method, 'unknown') as method,
+        COALESCE(o.payment_status, 'unknown') as method,
         COUNT(*) as count,
-        COALESCE(SUM(total_amount), 0) as amount
-      FROM receipts
-      WHERE site_id = ${siteId}
-        AND receipt_type = 'sale'
-        AND issued_at >= ${startDate.toISOString()}
-        AND issued_at <= ${endDate.toISOString()}
-      GROUP BY payment_method
+        COALESCE(SUM(o.total), 0) as amount
+      FROM receipts r
+      JOIN orders o ON r.order_id = o.id
+      WHERE o.site_id = ${siteId}
+        AND r.type = 'sale'
+        AND r.issued_at >= ${startDate.toISOString()}
+        AND r.issued_at <= ${endDate.toISOString()}
+      GROUP BY o.payment_status
       ORDER BY amount DESC
     `;
 
     // Get daily breakdown for chart
     const dailyResult = await sql`
       SELECT
-        DATE(issued_at) as date,
+        DATE(r.issued_at) as date,
         COUNT(*) as receipts,
-        COALESCE(SUM(total_amount), 0) as revenue
-      FROM receipts
-      WHERE site_id = ${siteId}
-        AND receipt_type = 'sale'
-        AND issued_at >= ${startDate.toISOString()}
-        AND issued_at <= ${endDate.toISOString()}
-      GROUP BY DATE(issued_at)
+        COALESCE(SUM(o.total), 0) as revenue
+      FROM receipts r
+      JOIN orders o ON r.order_id = o.id
+      WHERE o.site_id = ${siteId}
+        AND r.type = 'sale'
+        AND r.issued_at >= ${startDate.toISOString()}
+        AND r.issued_at <= ${endDate.toISOString()}
+      GROUP BY DATE(r.issued_at)
       ORDER BY date
     `;
 
