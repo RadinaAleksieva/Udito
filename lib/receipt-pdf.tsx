@@ -135,7 +135,7 @@ export type ReceiptPdfData = {
 };
 
 // Helper to get logo dimensions
-function getLogoStyle(logoWidth?: number | null, logoHeight?: number | null, maxH = 50, maxW = 100) {
+function getLogoStyle(logoWidth?: number | null, logoHeight?: number | null, maxH = 70, maxW = 140) {
   if (logoWidth && logoHeight) {
     const aspectRatio = logoWidth / logoHeight;
     let width, height;
@@ -722,7 +722,7 @@ function ClassicTemplate({ data }: { data: ReceiptPdfData }) {
         <View style={classicStyles.header}>
           {data.logoUrl ? (
             <View style={classicStyles.logoWrapper}>
-              <Image src={data.logoUrl} style={getLogoStyle(data.logoWidth, data.logoHeight, 40, 80)} />
+              <Image src={data.logoUrl} style={getLogoStyle(data.logoWidth, data.logoHeight, 55, 110)} />
             </View>
           ) : (
             <Text style={classicStyles.storeName}>{data.storeName}</Text>
@@ -1509,7 +1509,7 @@ function PlayfulTemplate({ data }: { data: ReceiptPdfData }) {
           <View style={playfulStyles.header}>
             <View style={playfulStyles.logoBlock}>
               {data.logoUrl ? (
-                <Image src={data.logoUrl} style={getLogoStyle(data.logoWidth, data.logoHeight, 50, 100)} />
+                <Image src={data.logoUrl} style={getLogoStyle(data.logoWidth, data.logoHeight, 70, 140)} />
               ) : (
                 <Text style={[playfulStyles.logoFallback, { color: gradient.accent }]}>{data.storeName}</Text>
               )}
