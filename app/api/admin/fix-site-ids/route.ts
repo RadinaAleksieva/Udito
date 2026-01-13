@@ -48,6 +48,8 @@ export async function GET(request: Request) {
     return {
       number: order.number,
       instanceIdFromRaw: instId,
+      instanceIdObject: order.instance_id_object,
+      instanceIdType: order.instance_id_type,
       matchedStore: matchedCompany?.storeName || "UNKNOWN",
       shouldHaveSiteId: matchedCompany?.siteId || null,
     };
