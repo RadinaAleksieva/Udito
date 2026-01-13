@@ -4732,6 +4732,15 @@ main {
   background: rgba(255, 255, 255, 0.8);
 }
 
+[data-theme="light"] .nav-link,
+[data-theme="light"] .nav-link--button {
+  color: var(--ink) !important;
+}
+
+[data-theme="light"] .nav-link:hover {
+  color: var(--blue) !important;
+}
+
 /* ========== Store Selector ========== */
 .store-selector {
   display: flex;
