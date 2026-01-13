@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
-import { initDb, saveWixTokens } from "@/lib/db";
+import { initDb, saveWixTokens, linkStoreToUser } from "@/lib/db";
 import { getAppInstanceDetails } from "@/lib/wix";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth-options";
 
 const WIX_API_BASE = process.env.WIX_API_BASE || "https://www.wixapis.com";
 
@@ -223,4 +225,104 @@ export async function GET(request: Request) {
     });
   }
   return responseRedirect;
+}
+
+// Handle POST requests with access_token from popup flow
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const { accessToken } = body as { accessToken?: string };
+
+    if (!accessToken) {
+      return NextResponse.json(
+        { ok: false, error: "Липсва access token" },
+        { status: 400 }
+      );
+    }
+
+    // Decode the JWT to get instanceId
+    // Format: OAUTH2.{base64header}.{base64payload}.{signature}
+    let instanceId: string | null = null;
+    try {
+      const parts = accessToken.split(".");
+      if (parts.length >= 2) {
+        // The payload is the second part for OAUTH2 tokens
+        const payloadBase64 = parts[1];
+        const payloadJson = Buffer.from(payloadBase64, "base64").toString("utf8");
+        const payload = JSON.parse(payloadJson);
+
+        // The actual data is nested in the "data" field as a JSON string
+        if (payload.data) {
+          const data = JSON.parse(payload.data);
+          instanceId = data.instanceId;
+        }
+      }
+    } catch (decodeError) {
+      console.warn("Failed to decode access token:", decodeError);
+    }
+
+    if (!instanceId) {
+      return NextResponse.json(
+        { ok: false, error: "Невалиден access token" },
+        { status: 400 }
+      );
+    }
+
+    // Get user session
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+      return NextResponse.json(
+        { ok: false, error: "Не сте влезли в системата" },
+        { status: 401 }
+      );
+    }
+
+    await initDb();
+
+    // Get site details from Wix
+    let siteId: string | null = null;
+    let siteName: string | null = null;
+    let siteDomain: string | null = null;
+
+    try {
+      const appInstance = await getAppInstanceDetails({
+        instanceId,
+        accessToken,
+      });
+      siteId = appInstance?.siteId ?? null;
+      siteName = appInstance?.siteName ?? null;
+      siteDomain = appInstance?.siteUrl ?? null;
+    } catch (error) {
+      console.warn("Failed to get app instance details:", error);
+    }
+
+    // Save tokens to database
+    await saveWixTokens({
+      businessId: null,
+      instanceId,
+      siteId,
+      accessToken,
+      refreshToken: null,
+      expiresAt: null,
+    });
+
+    // Link store to user
+    if (siteId) {
+      await linkStoreToUser(session.user.email, instanceId, siteId, siteName, siteDomain);
+    }
+
+    return NextResponse.json({
+      ok: true,
+      instanceId,
+      siteId,
+      siteName,
+      siteDomain,
+    });
+  } catch (error) {
+    console.error("OAuth callback POST error:", error);
+    return NextResponse.json(
+      { ok: false, error: "Грешка при обработка на токена" },
+      { status: 500 }
+    );
+  }
 }
