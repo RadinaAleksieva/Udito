@@ -1,6 +1,7 @@
 import TopNav from "../components/top-nav";
 import CompanyForm from "./company-form";
-import { initDb } from "@/lib/db";
+import StoreConnectForm from "./store-connect-form";
+import { initDb, sql } from "@/lib/db";
 import { getActiveWixContext, getActiveWixToken } from "@/lib/wix-context";
 import { auth, getUserStores, linkStoreToUser } from "@/lib/auth";
 
@@ -46,6 +47,22 @@ export default async function SettingsPage() {
     instanceId = cookieInstanceId ?? null;
   }
 
+  // Get company info for connected stores
+  const storesWithInfo = await Promise.all(
+    userStores.map(async (store: any) => {
+      const companyResult = await sql`
+        SELECT store_name, store_domain FROM companies
+        WHERE site_id = ${store.site_id}
+        LIMIT 1
+      `;
+      return {
+        ...store,
+        store_name: companyResult.rows[0]?.store_name || null,
+        store_domain: companyResult.rows[0]?.store_domain || null,
+      };
+    })
+  );
+
   return (
     <main>
       <TopNav title="Настройки" />
@@ -54,7 +71,7 @@ export default async function SettingsPage() {
           <div>
             <h1>Настройки на магазина</h1>
             <p>
-              Настройте фирмените данни, избрания шаблон и връзката с Wix.
+              Настройте фирмените данни и управлявайте свързаните магазини.
             </p>
           </div>
           <div className="hero-card">
@@ -65,20 +82,41 @@ export default async function SettingsPage() {
               </p>
             )}
             <p>
-              Активен магазин: <strong>{siteId || "Неизбран"}</strong>
+              Свързани магазини: <strong>{userStores.length}</strong>
             </p>
-            {siteId && instanceId ? (
-              <p>
-                Код за достъп: <strong>{instanceId}</strong>
-              </p>
-            ) : null}
-            {!siteId && (
-              <p className="form-warning">
-                Няма свързан магазин. Отворете приложението от Wix, за да свържете магазина.
-              </p>
-            )}
           </div>
         </section>
+
+        {/* Connected Stores Section */}
+        {session?.user && (
+          <section className="settings-section">
+            <h2>Свързани магазини</h2>
+            {storesWithInfo.length > 0 ? (
+              <div className="stores-list">
+                {storesWithInfo.map((store: any, index: number) => (
+                  <div key={store.id || index} className="store-item">
+                    <div className="store-item__info">
+                      <strong>{store.store_name || store.store_domain || "Неименуван магазин"}</strong>
+                      {store.store_domain && (
+                        <span className="store-item__domain">{store.store_domain}</span>
+                      )}
+                    </div>
+                    <div className="store-item__id">
+                      <code>{store.site_id || store.instance_id}</code>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="empty-state">Няма свързани магазини.</p>
+            )}
+          </section>
+        )}
+
+        {/* Store Connect Form - only for authenticated users */}
+        {session?.user && <StoreConnectForm />}
+
+        {/* Company Form */}
         <CompanyForm />
       </div>
       <footer className="footer">UDITO от Designs by Po.</footer>
