@@ -333,7 +333,7 @@ export default async function OverviewPage({
                   store_name: s.store_name,
                   store_domain: s.store_domain,
                 }))}
-                currentSiteId={siteId}
+                currentSiteId={siteId || instanceId}
               />
             )}
             <div className="status-grid">

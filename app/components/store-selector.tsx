@@ -1,6 +1,7 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { useEffect } from "react";
 
 type Store = {
   id: string;
@@ -9,6 +10,8 @@ type Store = {
   store_name: string | null;
   store_domain: string | null;
 };
+
+const STORE_KEY = "udito_selected_store";
 
 export default function StoreSelector({
   stores,
@@ -19,16 +22,57 @@ export default function StoreSelector({
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
+
+  // Persist selection to localStorage when currentSiteId changes
+  useEffect(() => {
+    if (currentSiteId) {
+      try {
+        localStorage.setItem(STORE_KEY, currentSiteId);
+      } catch {
+        // Ignore storage errors
+      }
+    }
+  }, [currentSiteId]);
+
+  // Check if we need to restore from localStorage
+  useEffect(() => {
+    const storeParam = searchParams.get("store");
+    if (!storeParam && stores.length > 1) {
+      try {
+        const savedStore = localStorage.getItem(STORE_KEY);
+        if (savedStore && savedStore !== currentSiteId) {
+          // Verify saved store exists in current stores list
+          const storeExists = stores.some(
+            (s) => s.site_id === savedStore || s.instance_id === savedStore
+          );
+          if (storeExists) {
+            const params = new URLSearchParams(searchParams.toString());
+            params.set("store", savedStore);
+            router.replace(`${pathname}?${params.toString()}`);
+          }
+        }
+      } catch {
+        // Ignore storage errors
+      }
+    }
+  }, [stores, currentSiteId, searchParams, pathname, router]);
 
   const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newSiteId = e.target.value;
     const params = new URLSearchParams(searchParams.toString());
     if (newSiteId) {
       params.set("store", newSiteId);
+      // Persist selection
+      try {
+        localStorage.setItem(STORE_KEY, newSiteId);
+      } catch {
+        // Ignore storage errors
+      }
     } else {
       params.delete("store");
     }
-    router.push(`?${params.toString()}`);
+    router.push(`${pathname}?${params.toString()}`);
   };
 
   if (stores.length === 0) {
