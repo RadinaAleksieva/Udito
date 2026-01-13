@@ -18,6 +18,8 @@ export async function GET(request: Request) {
       number,
       site_id,
       raw->>'instanceId' as instance_id_from_raw,
+      raw->'instanceId' as instance_id_object,
+      jsonb_typeof(raw->'instanceId') as instance_id_type,
       created_at
     FROM orders
     WHERE site_id IS NULL
