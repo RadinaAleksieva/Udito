@@ -1,6 +1,7 @@
 import { cookies, headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import LogoutButton from "./logout-button";
+import ThemeToggle from "./theme-toggle";
 
 const links = [
   { href: "/overview", label: "Общ преглед" },
@@ -54,6 +55,7 @@ export default async function TopNav({ title }: { title: string }) {
             Отвори в нов таб
           </a>
         ) : null}
+        <ThemeToggle />
         {hasAccess ? <LogoutButton /> : null}
       </div>
     </nav>

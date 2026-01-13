@@ -23,6 +23,7 @@ import ConnectionCheck from "./connection-check";
 import AutoSync from "./auto-sync";
 import { auth, getUserStores, linkStoreToUser } from "@/lib/auth";
 import Link from "next/link";
+import StoreSelector from "../components/store-selector";
 
 export const dynamic = "force-dynamic";
 
@@ -89,7 +90,7 @@ async function fetchSiteLabel(siteId: string | null, instanceId: string | null) 
 export default async function OverviewPage({
   searchParams,
 }: {
-  searchParams?: { debug?: string; month?: string };
+  searchParams?: { debug?: string; month?: string; store?: string };
 }) {
   await initDb();
 
@@ -107,12 +108,25 @@ export default async function OverviewPage({
   const cookieSiteId = wixContext.siteId;
   const cookieInstanceId = wixContext.instanceId;
 
+  // Check if user selected a specific store via query param
+  const selectedStoreId = searchParams?.store || null;
+
   if (session?.user?.id) {
     // User is logged in
     if (hasUserStores) {
-      // Use the first connected store
-      siteId = userStores[0].site_id || null;
-      instanceId = userStores[0].instance_id || null;
+      // Check if user selected a specific store
+      const selectedStore = selectedStoreId
+        ? userStores.find((s: any) => s.site_id === selectedStoreId || s.instance_id === selectedStoreId)
+        : null;
+
+      if (selectedStore) {
+        siteId = selectedStore.site_id || null;
+        instanceId = selectedStore.instance_id || null;
+      } else {
+        // Use the first connected store
+        siteId = userStores[0].site_id || null;
+        instanceId = userStores[0].instance_id || null;
+      }
     } else if (cookieSiteId || cookieInstanceId) {
       // User has Wix cookies but no store connections - AUTO LINK
       try {
@@ -310,6 +324,18 @@ export default async function OverviewPage({
               Това табло показва синхронизирани поръчки, електронни бележки и статуса
               на месечния XML файл.
             </p>
+            {hasUserStores && userStores.length > 0 && (
+              <StoreSelector
+                stores={userStores.map((s: any) => ({
+                  id: s.id?.toString() || s.site_id || s.instance_id,
+                  site_id: s.site_id,
+                  instance_id: s.instance_id,
+                  store_name: s.store_name,
+                  store_domain: s.store_domain,
+                }))}
+                currentSiteId={siteId}
+              />
+            )}
             <div className="status-grid">
               <div className="status-card">
                 <span>Връзка с Wix</span>
