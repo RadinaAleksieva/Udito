@@ -570,15 +570,17 @@ export async function POST(request: NextRequest) {
           // Handle v2 event manually
           if (eventData?.entity) {
             console.log("⚠️ Manually handling v2 Order Created event...");
+            // IMPORTANT: instanceId is in parsedPayload (JWS level), not in eventData
             const v2Event = {
               data: eventData.entity,
               metadata: {
                 eventType: "order.created",
                 entityId: eventData?.entity?.id ?? eventData?.entity?._id,
-                instanceId: eventData?.instanceId,
+                instanceId: parsedPayload.instanceId ?? eventData?.instanceId,
                 eventTime: eventData?.eventTime ?? new Date().toISOString(),
               }
             };
+            console.log("📦 v2 event instanceId:", v2Event.metadata.instanceId);
             await handleOrderEvent(v2Event);
             console.log("✅ v2 event handled successfully");
             return NextResponse.json({ ok: true });
