@@ -334,15 +334,21 @@ export async function initDb() {
   await sql`alter table companies add column if not exists receipts_start_date timestamptz;`;
   await sql`alter table companies add column if not exists accent_color text default 'green';`;
 
+  // Drop old unique indexes that prevent multiple users connecting to same store
+  await sql`drop index if exists store_connections_site_id_key;`;
+  await sql`drop index if exists store_connections_instance_id_key;`;
+
+  // Create composite unique indexes: each user can connect to a store only once
+  // but multiple users CAN connect to the same store
   await sql`
-    create unique index if not exists store_connections_site_id_key
-    on store_connections (site_id)
-    where site_id is not null;
+    create unique index if not exists store_connections_site_user_key
+    on store_connections (site_id, user_id)
+    where site_id is not null and user_id is not null;
   `;
   await sql`
-    create unique index if not exists store_connections_instance_id_key
-    on store_connections (instance_id)
-    where instance_id is not null;
+    create unique index if not exists store_connections_instance_user_key
+    on store_connections (instance_id, user_id)
+    where instance_id is not null and user_id is not null;
   `;
 
   // NextAuth.js tables and migrations
