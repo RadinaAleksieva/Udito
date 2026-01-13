@@ -3610,24 +3610,27 @@ main {
   border-radius: 980px;
   font-size: 17px;
   font-weight: 500;
-  background: rgba(255, 255, 255, 0.1);
-  color: #2997ff;
-  transition: all 0.4s ease;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #fff;
+  transition: all 0.3s ease;
 }
 
 .apple-price-card__btn:hover {
-  background: rgba(255, 255, 255, 0.15);
-  transform: scale(1.02);
+  background: rgba(88, 86, 214, 0.3);
+  border-color: rgba(88, 86, 214, 0.5);
+  color: #fff;
 }
 
 .apple-price-card__btn--primary {
-  background: linear-gradient(135deg, #fff 0%, #f5f5f7 100%);
+  background: #fff;
+  border: none;
   color: #000;
-  box-shadow: 0 4px 20px rgba(255, 255, 255, 0.15);
 }
 
 .apple-price-card__btn--primary:hover {
-  box-shadow: 0 8px 30px rgba(255, 255, 255, 0.25);
+  background: #f0f0f0;
+  color: #000;
 }
 
 /* FAQ */
