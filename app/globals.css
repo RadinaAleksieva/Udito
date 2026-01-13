@@ -4709,40 +4709,43 @@ main {
   text-decoration: underline;
 }
 
-/* ========== Light Theme ========== */
+/* ========== Light Theme - Apple-style Glassmorphism ========== */
 [data-theme="light"] {
   --ink: #1d1d1f;
-  --ink-secondary: #6e6e73;
+  --ink-secondary: #86868b;
   --blue: #0071e3;
-  --blue-ink: #5856d6;
-  --purple: #5856d6;
-  --green: #34c759;
-  --red: #ff3b30;
-  --sand: #f5f5f7;
-  --sky: rgba(0, 113, 227, 0.1);
-  --accent: #ff9500;
-  --soft: rgba(0, 0, 0, 0.05);
-  --bg-primary: #f5f5f7;
+  --blue-ink: #0066cc;
+  --purple: #5e5ce6;
+  --green: #30d158;
+  --red: #ff453a;
+  --sand: #fbfbfd;
+  --sky: rgba(0, 113, 227, 0.08);
+  --accent: #ff9f0a;
+  --soft: rgba(0, 0, 0, 0.03);
+  --bg-primary: #fbfbfd;
   --bg-secondary: #ffffff;
-  --bg-card: rgba(255, 255, 255, 0.7);
-  --bg-card-hover: rgba(255, 255, 255, 0.9);
-  --border-color: rgba(0, 0, 0, 0.08);
-  --border-color-strong: rgba(0, 0, 0, 0.12);
-  --glass-bg: rgba(255, 255, 255, 0.6);
-  --glass-border: rgba(255, 255, 255, 0.3);
-  --shadow-soft: 0 4px 30px rgba(0, 0, 0, 0.08);
-  --shadow-card: 0 2px 20px rgba(0, 0, 0, 0.06);
+  --bg-card: rgba(255, 255, 255, 0.72);
+  --bg-card-hover: rgba(255, 255, 255, 0.88);
+  --border-color: rgba(0, 0, 0, 0.04);
+  --border-color-strong: rgba(0, 0, 0, 0.08);
 }
 
+/* Mesh gradient background like Apple */
 [data-theme="light"] body {
-  background: linear-gradient(135deg, #f5f5f7 0%, #e8e8ed 100%);
+  background:
+    radial-gradient(ellipse at 20% 0%, rgba(0, 113, 227, 0.08) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 100%, rgba(94, 92, 230, 0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 50%, rgba(48, 209, 88, 0.04) 0%, transparent 60%),
+    linear-gradient(180deg, #fbfbfd 0%, #f5f5f7 100%);
+  background-attachment: fixed;
 }
 
+/* Navigation - frosted glass */
 [data-theme="light"] .nav {
-  background: rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(251, 251, 253, 0.72);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 0.5px solid rgba(0, 0, 0, 0.08);
 }
 
 [data-theme="light"] .nav-link,
@@ -4754,46 +4757,58 @@ main {
   color: var(--blue) !important;
 }
 
-/* Glassmorphism cards for light theme */
+/* Glass cards - Apple style */
 [data-theme="light"] .status-card,
 [data-theme="light"] .stat-item,
-[data-theme="light"] .expandable-card {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
-}
-
-/* Keep the blue gradient for final revenue card in light theme */
-[data-theme="light"] .final-revenue-card {
-  background: linear-gradient(135deg, #0071e3 0%, #5856d6 100%);
-  box-shadow: 0 8px 32px rgba(0, 113, 227, 0.25);
+[data-theme="light"] .expandable-card,
+[data-theme="light"] .info-card,
+[data-theme="light"] .feature-card {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border: 0.5px solid rgba(255, 255, 255, 0.6);
+  box-shadow:
+    0 0.5px 0 0 rgba(255, 255, 255, 0.6) inset,
+    0 4px 16px rgba(0, 0, 0, 0.04),
+    0 8px 32px rgba(0, 0, 0, 0.04);
+  border-radius: 16px;
 }
 
 [data-theme="light"] .status-card:hover,
+[data-theme="light"] .stat-item:hover,
 [data-theme="light"] .expandable-card:hover {
-  background: rgba(255, 255, 255, 0.85);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow:
+    0 0.5px 0 0 rgba(255, 255, 255, 0.8) inset,
+    0 8px 24px rgba(0, 0, 0, 0.06),
+    0 16px 48px rgba(0, 0, 0, 0.06);
+  transform: translateY(-1px);
 }
 
-/* Info cards glassmorphism */
-[data-theme="light"] .info-card,
-[data-theme="light"] .feature-card {
-  background: rgba(255, 255, 255, 0.6);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.04);
+/* Hero revenue card - vibrant gradient */
+[data-theme="light"] .final-revenue-card {
+  background: linear-gradient(135deg, #0071e3 0%, #5e5ce6 100%);
+  box-shadow:
+    0 8px 24px rgba(0, 113, 227, 0.2),
+    0 16px 48px rgba(94, 92, 230, 0.15);
 }
 
-/* Store selector glassmorphism */
+/* Store selector */
 [data-theme="light"] .store-selector {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border: 0.5px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+/* Form elements */
+[data-theme="light"] select,
+[data-theme="light"] .month-select,
+[data-theme="light"] .reports-select {
+  background: rgba(255, 255, 255, 0.88);
+  border: 0.5px solid rgba(0, 0, 0, 0.08);
+  color: var(--ink);
 }
 
 /* Main content area */
@@ -4802,20 +4817,66 @@ main {
 }
 
 /* Tables */
+[data-theme="light"] .receipt-table {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+}
+
 [data-theme="light"] .receipt-table th {
-  background: rgba(0, 0, 0, 0.03);
+  background: rgba(0, 0, 0, 0.02);
   color: var(--ink-secondary);
+  font-weight: 500;
+  border-bottom: 0.5px solid rgba(0, 0, 0, 0.06);
 }
 
 [data-theme="light"] .receipt-table td {
-  border-bottom-color: rgba(0, 0, 0, 0.06);
+  border-bottom: 0.5px solid rgba(0, 0, 0, 0.04);
+  color: var(--ink);
 }
 
-/* Error styling - nicer look */
+[data-theme="light"] .receipt-table tr:hover td {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+/* Error styling */
 [data-theme="light"] .reports-error {
-  background: rgba(255, 59, 48, 0.08);
-  border: 1px solid rgba(255, 59, 48, 0.2);
-  color: #c92a2a;
+  background: rgba(255, 69, 58, 0.08);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border: 0.5px solid rgba(255, 69, 58, 0.15);
+  color: #d70015;
+  border-radius: 12px;
+}
+
+/* Text colors for better contrast */
+[data-theme="light"] h1,
+[data-theme="light"] h2,
+[data-theme="light"] h3 {
+  color: var(--ink);
+}
+
+[data-theme="light"] p,
+[data-theme="light"] span {
+  color: var(--ink-secondary);
+}
+
+[data-theme="light"] strong,
+[data-theme="light"] .stat-item__value,
+[data-theme="light"] .status-card strong {
+  color: var(--ink);
+}
+
+/* Links */
+[data-theme="light"] a {
+  color: var(--blue);
+}
+
+[data-theme="light"] a:hover {
+  color: var(--blue-ink);
 }
 
 /* ========== Store Selector ========== */
