@@ -10,7 +10,7 @@ import { getActiveWixContext } from "@/lib/wix-context";
 export async function GET(request: Request) {
   try {
     await initDb();
-    const { siteId, instanceId } = getActiveWixContext();
+    const { siteId, instanceId } = await getActiveWixContext();
     const url = new URL(request.url);
     const orderId = url.searchParams.get("orderId");
 

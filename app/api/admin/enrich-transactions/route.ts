@@ -14,7 +14,7 @@ export async function POST(request: Request) {
 
     // Allow siteId from query param for CLI usage, fallback to context
     const querySiteId = url.searchParams.get("siteId");
-    const context = getActiveWixContext();
+    const context = await getActiveWixContext();
     const siteId = querySiteId || context.siteId;
     const instanceId = context.instanceId;
 

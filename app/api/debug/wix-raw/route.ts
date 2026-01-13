@@ -10,7 +10,7 @@ const WIX_API_BASE = process.env.WIX_API_BASE || "https://www.wixapis.com";
  */
 export async function GET(request: Request) {
   try {
-    const { siteId, instanceId } = getActiveWixContext();
+    const { siteId, instanceId } = await getActiveWixContext();
 
     if (!siteId && !instanceId) {
       return NextResponse.json(

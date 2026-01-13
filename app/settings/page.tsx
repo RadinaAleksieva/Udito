@@ -15,7 +15,7 @@ export default async function SettingsPage() {
   let instanceId: string | null = null;
 
   // Check for Wix cookies (from iframe access)
-  const wixContext = getActiveWixContext();
+  const wixContext = await getActiveWixContext();
   const cookieSiteId = wixContext.siteId;
   const cookieInstanceId = wixContext.instanceId;
 

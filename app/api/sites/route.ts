@@ -7,7 +7,7 @@ const WIX_API_BASE = "https://www.wixapis.com";
 export async function GET() {
   let accessToken: string;
   try {
-    const { siteId, instanceId } = getActiveWixContext();
+    const { siteId, instanceId } = await getActiveWixContext();
     accessToken = await getAccessToken({
       instanceId,
       siteId,

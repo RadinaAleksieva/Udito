@@ -11,7 +11,7 @@ import {
 export async function GET() {
   try {
     await initDb();
-    const { siteId, instanceId } = getActiveWixContext();
+    const { siteId, instanceId } = await getActiveWixContext();
     if (!siteId) {
       return NextResponse.json(
         { ok: false, error: "Missing site context." },

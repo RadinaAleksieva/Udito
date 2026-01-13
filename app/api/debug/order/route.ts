@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   await initDb();
-  const { siteId, instanceId } = getActiveWixContext();
+  const { siteId, instanceId } = await getActiveWixContext();
   if (!siteId) {
     return NextResponse.json(
       { ok: false, error: "Missing site context." },

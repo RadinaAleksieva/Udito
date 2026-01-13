@@ -104,7 +104,7 @@ export default async function OverviewPage({
   let needsStoreConnection = false;
 
   // Check for Wix cookies (from iframe access)
-  const wixContext = getActiveWixContext();
+  const wixContext = await getActiveWixContext();
   const cookieSiteId = wixContext.siteId;
   const cookieInstanceId = wixContext.instanceId;
 

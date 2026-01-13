@@ -31,7 +31,7 @@ function resolveStartDateIso(startParam?: string | null) {
 export async function POST(request: Request) {
   try {
     await initDb();
-    const { siteId, instanceId } = getActiveWixContext();
+    const { siteId, instanceId } = await getActiveWixContext();
 
     if (!siteId && !instanceId) {
       return NextResponse.json(
@@ -161,7 +161,7 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("Fast sync failed", error);
-    const { siteId } = getActiveWixContext();
+    const { siteId } = await getActiveWixContext();
 
     if (siteId) {
       await upsertSyncState({

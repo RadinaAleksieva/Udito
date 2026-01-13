@@ -7,7 +7,7 @@ import { getActiveWixContext } from "@/lib/wix-context";
  */
 export async function GET(request: Request) {
   try {
-    const { siteId, instanceId } = getActiveWixContext();
+    const { siteId, instanceId } = await getActiveWixContext();
 
     if (!siteId && !instanceId) {
       return NextResponse.json(

@@ -12,7 +12,7 @@ async function getSiteIdForRequest() {
   const session = await auth();
 
   // Check for Wix cookies
-  const wixContext = getActiveWixContext();
+  const wixContext = await getActiveWixContext();
   const cookieSiteId = wixContext.siteId;
   const cookieInstanceId = wixContext.instanceId;
 

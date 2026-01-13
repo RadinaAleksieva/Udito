@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { instanceId } = getActiveWixContext();
+  const { instanceId } = await getActiveWixContext();
 
   await saveWixTokens({
     businessId: null,

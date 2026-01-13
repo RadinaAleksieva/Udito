@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     await initDb();
-    const { siteId } = getActiveWixContext();
+    const { siteId } = await getActiveWixContext();
 
     if (!siteId) {
       return NextResponse.json({ ok: false, error: "Missing site context" }, { status: 400 });
@@ -33,7 +33,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     await initDb();
-    const { siteId } = getActiveWixContext();
+    const { siteId } = await getActiveWixContext();
 
     if (!siteId) {
       return NextResponse.json({ ok: false, error: "Missing site context" }, { status: 400 });

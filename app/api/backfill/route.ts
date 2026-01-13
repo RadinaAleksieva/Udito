@@ -17,7 +17,7 @@ function resolveStartDateIso(startParam?: string | null) {
 export async function POST(request: Request) {
   try {
     await initDb();
-    const { siteId, instanceId } = getActiveWixContext();
+    const { siteId, instanceId } = await getActiveWixContext();
     if (!siteId && !instanceId) {
       return NextResponse.json(
         { ok: false, error: "Missing Wix context." },
@@ -95,7 +95,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Backfill failed", error);
     const url = new URL(request.url);
-    const { siteId } = getActiveWixContext();
+    const { siteId } = await getActiveWixContext();
     if (siteId) {
       await upsertSyncState({
         siteId,

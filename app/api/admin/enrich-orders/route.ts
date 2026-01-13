@@ -23,7 +23,7 @@ import { getActiveWixContext } from "@/lib/wix-context";
 export async function POST(request: Request) {
   try {
     await initDb();
-    const { siteId, instanceId } = getActiveWixContext();
+    const { siteId, instanceId } = await getActiveWixContext();
 
     if (!siteId && !instanceId) {
       return NextResponse.json(
