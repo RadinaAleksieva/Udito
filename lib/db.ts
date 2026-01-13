@@ -1,5 +1,8 @@
 import { sql } from "@vercel/postgres";
 
+// Re-export sql for direct queries in other modules
+export { sql };
+
 export type StoredOrder = {
   id: string;
   businessId: string | null;
