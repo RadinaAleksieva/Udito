@@ -14,9 +14,11 @@ export async function GET(request: Request) {
   const redirectUrl = `${appBaseUrl}/api/oauth/callback`;
 
   // Wix OAuth authorization URL
+  // Use the install URL with redirectToUrl=true to force full page redirect
   const wixAuthUrl = new URL("https://www.wix.com/installer/install");
   wixAuthUrl.searchParams.set("appId", appId);
   wixAuthUrl.searchParams.set("redirectUrl", redirectUrl);
+  wixAuthUrl.searchParams.set("redirectToUrl", "true");
 
   return NextResponse.redirect(wixAuthUrl.toString());
 }
