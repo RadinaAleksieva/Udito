@@ -459,7 +459,7 @@ function extractPayment(raw: any, order: OrderRow) {
 export default async function OrdersPage({
   searchParams,
 }: {
-  searchParams?: { month?: string };
+  searchParams?: { month?: string; store?: string };
 }) {
   await initDb();
 
@@ -474,8 +474,20 @@ export default async function OrdersPage({
       // User has no connected stores - redirect to overview to connect one
       redirect("/overview");
     }
-    // Use the first connected store (TODO: add store selector)
-    siteId = userStores[0].site_id || userStores[0].instance_id;
+    // Check if a specific store is requested via query param
+    const storeParam = searchParams?.store;
+    if (storeParam) {
+      const selectedStore = userStores.find(
+        (s: any) => s.site_id === storeParam || s.instance_id === storeParam
+      );
+      if (selectedStore) {
+        siteId = selectedStore.site_id || selectedStore.instance_id;
+      }
+    }
+    // Fallback to first connected store
+    if (!siteId) {
+      siteId = userStores[0].site_id || userStores[0].instance_id;
+    }
   } else {
     // Legacy flow: User not logged in via NextAuth, check Wix cookies
     const token = await getActiveWixToken();

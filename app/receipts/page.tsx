@@ -87,7 +87,7 @@ function getReceiptTypeClass(type: string | null | undefined): string {
 export default async function ReceiptsPage({
   searchParams,
 }: {
-  searchParams?: { month?: string };
+  searchParams?: { month?: string; store?: string };
 }) {
   await initDb();
 
@@ -101,7 +101,20 @@ export default async function ReceiptsPage({
     if (userStores.length === 0) {
       redirect("/overview");
     }
-    siteId = userStores[0].site_id || userStores[0].instance_id;
+    // Check if a specific store is requested via query param
+    const storeParam = searchParams?.store;
+    if (storeParam) {
+      const selectedStore = userStores.find(
+        (s: any) => s.site_id === storeParam || s.instance_id === storeParam
+      );
+      if (selectedStore) {
+        siteId = selectedStore.site_id || selectedStore.instance_id;
+      }
+    }
+    // Fallback to first connected store
+    if (!siteId) {
+      siteId = userStores[0].site_id || userStores[0].instance_id;
+    }
   } else {
     // Legacy flow: User not logged in via NextAuth, check Wix cookies
     const token = await getActiveWixToken();

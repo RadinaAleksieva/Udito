@@ -77,12 +77,16 @@ export default function ReportsPage() {
   // Read from URL params, fallback to current month
   const selectedYear = parseInt(searchParams.get("year") || String(currentDate.getFullYear()));
   const selectedMonth = parseInt(searchParams.get("month") || String(currentDate.getMonth() + 1));
+  const storeParam = searchParams.get("store");
 
   // Update URL when selection changes
   const updateSelection = (year: number, month: number) => {
     const params = new URLSearchParams();
     params.set("year", String(year));
     params.set("month", String(month));
+    if (storeParam) {
+      params.set("store", storeParam);
+    }
     router.push(`/reports?${params.toString()}`);
   };
 
@@ -92,9 +96,11 @@ export default function ReportsPage() {
       setError(null);
       setExpandedSection(null);
       try {
-        const response = await fetch(
-          `/api/reports/monthly?year=${selectedYear}&month=${selectedMonth}`
-        );
+        let url = `/api/reports/monthly?year=${selectedYear}&month=${selectedMonth}`;
+        if (storeParam) {
+          url += `&store=${encodeURIComponent(storeParam)}`;
+        }
+        const response = await fetch(url);
         const data = await response.json();
         if (data.ok) {
           setStats(data.stats);
@@ -108,7 +114,7 @@ export default function ReportsPage() {
       }
     }
     loadStats();
-  }, [selectedYear, selectedMonth]);
+  }, [selectedYear, selectedMonth, storeParam]);
 
   // Generate year options (current year and 2 years back)
   const years = [currentDate.getFullYear(), currentDate.getFullYear() - 1, currentDate.getFullYear() - 2];
