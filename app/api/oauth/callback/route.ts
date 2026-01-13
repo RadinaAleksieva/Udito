@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { initDb, saveWixTokens, linkStoreToUser } from "@/lib/db";
+import { initDb, saveWixTokens } from "@/lib/db";
+import { linkStoreToUser } from "@/lib/auth";
 import { getAppInstanceDetails } from "@/lib/wix";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth-options";
+import { authOptions } from "@/lib/auth";
 
 const WIX_API_BASE = process.env.WIX_API_BASE || "https://www.wixapis.com";
 
@@ -270,7 +271,7 @@ export async function POST(request: Request) {
 
     // Get user session
     const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    if (!session?.user?.id || !session?.user?.email) {
       return NextResponse.json(
         { ok: false, error: "Не сте влезли в системата" },
         { status: 401 }
@@ -308,7 +309,7 @@ export async function POST(request: Request) {
 
     // Link store to user
     if (siteId) {
-      await linkStoreToUser(session.user.email, instanceId, siteId, siteName, siteDomain);
+      await linkStoreToUser(session.user.id, siteId, instanceId ?? undefined);
     }
 
     return NextResponse.json({
