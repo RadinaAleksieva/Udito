@@ -53,8 +53,28 @@ export default function StoreConnectForm() {
     <section className="settings-section">
       <h2>Свържи нов магазин</h2>
       <p className="section-description">
-        Въведете Instance ID от Wix, за да свържете нов магазин към вашия акаунт.
+        Свържете нов Wix магазин към вашия акаунт.
       </p>
+
+      {/* Primary method - OAuth via Wix */}
+      <div className="connect-primary">
+        <a
+          href="/api/oauth/authorize"
+          className="btn btn-primary btn-large"
+        >
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M12 4v16m8-8H4" />
+          </svg>
+          Свържи през Wix
+        </a>
+        <p className="form-hint">
+          Препоръчителен метод. Ще бъдете пренасочени към Wix за оторизация.
+        </p>
+      </div>
+
+      <div className="connect-divider">
+        <span>или въведете код ръчно</span>
+      </div>
 
       <form onSubmit={handleSubmit} className="store-connect-form">
         <div className="form-group">
@@ -68,9 +88,6 @@ export default function StoreConnectForm() {
             disabled={loading}
             className="form-input"
           />
-          <p className="form-hint">
-            Можете да намерите Instance ID в URL адреса, когато отворите UDITO от Wix Dashboard.
-          </p>
         </div>
 
         {error && (
@@ -88,9 +105,9 @@ export default function StoreConnectForm() {
         <button
           type="submit"
           disabled={loading || !instanceId.trim()}
-          className="btn btn-primary"
+          className="btn btn-secondary"
         >
-          {loading ? "Свързване..." : "Свържи магазин"}
+          {loading ? "Свързване..." : "Свържи с код"}
         </button>
       </form>
 
