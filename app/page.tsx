@@ -1,339 +1,423 @@
+"use client";
+
 import Link from "next/link";
+import Image from "next/image";
+import { useState, useEffect, useRef } from "react";
 import TokenCapture from "./overview/token-capture";
 
 export default function Home() {
+  const [scrollY, setScrollY] = useState(0);
+  const [activeFeature, setActiveFeature] = useState(0);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const heroRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    setIsLoaded(true);
+
+    const handleScroll = () => {
+      setScrollY(window.scrollY);
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const parallaxOffset = Math.min(scrollY * 0.3, 150);
+  const heroOpacity = Math.max(1 - scrollY / 600, 0);
+
   return (
-    <main className="landing">
+    <main className="apple-landing">
       <TokenCapture />
 
-      {/* Navigation */}
-      <nav className="landing-nav">
-        <div className="landing-nav-inner">
-          <span className="landing-logo">UDITO</span>
-          <div className="landing-nav-links">
+      {/* Navigation - Glass effect */}
+      <nav className={`apple-nav ${scrollY > 50 ? "apple-nav--scrolled" : ""}`}>
+        <div className="apple-nav__inner">
+          <Link href="/" className="apple-nav__logo">
+            <Image
+              src="/brand/udito-logo.png"
+              alt="UDITO"
+              width={100}
+              height={33}
+              priority
+            />
+          </Link>
+          <div className="apple-nav__links">
             <a href="#features">Функции</a>
-            <a href="#how-it-works">Как работи</a>
+            <a href="#how">Как работи</a>
             <a href="#pricing">Цени</a>
-            <a href="#contact">Контакт</a>
           </div>
-          <Link href="/overview" className="btn-login">
+          <Link href="/overview" className="apple-nav__cta">
             Вход
           </Link>
         </div>
       </nav>
 
       {/* Hero Section */}
-      <section className="landing-hero">
-        <div className="landing-hero-content">
-          <div className="landing-hero-badge">
-            <span>Wix Stores</span>
-          </div>
-          <h1>Електронни бележки за Wix магазини в България</h1>
-          <p className="landing-hero-subtitle">
-            Автоматични касови бележки при всяка платена поръчка.
-            Месечен XML файл за НАП. Без касов апарат.
+      <section
+        className={`apple-hero ${isLoaded ? "apple-hero--loaded" : ""}`}
+        ref={heroRef}
+        style={{ opacity: heroOpacity }}
+      >
+        <div className="apple-hero__bg">
+          <div className="apple-hero__gradient"></div>
+          <div className="apple-hero__orb apple-hero__orb--1"></div>
+          <div className="apple-hero__orb apple-hero__orb--2"></div>
+          <div className="apple-hero__orb apple-hero__orb--3"></div>
+        </div>
+
+        <div className="apple-hero__content">
+          <div className="apple-hero__eyebrow">За Wix магазини в България</div>
+          <h1 className="apple-hero__title">
+            Електронни бележки.
+            <br />
+            <span>Автоматично.</span>
+          </h1>
+          <p className="apple-hero__subtitle">
+            Фискална отчетност без касов апарат. Интеграция с Wix за минути.
           </p>
-          <div className="landing-hero-cta">
-            <Link href="/overview" className="btn-primary btn-large">
-              Започни сега
+          <div className="apple-hero__cta">
+            <Link href="/overview" className="apple-btn apple-btn--primary">
+              Започни безплатно
             </Link>
-            <a href="#how-it-works" className="btn-secondary btn-large">
+            <a href="#how" className="apple-btn apple-btn--secondary">
               Научи повече
             </a>
           </div>
-          <p className="landing-hero-note">
-            Безплатен пробен период. Без кредитна карта.
-          </p>
+        </div>
+
+        {/* Floating Glass Card */}
+        <div
+          className="apple-hero__card"
+          style={{ transform: `translateY(${parallaxOffset}px)` }}
+        >
+          <div className="glass-card">
+            <div className="glass-card__header">
+              <div className="glass-card__dot glass-card__dot--green"></div>
+              <span>Бележка издадена</span>
+            </div>
+            <div className="glass-card__body">
+              <div className="glass-card__receipt">
+                <div className="glass-card__receipt-num">№ 000052</div>
+                <div className="glass-card__receipt-row">
+                  <span>Поръчка</span>
+                  <span>#10248</span>
+                </div>
+                <div className="glass-card__receipt-row">
+                  <span>Сума</span>
+                  <span>89.90 €</span>
+                </div>
+                <div className="glass-card__receipt-divider"></div>
+                <div className="glass-card__receipt-row glass-card__receipt-row--total">
+                  <span>Общо</span>
+                  <span>89.90 €</span>
+                </div>
+              </div>
+            </div>
+            <div className="glass-card__footer">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M5 13l4 4L19 7" />
+              </svg>
+              <span>Изпратена на клиента</span>
+            </div>
+          </div>
+
+          {/* Mini floating elements */}
+          <div className="floating-pill floating-pill--1">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            Синхронизирано
+          </div>
+          <div className="floating-pill floating-pill--2">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            XML готов
+          </div>
         </div>
       </section>
 
-      {/* Benefits Section */}
-      <section className="landing-benefits" id="features">
-        <div className="landing-container">
-          <h2 className="landing-section-title">Защо UDITO?</h2>
-          <p className="landing-section-subtitle">
-            Всичко необходимо за фискална отчетност на онлайн магазин
+      {/* Stats Section */}
+      <section className="apple-stats">
+        <div className="apple-stats__inner">
+          <div className="apple-stat">
+            <span className="apple-stat__value">5€</span>
+            <span className="apple-stat__label">на месец</span>
+          </div>
+          <div className="apple-stat__divider"></div>
+          <div className="apple-stat">
+            <span className="apple-stat__value">0</span>
+            <span className="apple-stat__label">ръчна работа</span>
+          </div>
+          <div className="apple-stat__divider"></div>
+          <div className="apple-stat">
+            <span className="apple-stat__value">100%</span>
+            <span className="apple-stat__label">автоматизация</span>
+          </div>
+        </div>
+      </section>
+
+      {/* Features Section */}
+      <section className="apple-features" id="features">
+        <div className="apple-section__header">
+          <h2 className="apple-section__title">
+            Всичко, от което
+            <br />
+            се нуждаете.
+          </h2>
+          <p className="apple-section__subtitle">
+            Пълна автоматизация. Нула усилия.
           </p>
-          <div className="landing-benefits-grid">
-            <div className="landing-benefit-card">
-              <div className="landing-benefit-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        </div>
+
+        <div className="apple-features__grid">
+          {[
+            {
+              icon: (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                   <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-              </div>
-              <h3>Без касов апарат</h3>
-              <p>
-                Издавайте електронни бележки директно от системата.
-                Спестете разходи за хардуер и поддръжка.
-              </p>
-            </div>
-            <div className="landing-benefit-card">
-              <div className="landing-benefit-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M13 10V3L4 14h7v7l9-11h-7z" />
+              ),
+              title: "Автоматични бележки",
+              desc: "При всяка платена поръчка системата издава бележка без намеса от вас.",
+            },
+            {
+              icon: (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
                 </svg>
-              </div>
-              <h3>Автоматично</h3>
-              <p>
-                Бележка се издава автоматично при платена поръчка.
-                Сторно при отказ. Без ръчна работа.
-              </p>
-            </div>
-            <div className="landing-benefit-card">
-              <div className="landing-benefit-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              ),
+              title: "Сторно при отказ",
+              desc: "Отказана поръчка? Сторно бележката се генерира автоматично.",
+            },
+            {
+              icon: (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                   <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-              </div>
-              <h3>НАП XML</h3>
-              <p>
-                Месечен одиторски файл по Наредба Н-18, Приложение 38.
-                Готов за изтегляне с един клик.
-              </p>
+              ),
+              title: "XML за НАП",
+              desc: "Месечен одиторски файл по Наредба Н-18 готов с един клик.",
+            },
+          ].map((feature, idx) => (
+            <div
+              key={idx}
+              className={`apple-feature-card ${activeFeature === idx ? "apple-feature-card--active" : ""}`}
+              onMouseEnter={() => setActiveFeature(idx)}
+            >
+              <div className="apple-feature-card__icon">{feature.icon}</div>
+              <h3>{feature.title}</h3>
+              <p>{feature.desc}</p>
             </div>
-            <div className="landing-benefit-card">
-              <div className="landing-benefit-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                </svg>
-              </div>
-              <h3>Сигурност</h3>
-              <p>
-                Данните се съхраняват криптирано.
-                Достъп само за оторизирани потребители.
-              </p>
-            </div>
-          </div>
+          ))}
         </div>
       </section>
 
       {/* How it works */}
-      <section className="landing-how-it-works" id="how-it-works">
-        <div className="landing-container">
-          <h2 className="landing-section-title">Как работи</h2>
-          <p className="landing-section-subtitle">
-            Три лесни стъпки до пълна автоматизация
-          </p>
-          <div className="landing-steps">
-            <div className="landing-step">
-              <div className="landing-step-number">1</div>
-              <h3>Свържете Wix магазина</h3>
-              <p>
-                Инсталирайте UDITO от Wix App Market.
-                Автоматично се свързва с вашия магазин.
-              </p>
-            </div>
-            <div className="landing-step-arrow">→</div>
-            <div className="landing-step">
-              <div className="landing-step-number">2</div>
-              <h3>Настройте фирмата</h3>
-              <p>
-                Въведете ЕИК, адрес и данни за бележките.
-                Изберете шаблон за дизайн.
-              </p>
-            </div>
-            <div className="landing-step-arrow">→</div>
-            <div className="landing-step">
-              <div className="landing-step-number">3</div>
-              <h3>Готово!</h3>
-              <p>
-                При всяка платена поръчка се издава бележка.
-                В края на месеца изтеглете XML файла.
-              </p>
-            </div>
-          </div>
+      <section className="apple-how" id="how">
+        <div className="apple-section__header">
+          <h2 className="apple-section__title">
+            Три стъпки.
+            <br />
+            Пет минути.
+          </h2>
         </div>
-      </section>
 
-      {/* Features detail */}
-      <section className="landing-features">
-        <div className="landing-container">
-          <div className="landing-feature-row">
-            <div className="landing-feature-text">
-              <h2>Електронни касови бележки</h2>
-              <p>
-                Всяка платена поръчка получава уникален номер на бележка.
-                Клиентът вижда бележката в имейла за потвърждение.
-              </p>
-              <ul className="landing-feature-list">
-                <li>Уникална номерация без прекъсване</li>
-                <li>Автоматично сторно при отказана поръчка</li>
-                <li>Поддръжка на карта и наложен платеж</li>
-                <li>Пълна история на всички бележки</li>
-              </ul>
-            </div>
-            <div className="landing-feature-visual">
-              <div className="landing-receipt-preview">
-                <div className="receipt-header">КАСОВА БЕЛЕЖКА</div>
-                <div className="receipt-number">№ 000047</div>
-                <div className="receipt-line"></div>
-                <div className="receipt-item">
-                  <span>Продукт 1</span>
-                  <span>29.90 лв</span>
-                </div>
-                <div className="receipt-item">
-                  <span>Доставка</span>
-                  <span>5.00 лв</span>
-                </div>
-                <div className="receipt-line"></div>
-                <div className="receipt-total">
-                  <span>ОБЩО</span>
-                  <span>34.90 лв</span>
-                </div>
-              </div>
+        <div className="apple-how__steps">
+          <div className="apple-step">
+            <div className="apple-step__num">1</div>
+            <div className="apple-step__content">
+              <h3>Свържете Wix магазина</h3>
+              <p>Инсталирайте UDITO от Wix App Market. Автоматично синхронизира поръчките.</p>
             </div>
           </div>
-
-          <div className="landing-feature-row landing-feature-row-reverse">
-            <div className="landing-feature-text">
-              <h2>Одиторски XML файл</h2>
-              <p>
-                Месечен файл по изискванията на Наредба Н-18, Приложение 38.
-                Съдържа всички продажби и сторна за периода.
-              </p>
-              <ul className="landing-feature-list">
-                <li>Автоматично генериране</li>
-                <li>Валиден XML формат</li>
-                <li>Включва продажби и възстановявания</li>
-                <li>Готов за подаване към НАП</li>
-              </ul>
+          <div className="apple-step__connector"></div>
+          <div className="apple-step">
+            <div className="apple-step__num">2</div>
+            <div className="apple-step__content">
+              <h3>Въведете данните</h3>
+              <p>ЕИК, адрес на фирмата и настройки за бележките. Веднъж и готово.</p>
             </div>
-            <div className="landing-feature-visual">
-              <div className="landing-xml-preview">
-                <code>
-                  {`<?xml version="1.0"?>
-<audit>
-  <header>
-    <eik>123456789</eik>
-    <period>2026-01</period>
-  </header>
-  <orders>
-    <order id="47">...</order>
-    <order id="48">...</order>
-  </orders>
-</audit>`}
-                </code>
-              </div>
+          </div>
+          <div className="apple-step__connector"></div>
+          <div className="apple-step">
+            <div className="apple-step__num">3</div>
+            <div className="apple-step__content">
+              <h3>Готово!</h3>
+              <p>Бележките се издават автоматично. Изтегляйте XML всеки месец.</p>
             </div>
           </div>
         </div>
       </section>
 
       {/* Pricing */}
-      <section className="landing-pricing" id="pricing">
-        <div className="landing-container">
-          <h2 className="landing-section-title">Цени</h2>
-          <p className="landing-section-subtitle">
-            Прозрачно ценообразуване без скрити такси
+      <section className="apple-pricing" id="pricing">
+        <div className="apple-section__header">
+          <h2 className="apple-section__title">
+            Прости цени.
+            <br />
+            Без изненади.
+          </h2>
+          <p className="apple-section__subtitle">
+            Изберете плана, който отговаря на бизнеса ви.
           </p>
-          <div className="landing-pricing-grid">
-            <div className="landing-pricing-card">
-              <div className="landing-pricing-name">Стартов</div>
-              <div className="landing-pricing-price">
-                <span className="landing-pricing-amount">29</span>
-                <span className="landing-pricing-currency">лв/мес</span>
-              </div>
-              <ul className="landing-pricing-features">
-                <li>До 100 поръчки/месец</li>
-                <li>Електронни бележки</li>
-                <li>Месечен XML файл</li>
-                <li>Имейл поддръжка</li>
-              </ul>
-              <Link href="/overview" className="btn-secondary">
-                Започни
-              </Link>
+        </div>
+
+        <div className="apple-pricing__grid">
+          <div className="apple-price-card">
+            <div className="apple-price-card__header">
+              <span className="apple-price-card__name">Стартов</span>
+              <span className="apple-price-card__desc">За малки магазини</span>
             </div>
-            <div className="landing-pricing-card landing-pricing-featured">
-              <div className="landing-pricing-badge">Популярен</div>
-              <div className="landing-pricing-name">Бизнес</div>
-              <div className="landing-pricing-price">
-                <span className="landing-pricing-amount">59</span>
-                <span className="landing-pricing-currency">лв/мес</span>
-              </div>
-              <ul className="landing-pricing-features">
-                <li>До 500 поръчки/месец</li>
-                <li>Електронни бележки</li>
-                <li>Месечен XML файл</li>
-                <li>Приоритетна поддръжка</li>
-                <li>Множество потребители</li>
-              </ul>
-              <Link href="/overview" className="btn-primary">
-                Започни
-              </Link>
+            <div className="apple-price-card__price">
+              <span className="apple-price-card__amount">5</span>
+              <span className="apple-price-card__currency">€/мес</span>
             </div>
-            <div className="landing-pricing-card">
-              <div className="landing-pricing-name">Enterprise</div>
-              <div className="landing-pricing-price">
-                <span className="landing-pricing-amount">По договор</span>
-              </div>
-              <ul className="landing-pricing-features">
-                <li>Неограничени поръчки</li>
-                <li>Електронни бележки</li>
-                <li>Месечен XML файл</li>
-                <li>Персонален мениджър</li>
-                <li>SLA гаранция</li>
-                <li>Интеграции по поръчка</li>
-              </ul>
-              <a href="#contact" className="btn-secondary">
-                Свържете се
-              </a>
+            <ul className="apple-price-card__list">
+              <li>До 50 поръчки/месец</li>
+              <li>Електронни бележки</li>
+              <li>Месечен XML файл</li>
+              <li>Имейл поддръжка</li>
+            </ul>
+            <Link href="/overview" className="apple-price-card__btn">
+              Започни
+            </Link>
+          </div>
+
+          <div className="apple-price-card apple-price-card--featured">
+            <div className="apple-price-card__badge">Популярен</div>
+            <div className="apple-price-card__header">
+              <span className="apple-price-card__name">Бизнес</span>
+              <span className="apple-price-card__desc">За растящи бизнеси</span>
             </div>
+            <div className="apple-price-card__price">
+              <span className="apple-price-card__amount">15</span>
+              <span className="apple-price-card__currency">€/мес</span>
+            </div>
+            <ul className="apple-price-card__list">
+              <li>До 300 поръчки/месец</li>
+              <li>Електронни бележки</li>
+              <li>Месечен XML файл</li>
+              <li>Приоритетна поддръжка</li>
+              <li>Множество потребители</li>
+            </ul>
+            <Link href="/overview" className="apple-price-card__btn apple-price-card__btn--primary">
+              Започни
+            </Link>
+          </div>
+
+          <div className="apple-price-card">
+            <div className="apple-price-card__header">
+              <span className="apple-price-card__name">Корпоративен</span>
+              <span className="apple-price-card__desc">За големи обеми</span>
+            </div>
+            <div className="apple-price-card__price">
+              <span className="apple-price-card__amount apple-price-card__amount--text">По договор</span>
+            </div>
+            <ul className="apple-price-card__list">
+              <li>Неограничени поръчки</li>
+              <li>Всички функции</li>
+              <li>Персонален мениджър</li>
+              <li>SLA гаранция</li>
+            </ul>
+            <a href="#contact" className="apple-price-card__btn">
+              Свържете се
+            </a>
           </div>
         </div>
       </section>
 
-      {/* CTA Section */}
-      <section className="landing-cta">
-        <div className="landing-container">
-          <h2>Готови ли сте да автоматизирате фискалната отчетност?</h2>
-          <p>Започнете безплатен пробен период още днес</p>
-          <Link href="/overview" className="btn-primary btn-large">
+      {/* FAQ */}
+      <section className="apple-faq">
+        <div className="apple-section__header">
+          <h2 className="apple-section__title">Въпроси и отговори</h2>
+        </div>
+
+        <div className="apple-faq__list">
+          <details className="apple-faq__item">
+            <summary>
+              <span>Трябва ли ми касов апарат?</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M19 9l-7 7-7-7" />
+              </svg>
+            </summary>
+            <p>Не. UDITO издава електронни касови бележки, напълно законни за онлайн търговия.</p>
+          </details>
+          <details className="apple-faq__item">
+            <summary>
+              <span>Как се свързвам с Wix?</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M19 9l-7 7-7-7" />
+              </svg>
+            </summary>
+            <p>Инсталирате UDITO от Wix App Market с няколко клика. Системата автоматично синхронизира поръчките.</p>
+          </details>
+          <details className="apple-faq__item">
+            <summary>
+              <span>Какво е месечният XML файл?</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M19 9l-7 7-7-7" />
+              </svg>
+            </summary>
+            <p>Одиторски файл по Наредба Н-18, Приложение 38. Съдържа всички продажби за периода.</p>
+          </details>
+          <details className="apple-faq__item">
+            <summary>
+              <span>Има ли безплатен пробен период?</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M19 9l-7 7-7-7" />
+              </svg>
+            </summary>
+            <p>Да, можете да тествате всички функции безплатно преди да изберете план.</p>
+          </details>
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section className="apple-cta">
+        <div className="apple-cta__content">
+          <h2>Готови да започнете?</h2>
+          <p>Опитайте UDITO безплатно днес.</p>
+          <Link href="/overview" className="apple-btn apple-btn--primary apple-btn--large">
             Започни безплатно
           </Link>
         </div>
       </section>
 
-      {/* Contact */}
-      <section className="landing-contact" id="contact">
-        <div className="landing-container">
-          <h2 className="landing-section-title">Контакт</h2>
-          <p className="landing-section-subtitle">
-            Имате въпроси? Свържете се с нас
-          </p>
-          <div className="landing-contact-info">
-            <div className="landing-contact-item">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-              </svg>
-              <span>info@udito.bg</span>
-            </div>
-            <div className="landing-contact-item">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-              </svg>
-              <span>+359 88 888 8888</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* Footer */}
-      <footer className="landing-footer">
-        <div className="landing-container">
-          <div className="landing-footer-content">
-            <div className="landing-footer-brand">
-              <span className="landing-logo">UDITO</span>
+      <footer className="apple-footer" id="contact">
+        <div className="apple-footer__inner">
+          <div className="apple-footer__top">
+            <div className="apple-footer__brand">
+              <Image
+                src="/brand/udito-logo.png"
+                alt="UDITO"
+                width={80}
+                height={27}
+              />
               <p>Електронни бележки за Wix магазини</p>
             </div>
-            <div className="landing-footer-links">
-              <a href="#features">Функции</a>
-              <a href="#pricing">Цени</a>
-              <a href="#contact">Контакт</a>
-              <Link href="/overview">Вход</Link>
+            <div className="apple-footer__columns">
+              <div className="apple-footer__col">
+                <h4>Продукт</h4>
+                <a href="#features">Функции</a>
+                <a href="#pricing">Цени</a>
+                <a href="#how">Как работи</a>
+              </div>
+              <div className="apple-footer__col">
+                <h4>Контакт</h4>
+                <a href="mailto:info@udito.bg">info@udito.bg</a>
+                <a href="tel:+359888888888">+359 88 888 8888</a>
+              </div>
+              <div className="apple-footer__col">
+                <h4>Правни</h4>
+                <Link href="/privacy">Поверителност</Link>
+                <Link href="/terms">Условия</Link>
+              </div>
             </div>
           </div>
-          <div className="landing-footer-bottom">
-            <p>© 2026 UDITO от Designs by Po. Всички права запазени.</p>
+          <div className="apple-footer__bottom">
+            <p>© 2026 UDITO. Всички права запазени.</p>
           </div>
         </div>
       </footer>
