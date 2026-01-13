@@ -282,8 +282,6 @@ export async function POST(request: Request) {
 
     // Get site details from Wix
     let siteId: string | null = null;
-    let siteName: string | null = null;
-    let siteDomain: string | null = null;
 
     try {
       const appInstance = await getAppInstanceDetails({
@@ -291,8 +289,6 @@ export async function POST(request: Request) {
         accessToken,
       });
       siteId = appInstance?.siteId ?? null;
-      siteName = appInstance?.siteName ?? null;
-      siteDomain = appInstance?.siteUrl ?? null;
     } catch (error) {
       console.warn("Failed to get app instance details:", error);
     }
@@ -316,8 +312,6 @@ export async function POST(request: Request) {
       ok: true,
       instanceId,
       siteId,
-      siteName,
-      siteDomain,
     });
   } catch (error) {
     console.error("OAuth callback POST error:", error);
