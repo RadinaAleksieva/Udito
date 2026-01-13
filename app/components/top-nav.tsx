@@ -2,16 +2,7 @@ import { cookies, headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import LogoutButton from "./logout-button";
 import ThemeToggle from "./theme-toggle";
-
-const links = [
-  { href: "/overview", label: "Общ преглед" },
-  { href: "/orders", label: "Поръчки" },
-  { href: "/receipts", label: "Електронни бележки" },
-  { href: "/audit", label: "Одиторски файл" },
-  { href: "/reports", label: "Отчети" },
-  { href: "/settings", label: "Настройки" },
-  { href: "/help", label: "Помощ" },
-];
+import NavLinks from "./nav-links";
 
 export default async function TopNav({ title }: { title: string }) {
   const appUrl = process.env.APP_BASE_URL || "https://udito.vercel.app";
@@ -40,11 +31,7 @@ export default async function TopNav({ title }: { title: string }) {
         <span>{title}</span>
       </div>
       <div className="nav-links">
-        {links.map((link) => (
-          <a key={link.href} href={link.href} className="nav-link">
-            {link.label}
-          </a>
-        ))}
+        <NavLinks />
         {isEmbedded ? (
           <a
             href={appUrl}
