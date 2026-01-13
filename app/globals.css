@@ -5262,3 +5262,321 @@ main {
 [data-theme="light"] .help-box code {
   background: rgba(0, 0, 0, 0.06);
 }
+
+/* ========== Enhanced Light Theme - Apple Glassmorphism ========== */
+
+/* Final Revenue Card - ensure text is readable */
+[data-theme="light"] .final-revenue-card {
+  background: linear-gradient(135deg, #0071e3 0%, #5856d6 50%, #af52de 100%);
+  color: #ffffff !important;
+  box-shadow:
+    0 8px 32px rgba(0, 113, 227, 0.25),
+    0 16px 64px rgba(88, 86, 214, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  border: none;
+}
+
+[data-theme="light"] .final-revenue-card__label {
+  color: rgba(255, 255, 255, 0.9) !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="light"] .final-revenue-card__value {
+  color: #ffffff !important;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="light"] .final-revenue-card__sub {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+/* Glass Buttons - Apple style */
+[data-theme="light"] .btn,
+[data-theme="light"] .btn-primary,
+[data-theme="light"] button[type="submit"] {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.8) 100%);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border: 0.5px solid rgba(0, 0, 0, 0.08);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 2px 8px rgba(0, 0, 0, 0.06),
+    0 4px 16px rgba(0, 0, 0, 0.04);
+  color: var(--ink) !important;
+  transition: all 0.2s ease;
+}
+
+[data-theme="light"] .btn:hover,
+[data-theme="light"] .btn-primary:hover,
+[data-theme="light"] button[type="submit"]:hover {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 1) 0%, rgba(255, 255, 255, 0.95) 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 1) inset,
+    0 4px 12px rgba(0, 0, 0, 0.08),
+    0 8px 24px rgba(0, 0, 0, 0.06);
+  transform: translateY(-1px);
+}
+
+[data-theme="light"] .btn-primary,
+[data-theme="light"] .login-btn--primary {
+  background: linear-gradient(180deg, #0077ed 0%, #0066cc 100%) !important;
+  color: #ffffff !important;
+  border: none !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.25) inset,
+    0 4px 16px rgba(0, 113, 227, 0.35),
+    0 8px 32px rgba(0, 113, 227, 0.2);
+}
+
+[data-theme="light"] .btn-primary:hover,
+[data-theme="light"] .login-btn--primary:hover {
+  background: linear-gradient(180deg, #0088ff 0%, #0077ed 100%) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.3) inset,
+    0 8px 24px rgba(0, 113, 227, 0.4),
+    0 16px 48px rgba(0, 113, 227, 0.25) !important;
+}
+
+/* Secondary buttons - glass effect */
+[data-theme="light"] .btn-secondary {
+  background: rgba(255, 255, 255, 0.72) !important;
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border: 0.5px solid rgba(0, 0, 0, 0.08) !important;
+  color: var(--blue) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.6) inset,
+    0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="light"] .btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.92) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.8) inset,
+    0 4px 16px rgba(0, 0, 0, 0.06);
+}
+
+/* Inputs with glass effect */
+[data-theme="light"] input,
+[data-theme="light"] textarea {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border: 0.5px solid rgba(0, 0, 0, 0.08);
+  color: var(--ink);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset;
+}
+
+[data-theme="light"] input:focus,
+[data-theme="light"] textarea:focus {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: var(--blue);
+  box-shadow:
+    0 0 0 3px rgba(0, 113, 227, 0.12),
+    0 1px 0 rgba(255, 255, 255, 0.8) inset;
+}
+
+[data-theme="light"] input::placeholder,
+[data-theme="light"] textarea::placeholder {
+  color: var(--ink-secondary);
+}
+
+/* Orders table and rows */
+[data-theme="light"] .orders-table {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border-radius: 16px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
+  border: 0.5px solid rgba(255, 255, 255, 0.6);
+}
+
+[data-theme="light"] .orders-head {
+  background: rgba(0, 0, 0, 0.02);
+  border-bottom: 0.5px solid rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="light"] .orders-head span {
+  color: var(--ink-secondary) !important;
+  font-weight: 500;
+}
+
+[data-theme="light"] .orders-row {
+  border-bottom: 0.5px solid rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="light"] .orders-row span {
+  color: var(--ink) !important;
+}
+
+[data-theme="light"] .orders-row:hover {
+  background: rgba(0, 113, 227, 0.04);
+}
+
+/* Stat items with better contrast */
+[data-theme="light"] .stat-item__label {
+  color: var(--ink-secondary) !important;
+  font-weight: 500;
+}
+
+[data-theme="light"] .stat-item__value {
+  color: var(--ink) !important;
+  font-weight: 600;
+}
+
+/* Hero card improvements */
+[data-theme="light"] .hero-card {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border: 0.5px solid rgba(255, 255, 255, 0.6);
+  box-shadow:
+    0 0.5px 0 0 rgba(255, 255, 255, 0.6) inset,
+    0 8px 32px rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="light"] .hero-card h2 {
+  color: var(--ink) !important;
+}
+
+[data-theme="light"] .hero-card p {
+  color: var(--ink-secondary) !important;
+}
+
+/* Card elements inside hero */
+[data-theme="light"] .card {
+  background: rgba(255, 255, 255, 0.6);
+  border: 0.5px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+}
+
+[data-theme="light"] .card h3 {
+  color: var(--ink) !important;
+}
+
+[data-theme="light"] .card p {
+  color: var(--ink-secondary) !important;
+}
+
+/* Footer */
+[data-theme="light"] .footer {
+  color: var(--ink-secondary);
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* Login page improvements */
+[data-theme="light"] .login-card {
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: saturate(180%) blur(24px);
+  -webkit-backdrop-filter: saturate(180%) blur(24px);
+  border: 0.5px solid rgba(255, 255, 255, 0.6);
+  box-shadow:
+    0 0.5px 0 rgba(255, 255, 255, 0.8) inset,
+    0 16px 64px rgba(0, 0, 0, 0.08),
+    0 32px 128px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="light"] .login-btn--google {
+  background: rgba(255, 255, 255, 0.92) !important;
+  border: 0.5px solid rgba(0, 0, 0, 0.08) !important;
+  color: var(--ink) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="light"] .login-btn--google:hover {
+  background: rgba(255, 255, 255, 1) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 1) inset,
+    0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .login-btn--email {
+  background: rgba(255, 255, 255, 0.72) !important;
+  border: 0.5px solid rgba(0, 0, 0, 0.08) !important;
+  color: var(--ink) !important;
+}
+
+[data-theme="light"] .login-features {
+  color: var(--ink-secondary);
+}
+
+[data-theme="light"] .login-feature h3 {
+  color: var(--ink) !important;
+}
+
+[data-theme="light"] .login-feature-icon {
+  background: rgba(0, 113, 227, 0.1);
+  color: var(--blue);
+}
+
+/* Reports page - better readability */
+[data-theme="light"] .reports-section {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border: 0.5px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
+  border-radius: 16px;
+}
+
+[data-theme="light"] .reports-header h1 {
+  color: var(--ink) !important;
+}
+
+/* Status meta text */
+[data-theme="light"] .status-meta {
+  color: var(--ink-secondary) !important;
+}
+
+/* Status card content */
+[data-theme="light"] .status-card span:first-child {
+  color: var(--ink-secondary) !important;
+}
+
+[data-theme="light"] .status-card strong {
+  color: var(--ink) !important;
+}
+
+/* Links in status cards */
+[data-theme="light"] .status-link {
+  color: var(--blue) !important;
+}
+
+[data-theme="light"] .status-link:hover {
+  color: var(--blue-ink) !important;
+}
+
+/* Container background - subtle */
+[data-theme="light"] .container {
+  background: transparent;
+}
+
+/* Section titles */
+[data-theme="light"] .orders h2,
+[data-theme="light"] section h2 {
+  color: var(--ink) !important;
+}
+
+/* Scrollbar styling */
+[data-theme="light"] ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+[data-theme="light"] ::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: 4px;
+}
+
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+}
+
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+}
