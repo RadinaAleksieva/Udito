@@ -18,6 +18,11 @@ function LoginForm() {
   const [status, setStatus] = useState("");
   const [isLoading, setIsLoading] = useState<string | null>(null);
   const [isInIframe, setIsInIframe] = useState(false);
+  const [wixParams, setWixParams] = useState<{
+    instance?: string;
+    instanceId?: string;
+    siteId?: string;
+  }>({});
 
   useEffect(() => {
     // Detect if we're in an iframe (embedded in Wix)
@@ -25,6 +30,18 @@ function LoginForm() {
       setIsInIframe(window.self !== window.top);
     } catch {
       setIsInIframe(true);
+    }
+
+    // Capture Wix params from URL
+    const params = new URLSearchParams(window.location.search);
+    const instance = params.get("instance") || undefined;
+    const wixInstanceId = params.get("instanceId") || params.get("instance_id") || undefined;
+    const siteId = params.get("siteId") || params.get("site_id") || undefined;
+    setWixParams({ instance, instanceId: wixInstanceId, siteId });
+
+    // Pre-fill instance ID if available
+    if (wixInstanceId) {
+      setInstanceId(wixInstanceId);
     }
   }, []);
 
@@ -41,7 +58,28 @@ function LoginForm() {
       if (result?.error) {
         setStatus("Грешен имейл или парола");
       } else {
-        window.location.href = callbackUrl;
+        // Capture Wix instance if available
+        if (wixParams.instanceId || wixParams.instance) {
+          try {
+            await fetch("/api/instance", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                instanceId: wixParams.instanceId,
+                token: wixParams.instance,
+                siteId: wixParams.siteId,
+              }),
+            });
+          } catch {
+            // Continue even if instance capture fails
+          }
+        }
+        // Build redirect URL with Wix params
+        const redirectUrl = new URL(callbackUrl, window.location.origin);
+        if (wixParams.instanceId) redirectUrl.searchParams.set("instanceId", wixParams.instanceId);
+        if (wixParams.instance) redirectUrl.searchParams.set("instance", wixParams.instance);
+        if (wixParams.siteId) redirectUrl.searchParams.set("siteId", wixParams.siteId);
+        window.location.href = redirectUrl.toString();
       }
     } catch {
       setStatus("Възникна грешка. Опитайте отново.");
@@ -112,7 +150,14 @@ function LoginForm() {
                 <div className="login-iframe-notice">
                   <p>За пълна функционалност, отворете UDITO в нов прозорец:</p>
                   <a
-                    href={`${window.location.origin}/login?callbackUrl=${encodeURIComponent(callbackUrl)}`}
+                    href={(() => {
+                      const url = new URL("/login", window.location.origin);
+                      url.searchParams.set("callbackUrl", callbackUrl);
+                      if (wixParams.instance) url.searchParams.set("instance", wixParams.instance);
+                      if (wixParams.instanceId) url.searchParams.set("instanceId", wixParams.instanceId);
+                      if (wixParams.siteId) url.searchParams.set("siteId", wixParams.siteId);
+                      return url.toString();
+                    })()}
                     target="_blank"
                     rel="noreferrer"
                     className="login-btn login-btn--primary"
@@ -131,7 +176,12 @@ function LoginForm() {
                     className="login-btn login-btn--google"
                     onClick={() => {
                       setIsLoading("google");
-                      signIn("google", { callbackUrl });
+                      // Build callback URL with Wix params
+                      const redirectUrl = new URL(callbackUrl, window.location.origin);
+                      if (wixParams.instanceId) redirectUrl.searchParams.set("instanceId", wixParams.instanceId);
+                      if (wixParams.instance) redirectUrl.searchParams.set("instance", wixParams.instance);
+                      if (wixParams.siteId) redirectUrl.searchParams.set("siteId", wixParams.siteId);
+                      signIn("google", { callbackUrl: redirectUrl.toString() });
                     }}
                     disabled={isLoading !== null}
                   >
