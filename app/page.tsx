@@ -227,15 +227,9 @@ export default function Home() {
             />
           </Link>
           <div className="apple-nav__links">
-            <a href="#features" className="nav-link">
-              <span>Функции</span>
-            </a>
-            <a href="#how" className="nav-link">
-              <span>Как работи</span>
-            </a>
-            <a href="#pricing" className="nav-link">
-              <span>Цени</span>
-            </a>
+            <a href="#features">Функции</a>
+            <a href="#how">Как работи</a>
+            <a href="#pricing">Цени</a>
           </div>
           <Link href="/overview" className="apple-nav__cta">
             <span>Вход</span>
