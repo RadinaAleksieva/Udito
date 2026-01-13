@@ -223,17 +223,35 @@ function resolveShippingLines(shipping: any) {
   if (typeof shipping === "string") {
     return { line1: shipping, line2: "", city: "—", postalCode: "" };
   }
-  const line1 =
+  // Helper to ensure we get a string, not an object
+  const toString = (val: any): string => {
+    if (val == null) return "";
+    if (typeof val === "string") return val;
+    if (typeof val === "number") return String(val);
+    if (typeof val === "object") {
+      // Handle common nested structures like {name: "...", number: "..."}
+      const parts = [];
+      if (val.name) parts.push(val.name);
+      if (val.number) parts.push(val.number);
+      if (val.apt) parts.push(`ап. ${val.apt}`);
+      if (parts.length > 0) return parts.join(" ");
+      // Fallback: try to get any string value
+      const firstString = Object.values(val).find(v => typeof v === "string");
+      return typeof firstString === "string" ? firstString : "";
+    }
+    return "";
+  };
+  const line1Raw =
     shipping.addressLine1 ??
     shipping.streetAddress ??
     shipping.line1 ??
     shipping.addressLine ??
     shipping.address ??
-    "—";
-  const line2 = shipping.addressLine2 ?? shipping.line2 ?? "";
-  const city = shipping.city ?? shipping.town ?? shipping.locality ?? "—";
-  const postalCode =
-    shipping.postalCode ?? shipping.zipCode ?? shipping.postal ?? "";
+    null;
+  const line1 = toString(line1Raw) || "—";
+  const line2 = toString(shipping.addressLine2 ?? shipping.line2 ?? "");
+  const city = toString(shipping.city ?? shipping.town ?? shipping.locality ?? "") || "—";
+  const postalCode = toString(shipping.postalCode ?? shipping.zipCode ?? shipping.postal ?? "");
   return { line1, line2, city, postalCode };
 }
 
