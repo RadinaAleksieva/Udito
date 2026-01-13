@@ -7,6 +7,8 @@ import {
   listReceiptsWithOrdersForSite,
 } from "@/lib/receipts";
 import { extractTransactionRef } from "@/lib/wix";
+import { auth, getUserStores } from "@/lib/auth";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -88,8 +90,28 @@ export default async function ReceiptsPage({
   searchParams?: { month?: string };
 }) {
   await initDb();
-  const token = await getActiveWixToken();
-  const siteId = token?.site_id ?? null;
+
+  // Security: Check user authentication and store access
+  const session = await auth();
+  let siteId: string | null = null;
+
+  if (session?.user?.id) {
+    // User is logged in - only show receipts from their connected stores
+    const userStores = await getUserStores(session.user.id);
+    if (userStores.length === 0) {
+      redirect("/overview");
+    }
+    siteId = userStores[0].site_id || userStores[0].instance_id;
+  } else {
+    // Legacy flow: User not logged in via NextAuth, check Wix cookies
+    const token = await getActiveWixToken();
+    siteId = token?.site_id ?? token?.instance_id ?? null;
+
+    if (!siteId) {
+      redirect("/login");
+    }
+  }
+
   const now = new Date();
 
   // Default to current month instead of "all"
@@ -134,16 +156,11 @@ export default async function ReceiptsPage({
         999
       ).toISOString()
     : null;
+  // siteId is guaranteed at this point (we redirect if not)
   const receipts =
-    monthMatch && rangeStart && rangeEnd && siteId
-      ? await listReceiptsWithOrdersForPeriodForSite(
-          rangeStart,
-          rangeEnd,
-          siteId
-        )
-      : siteId
-        ? await listReceiptsWithOrdersForSite(siteId, 1000)
-        : [];
+    monthMatch && rangeStart && rangeEnd
+      ? await listReceiptsWithOrdersForPeriodForSite(rangeStart, rangeEnd, siteId!)
+      : await listReceiptsWithOrdersForSite(siteId!, 1000);
 
   const dbReceipts = receipts as ReceiptRow[];
 

@@ -344,6 +344,63 @@ export async function initDb() {
     on store_connections (instance_id)
     where instance_id is not null;
   `;
+
+  // NextAuth.js tables and migrations
+  // Modify users table for NextAuth compatibility
+  await sql`alter table users add column if not exists name text;`;
+  await sql`alter table users add column if not exists email_verified timestamptz;`;
+  await sql`alter table users add column if not exists image text;`;
+  await sql`alter table users alter column password_hash drop not null;`;
+  await sql`alter table users alter column password_salt drop not null;`;
+
+  // OAuth accounts table
+  await sql`
+    create table if not exists accounts (
+      id text primary key,
+      user_id text not null references users(id) on delete cascade,
+      type text not null,
+      provider text not null,
+      provider_account_id text not null,
+      refresh_token text,
+      access_token text,
+      expires_at bigint,
+      token_type text,
+      scope text,
+      id_token text,
+      session_state text,
+      created_at timestamptz default now()
+    );
+  `;
+  await sql`
+    create unique index if not exists accounts_provider_account_idx
+    on accounts (provider, provider_account_id);
+  `;
+
+  // NextAuth sessions (modify existing or create new)
+  await sql`alter table sessions add column if not exists session_token text;`;
+  await sql`
+    create unique index if not exists sessions_token_idx
+    on sessions (session_token)
+    where session_token is not null;
+  `;
+
+  // Verification tokens for email verification
+  await sql`
+    create table if not exists verification_tokens (
+      identifier text not null,
+      token text not null,
+      expires timestamptz not null,
+      primary key (identifier, token)
+    );
+  `;
+
+  // Link users to store_connections
+  await sql`alter table store_connections add column if not exists user_id text;`;
+  await sql`
+    create index if not exists store_connections_user_id_idx
+    on store_connections (user_id)
+    where user_id is not null;
+  `;
 }
 
 export async function upsertOrder(order: StoredOrder) {

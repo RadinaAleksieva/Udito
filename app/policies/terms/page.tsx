@@ -1,11 +1,9 @@
-import TopNav from "../../components/top-nav";
-
-export const dynamic = "force-dynamic";
+import PublicHeader from "../../components/public-header";
 
 export default function TermsPage() {
   return (
     <main>
-      <TopNav title="Общи условия" />
+      <PublicHeader title="Общи условия" />
       <div className="container">
         <section className="hero">
           <div>

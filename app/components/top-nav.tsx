@@ -1,4 +1,6 @@
 import { cookies, headers } from "next/headers";
+import { auth } from "@/lib/auth";
+import LogoutButton from "./logout-button";
 
 const links = [
   { href: "/overview", label: "Общ преглед" },
@@ -14,8 +16,9 @@ export default async function TopNav({ title }: { title: string }) {
   const appUrl = process.env.APP_BASE_URL || "https://udito.vercel.app";
   const requestHeaders = headers();
   const jar = cookies();
+  const session = await auth();
   const hasAccess = Boolean(
-    jar.get("udito_instance_id")?.value || jar.get("udito_site_id")?.value
+    session?.user || jar.get("udito_instance_id")?.value || jar.get("udito_site_id")?.value
   );
   const fetchDest = requestHeaders.get("sec-fetch-dest");
   const referer = requestHeaders.get("referer") || "";
@@ -51,11 +54,7 @@ export default async function TopNav({ title }: { title: string }) {
             Отвори в нов таб
           </a>
         ) : null}
-        {hasAccess ? (
-          <a href="/api/logout" className="nav-link">
-            Изход
-          </a>
-        ) : null}
+        {hasAccess ? <LogoutButton /> : null}
       </div>
     </nav>
   );

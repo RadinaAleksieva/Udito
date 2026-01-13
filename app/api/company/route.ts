@@ -4,19 +4,70 @@ import {
   initDb,
   upsertCompany,
 } from "@/lib/db";
-import { getActiveWixToken } from "@/lib/wix-context";
+import { getActiveWixToken, getActiveWixContext } from "@/lib/wix-context";
+import { auth, getUserStores, linkStoreToUser } from "@/lib/auth";
+
+async function getSiteIdForRequest() {
+  // First check if user is logged in via NextAuth
+  const session = await auth();
+
+  // Check for Wix cookies
+  const wixContext = getActiveWixContext();
+  const cookieSiteId = wixContext.siteId;
+  const cookieInstanceId = wixContext.instanceId;
+
+  if (session?.user?.id) {
+    let userStores = await getUserStores(session.user.id);
+
+    if (userStores.length > 0) {
+      return {
+        siteId: userStores[0].site_id || null,
+        instanceId: userStores[0].instance_id || null,
+      };
+    }
+
+    // User has no stores but has Wix cookies - auto link
+    if (cookieSiteId || cookieInstanceId) {
+      try {
+        await linkStoreToUser(session.user.id, cookieSiteId || "", cookieInstanceId || undefined);
+        userStores = await getUserStores(session.user.id);
+        if (userStores.length > 0) {
+          return {
+            siteId: userStores[0].site_id || null,
+            instanceId: userStores[0].instance_id || null,
+          };
+        }
+      } catch {
+        // Fall through to use cookies
+      }
+      return {
+        siteId: cookieSiteId,
+        instanceId: cookieInstanceId,
+      };
+    }
+
+    return { siteId: null, instanceId: null };
+  }
+
+  // Fallback to cookie-based auth
+  const token = await getActiveWixToken();
+  return {
+    siteId: token?.site_id ?? null,
+    instanceId: token?.instance_id ?? null,
+  };
+}
 
 export async function GET() {
   await initDb();
-  const token = await getActiveWixToken();
-  const siteId = token?.site_id ?? null;
-  if (!siteId) {
+  const { siteId, instanceId } = await getSiteIdForRequest();
+
+  if (!siteId && !instanceId) {
     return NextResponse.json(
-      { ok: false, error: "Missing Wix site id." },
+      { ok: false, error: "Няма свързан магазин." },
       { status: 400 }
     );
   }
-  const company = await getCompanyBySite(siteId);
+  const company = await getCompanyBySite(siteId, instanceId);
   return NextResponse.json({ ok: true, company });
 }
 
@@ -35,19 +86,19 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
-  const token = await getActiveWixToken();
-  const siteId = token?.site_id ?? null;
-  const instanceId = token?.instance_id ?? null;
-  if (!siteId) {
+
+  const { siteId, instanceId } = await getSiteIdForRequest();
+
+  if (!siteId && !instanceId) {
     return NextResponse.json(
-      { ok: false, error: "Missing Wix site id." },
+      { ok: false, error: "Няма свързан магазин." },
       { status: 400 }
     );
   }
 
   const profile = {
     businessId: null,
-    siteId,
+    siteId: siteId || `temp-${instanceId}`,
     instanceId,
     storeName: body?.storeName ?? null,
     storeDomain: body?.storeDomain ?? null,
@@ -72,6 +123,6 @@ export async function POST(request: Request) {
   };
 
   await upsertCompany(profile);
-  const company = await getCompanyBySite(siteId);
+  const company = await getCompanyBySite(siteId, instanceId);
   return NextResponse.json({ ok: true, company });
 }

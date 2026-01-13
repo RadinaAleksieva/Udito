@@ -1,11 +1,9 @@
-import TopNav from "../../components/top-nav";
-
-export const dynamic = "force-dynamic";
+import PublicHeader from "../../components/public-header";
 
 export default function PrivacyPolicyPage() {
   return (
     <main>
-      <TopNav title="Политика за поверителност" />
+      <PublicHeader title="Политика за поверителност" />
       <div className="container">
         <section className="hero">
           <div>

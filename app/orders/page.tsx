@@ -4,11 +4,12 @@ import AutoSync from "../overview/auto-sync";
 import OrdersListWrapper from "./orders-list-wrapper";
 import {
   initDb,
-  listAllDetailedOrders,
   listAllDetailedOrdersForSite,
   listDetailedOrdersForPeriodForSite,
 } from "@/lib/db";
 import { getActiveWixToken } from "@/lib/wix-context";
+import { auth, getUserStores } from "@/lib/auth";
+import { redirect } from "next/navigation";
 import {
   deriveOrderCreatedAt,
   deriveOrderMoney,
@@ -461,8 +462,30 @@ export default async function OrdersPage({
   searchParams?: { month?: string };
 }) {
   await initDb();
-  const token = await getActiveWixToken();
-  const siteId = token?.site_id ?? token?.instance_id ?? null;
+
+  // Security: Check user authentication and store access
+  const session = await auth();
+  let siteId: string | null = null;
+
+  if (session?.user?.id) {
+    // User is logged in - only show orders from their connected stores
+    const userStores = await getUserStores(session.user.id);
+    if (userStores.length === 0) {
+      // User has no connected stores - redirect to overview to connect one
+      redirect("/overview");
+    }
+    // Use the first connected store (TODO: add store selector)
+    siteId = userStores[0].site_id || userStores[0].instance_id;
+  } else {
+    // Legacy flow: User not logged in via NextAuth, check Wix cookies
+    const token = await getActiveWixToken();
+    siteId = token?.site_id ?? token?.instance_id ?? null;
+
+    if (!siteId) {
+      // No authentication at all - redirect to login
+      redirect("/login");
+    }
+  }
   const now = new Date();
   const monthParam = searchParams?.month || "all";
   const monthMatch = monthParam.match(/^(\d{4})-(\d{2})$/);
@@ -504,12 +527,11 @@ export default async function OrdersPage({
         999
       ).toISOString()
     : null;
+  // siteId is guaranteed to exist at this point (we redirect if not)
   const orders =
-    monthMatch && rangeStart && rangeEnd && siteId
-      ? await listDetailedOrdersForPeriodForSite(rangeStart, rangeEnd, siteId)
-      : siteId
-        ? await listAllDetailedOrdersForSite(siteId)
-        : await listAllDetailedOrders();
+    monthMatch && rangeStart && rangeEnd
+      ? await listDetailedOrdersForPeriodForSite(rangeStart, rangeEnd, siteId!)
+      : await listAllDetailedOrdersForSite(siteId!);
 
   const dbOrders = orders as OrderRow[];
   const displayOrders = dbOrders.filter((order) => {

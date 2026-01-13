@@ -1,17 +1,50 @@
 import TopNav from "../components/top-nav";
 import CompanyForm from "./company-form";
 import { initDb } from "@/lib/db";
-import LoginForm from "../login/login-form";
 import { getActiveWixContext, getActiveWixToken } from "@/lib/wix-context";
+import { auth, getUserStores, linkStoreToUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
   await initDb();
-  const token = await getActiveWixToken();
-  const siteId = token?.site_id ?? null;
-  const context = getActiveWixContext();
-  const instanceId = context.instanceId ?? null;
+  const session = await auth();
+  let userStores = session?.user?.id ? await getUserStores(session.user.id) : [];
+
+  let siteId: string | null = null;
+  let instanceId: string | null = null;
+
+  // Check for Wix cookies (from iframe access)
+  const wixContext = getActiveWixContext();
+  const cookieSiteId = wixContext.siteId;
+  const cookieInstanceId = wixContext.instanceId;
+
+  if (session?.user?.id && userStores.length > 0) {
+    // User logged in with connected stores
+    siteId = userStores[0].site_id || null;
+    instanceId = userStores[0].instance_id || null;
+  } else if (session?.user?.id && (cookieSiteId || cookieInstanceId)) {
+    // User logged in with Wix cookies but no store connections - AUTO LINK
+    try {
+      await linkStoreToUser(session.user.id, cookieSiteId || "", cookieInstanceId || undefined);
+      userStores = await getUserStores(session.user.id);
+      if (userStores.length > 0) {
+        siteId = userStores[0].site_id || null;
+        instanceId = userStores[0].instance_id || null;
+      } else {
+        siteId = cookieSiteId;
+        instanceId = cookieInstanceId;
+      }
+    } catch {
+      siteId = cookieSiteId;
+      instanceId = cookieInstanceId;
+    }
+  } else {
+    // Legacy flow - use cookies
+    const token = await getActiveWixToken();
+    siteId = token?.site_id ?? null;
+    instanceId = cookieInstanceId ?? null;
+  }
 
   return (
     <main>
@@ -26,22 +59,27 @@ export default async function SettingsPage() {
           </div>
           <div className="hero-card">
             <h2>Статус</h2>
+            {session?.user && (
+              <p>
+                Потребител: <strong>{session.user.email}</strong>
+              </p>
+            )}
             <p>
               Активен магазин: <strong>{siteId || "Неизбран"}</strong>
             </p>
-            {siteId ? (
+            {siteId && instanceId ? (
               <p>
-                Код за достъп: <strong>{instanceId || "Няма"}</strong>
+                Код за достъп: <strong>{instanceId}</strong>
               </p>
             ) : null}
-            <p>
-              Ако няма активен магазин, отворете приложението от Wix или
-              използвайте вход с код за достъп.
-            </p>
+            {!siteId && (
+              <p className="form-warning">
+                Няма свързан магазин. Отворете приложението от Wix, за да свържете магазина.
+              </p>
+            )}
           </div>
         </section>
         <CompanyForm />
-        <LoginForm />
       </div>
       <footer className="footer">UDITO от Designs by Po.</footer>
     </main>

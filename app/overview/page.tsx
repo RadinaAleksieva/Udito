@@ -9,7 +9,7 @@ import {
   listRecentOrdersForPeriodForSite,
 } from "@/lib/db";
 import { getAccessToken } from "@/lib/wix";
-import { getActiveWixToken } from "@/lib/wix-context";
+import { getActiveWixToken, getActiveWixContext } from "@/lib/wix-context";
 import BackfillButton from "./backfill-button";
 import EnrichButton from "./enrich-button";
 import {
@@ -21,6 +21,8 @@ import {
 import { countReceiptsForPeriodForSite } from "@/lib/receipts";
 import ConnectionCheck from "./connection-check";
 import AutoSync from "./auto-sync";
+import { auth, getUserStores, linkStoreToUser } from "@/lib/auth";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -90,9 +92,58 @@ export default async function OverviewPage({
   searchParams?: { debug?: string; month?: string };
 }) {
   await initDb();
-  const token = await getActiveWixToken();
-  const siteId = token?.site_id ?? null;
-  const instanceId = token?.instance_id ?? null;
+
+  // Get user session and their connected stores
+  const session = await auth();
+  let userStores = session?.user?.id ? await getUserStores(session.user.id) : [];
+  let hasUserStores = userStores.length > 0;
+
+  let siteId: string | null = null;
+  let instanceId: string | null = null;
+  let needsStoreConnection = false;
+
+  // Check for Wix cookies (from iframe access)
+  const wixContext = getActiveWixContext();
+  const cookieSiteId = wixContext.siteId;
+  const cookieInstanceId = wixContext.instanceId;
+
+  if (session?.user?.id) {
+    // User is logged in
+    if (hasUserStores) {
+      // Use the first connected store
+      siteId = userStores[0].site_id || null;
+      instanceId = userStores[0].instance_id || null;
+    } else if (cookieSiteId || cookieInstanceId) {
+      // User has Wix cookies but no store connections - AUTO LINK
+      try {
+        await linkStoreToUser(session.user.id, cookieSiteId || "", cookieInstanceId || undefined);
+        // Refresh stores after linking
+        userStores = await getUserStores(session.user.id);
+        hasUserStores = userStores.length > 0;
+        if (hasUserStores) {
+          siteId = userStores[0].site_id || null;
+          instanceId = userStores[0].instance_id || null;
+        } else {
+          // Fallback to cookies if refresh didn't work
+          siteId = cookieSiteId;
+          instanceId = cookieInstanceId;
+        }
+      } catch (e) {
+        console.error("Auto-link store failed:", e);
+        // Still use the cookies so user can see their data
+        siteId = cookieSiteId;
+        instanceId = cookieInstanceId;
+      }
+    } else {
+      // User has no connected stores and no Wix cookies
+      needsStoreConnection = true;
+    }
+  } else {
+    // Legacy flow: User not logged in via NextAuth, check Wix cookies
+    const token = await getActiveWixToken();
+    siteId = token?.site_id ?? null;
+    instanceId = token?.instance_id ?? null;
+  }
   const now = new Date();
   const monthParam = searchParams?.month || "";
   const showDebug = searchParams?.debug === "1";
@@ -158,7 +209,7 @@ export default async function OverviewPage({
   const monthLabelText = monthOptions.find((option) => option.value === monthLabel)
     ?.label;
   const hasConnection = Boolean(siteId);
-  const hasInstance = Boolean(token?.instance_id);
+  const hasInstance = Boolean(instanceId);
   // Prioritize company.store_domain if set (user's preference), then Wix API, then fallback
   const domainLabel = company?.store_domain || siteLabel || null;
   const activeStoreLabel = domainLabel || siteId || "Неизбран";
@@ -174,6 +225,77 @@ export default async function OverviewPage({
     year: "numeric",
     month: "long",
   });
+
+  // Show connect store message if needed
+  if (needsStoreConnection) {
+    return (
+      <main>
+        <TopNav title="UDITO Табло" />
+        <div className="container">
+          <section className="hero">
+            <div>
+              <h1>Добре дошли в UDITO!</h1>
+              <p>
+                За да използвате приложението, трябва да свържете вашия Wix магазин.
+              </p>
+              <div className="connect-store-box">
+                <div className="connect-store-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="48" height="48">
+                    <path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                </div>
+                <h2>Свържете вашия магазин</h2>
+                <p>
+                  Отворете <strong>UDITO</strong> от Wix Dashboard на вашия магазин.
+                  Приложението автоматично ще се свърже с вашия акаунт.
+                </p>
+                <div className="connect-store-steps">
+                  <div className="connect-step">
+                    <span className="step-number">1</span>
+                    <span>Отидете в <a href="https://manage.wix.com" target="_blank" rel="noreferrer">Wix Dashboard</a></span>
+                  </div>
+                  <div className="connect-step">
+                    <span className="step-number">2</span>
+                    <span>Инсталирайте UDITO от App Market</span>
+                  </div>
+                  <div className="connect-step">
+                    <span className="step-number">3</span>
+                    <span>Отворете приложението от Dashboard</span>
+                  </div>
+                </div>
+                <p className="connect-store-note">
+                  Ако вече имате инсталирано приложението, можете да въведете Instance ID от{" "}
+                  <Link href="/settings">Настройки</Link>.
+                </p>
+              </div>
+            </div>
+            <div className="hero-card">
+              <h2>Какво прави UDITO</h2>
+              <p>
+                UDITO е приложение за алтернативен режим на отчитане на продажби
+                за Wix магазини в България.
+              </p>
+              <div className="grid">
+                <div className="card">
+                  <h3>Електронни бележки</h3>
+                  <p>Автоматично издаване при платена поръчка.</p>
+                </div>
+                <div className="card">
+                  <h3>Одиторски файл</h3>
+                  <p>Месечен XML за НАП.</p>
+                </div>
+                <div className="card">
+                  <h3>Синхронизация</h3>
+                  <p>Реално време с Wix.</p>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+        <footer className="footer">UDITO от Designs by Po.</footer>
+      </main>
+    );
+  }
 
   return (
     <main>

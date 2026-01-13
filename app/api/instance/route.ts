@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getLatestWixTokenForSite, initDb, saveWixTokens } from "@/lib/db";
 import { decodeWixInstanceToken } from "@/lib/wix-instance";
 import { getAppInstanceDetails, getTokenInfo, getAccessToken } from "@/lib/wix";
+import { getServerSession } from "next-auth";
+import { authOptions, linkStoreToUser } from "@/lib/auth";
 
 const WIX_API_BASE = process.env.WIX_API_BASE || "https://www.wixapis.com";
 
@@ -128,6 +130,17 @@ export async function POST(request: Request) {
     // Register webhooks automatically
     if (resolvedSiteId) {
       await registerWebhooks(instanceId, resolvedSiteId);
+    }
+
+    // Auto-link store to user if logged in
+    try {
+      const session = await getServerSession(authOptions);
+      if (session?.user?.id && (resolvedSiteId || instanceId)) {
+        await linkStoreToUser(session.user.id, resolvedSiteId || "", instanceId);
+        console.log("✅ Auto-linked store to user:", session.user.id);
+      }
+    } catch (error) {
+      console.warn("⚠️ Auto-link store failed:", error);
     }
 
     const hasSite = Boolean(resolvedSiteId);
