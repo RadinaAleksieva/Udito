@@ -1190,6 +1190,18 @@ export async function getCompanyByBusiness(businessId: string) {
 }
 
 export async function upsertCompany(profile: CompanyProfile) {
+  // First check if company exists by instance_id (the stable Wix identifier)
+  // This prevents duplicate companies when site_id differs
+  if (profile.instanceId) {
+    const existing = await sql`
+      SELECT site_id FROM companies WHERE instance_id = ${profile.instanceId} LIMIT 1
+    `;
+    if (existing.rows.length > 0) {
+      // Use the existing site_id to update the correct record
+      profile.siteId = existing.rows[0].site_id;
+    }
+  }
+
   await sql`
     insert into companies (
       business_id,
