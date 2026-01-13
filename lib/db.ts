@@ -623,12 +623,16 @@ export async function listRecentOrdersForPeriodForSite(
   startIso: string,
   endIso: string,
   siteId: string,
-  limit = 10
+  limit = 10,
+  instanceId?: string | null
 ) {
   const result = await sql`
-    select id, number, payment_status, created_at, total, currency, source, raw
+    select id, number, payment_status, created_at, total, currency, source, raw, status
     from orders
-    where (site_id = ${siteId} OR site_id IS NULL)
+    where (
+      site_id = ${siteId}
+      OR (site_id IS NULL AND raw->>'instanceId' = ${instanceId || siteId})
+    )
       and (status is null or lower(status) not like 'archiv%')
       and coalesce(raw->>'archived', 'false') <> 'true'
       and coalesce(raw->>'isArchived', 'false') <> 'true'
@@ -647,14 +651,16 @@ export async function listPaginatedOrdersForSite(
   limit = 20,
   offset = 0,
   startIso: string | null = null,
-  endIso: string | null = null
+  endIso: string | null = null,
+  instanceId?: string | null
 ) {
+  const instId = instanceId || siteId;
   // Count total
   const countResult = startIso && endIso
     ? await sql`
         select count(*) as total
         from orders
-        where (site_id = ${siteId} OR site_id IS NULL)
+        where (site_id = ${siteId} OR (site_id IS NULL AND raw->>'instanceId' = ${instId}))
           and (status is null or lower(status) not like 'archiv%')
           and coalesce(raw->>'archived', 'false') <> 'true'
           and coalesce(raw->>'isArchived', 'false') <> 'true'
@@ -666,7 +672,7 @@ export async function listPaginatedOrdersForSite(
     : await sql`
         select count(*) as total
         from orders
-        where (site_id = ${siteId} OR site_id IS NULL)
+        where (site_id = ${siteId} OR (site_id IS NULL AND raw->>'instanceId' = ${instId}))
           and (status is null or lower(status) not like 'archiv%')
           and coalesce(raw->>'archived', 'false') <> 'true'
           and coalesce(raw->>'isArchived', 'false') <> 'true'
@@ -681,7 +687,7 @@ export async function listPaginatedOrdersForSite(
     ? await sql`
         select id, number, payment_status, status, created_at, paid_at, total, currency, customer_name, customer_email, raw, source
         from orders
-        where (site_id = ${siteId} OR site_id IS NULL)
+        where (site_id = ${siteId} OR (site_id IS NULL AND raw->>'instanceId' = ${instId}))
           and (status is null or lower(status) not like 'archiv%')
           and coalesce(raw->>'archived', 'false') <> 'true'
           and coalesce(raw->>'isArchived', 'false') <> 'true'
@@ -695,7 +701,7 @@ export async function listPaginatedOrdersForSite(
     : await sql`
         select id, number, payment_status, status, created_at, paid_at, total, currency, customer_name, customer_email, raw, source
         from orders
-        where (site_id = ${siteId} OR site_id IS NULL)
+        where (site_id = ${siteId} OR (site_id IS NULL AND raw->>'instanceId' = ${instId}))
           and (status is null or lower(status) not like 'archiv%')
           and coalesce(raw->>'archived', 'false') <> 'true'
           and coalesce(raw->>'isArchived', 'false') <> 'true'
@@ -709,11 +715,12 @@ export async function listPaginatedOrdersForSite(
   return { orders: ordersResult.rows, total };
 }
 
-export async function countOrdersForSite(siteId: string) {
+export async function countOrdersForSite(siteId: string, instanceId?: string | null) {
+  const instId = instanceId || siteId;
   const result = await sql`
     select count(*) as total
     from orders
-    where (site_id = ${siteId} OR site_id IS NULL)
+    where (site_id = ${siteId} OR (site_id IS NULL AND raw->>'instanceId' = ${instId}))
       and (status is null or lower(status) not like 'archiv%')
       and coalesce(raw->>'archived', 'false') <> 'true'
       and coalesce(raw->>'isArchived', 'false') <> 'true'
@@ -727,12 +734,14 @@ export async function countOrdersForSite(siteId: string) {
 export async function countOrdersForPeriodForSite(
   startIso: string,
   endIso: string,
-  siteId: string
+  siteId: string,
+  instanceId?: string | null
 ) {
+  const instId = instanceId || siteId;
   const result = await sql`
     select count(*) as total
     from orders
-    where (site_id = ${siteId} OR site_id IS NULL)
+    where (site_id = ${siteId} OR (site_id IS NULL AND raw->>'instanceId' = ${instId}))
       and (status is null or lower(status) not like 'archiv%')
       and coalesce(raw->>'archived', 'false') <> 'true'
       and coalesce(raw->>'isArchived', 'false') <> 'true'
@@ -846,7 +855,8 @@ export async function listAllDetailedOrders() {
   return result.rows;
 }
 
-export async function listAllDetailedOrdersForSite(siteId: string) {
+export async function listAllDetailedOrdersForSite(siteId: string, instanceId?: string | null) {
+  const instId = instanceId || siteId;
   const result = await sql`
     select id,
       number,
@@ -861,7 +871,7 @@ export async function listAllDetailedOrdersForSite(siteId: string) {
       raw,
       source
     from orders
-    where (site_id = ${siteId} OR site_id IS NULL)
+    where (site_id = ${siteId} OR (site_id IS NULL AND raw->>'instanceId' = ${instId}))
     order by created_at desc nulls last;
   `;
   return result.rows;
@@ -916,8 +926,10 @@ export async function listDetailedOrdersForPeriod(
 export async function listDetailedOrdersForPeriodForSite(
   startIso: string,
   endIso: string,
-  siteId: string
+  siteId: string,
+  instanceId?: string | null
 ) {
+  const instId = instanceId || siteId;
   const result = await sql`
     select id,
       number,
@@ -932,7 +944,7 @@ export async function listDetailedOrdersForPeriodForSite(
       raw,
       source
     from orders
-    where (site_id = ${siteId} OR site_id IS NULL)
+    where (site_id = ${siteId} OR (site_id IS NULL AND raw->>'instanceId' = ${instId}))
       and created_at between ${startIso} and ${endIso}
     order by created_at desc nulls last;
   `;
@@ -1035,7 +1047,8 @@ export async function getOrderById(orderId: string) {
   return result.rows[0] ?? null;
 }
 
-export async function getOrderByIdForSite(orderId: string, siteId: string) {
+export async function getOrderByIdForSite(orderId: string, siteId: string, instanceId?: string | null) {
+  const instId = instanceId || siteId;
   const result = await sql`
     select id,
       site_id,
@@ -1056,7 +1069,7 @@ export async function getOrderByIdForSite(orderId: string, siteId: string) {
       raw
     from orders
     where id = ${orderId}
-      and (site_id = ${siteId} OR site_id IS NULL)
+      and (site_id = ${siteId} OR (site_id IS NULL AND raw->>'instanceId' = ${instId}))
     limit 1;
   `;
   return result.rows[0] ?? null;

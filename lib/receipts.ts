@@ -122,13 +122,15 @@ export async function issueRefundReceipt(params: {
 export async function countReceiptsForPeriodForSite(
   startIso: string,
   endIso: string,
-  siteId: string
+  siteId: string,
+  instanceId?: string | null
 ): Promise<number> {
+  const instId = instanceId || siteId;
   const result = await sql`
     SELECT COUNT(*) as total
     FROM receipts r
     LEFT JOIN orders o ON o.id = r.order_id
-    WHERE (o.site_id = ${siteId} OR o.site_id IS NULL)
+    WHERE (o.site_id = ${siteId} OR (o.site_id IS NULL AND o.raw->>'instanceId' = ${instId}))
       AND r.issued_at BETWEEN ${startIso} AND ${endIso}
   `;
   return Number(result.rows[0]?.total ?? 0);
@@ -227,8 +229,10 @@ export async function listReceiptsWithOrders(limit = 200) {
 
 export async function listReceiptsWithOrdersForSite(
   siteId: string,
-  limit = 200
+  limit = 200,
+  instanceId?: string | null
 ) {
+  const instId = instanceId || siteId;
   const result = await sql`
     select receipts.order_id,
       receipts.id as receipt_id,
@@ -245,7 +249,7 @@ export async function listReceiptsWithOrdersForSite(
       orders.raw as order_raw
     from receipts
     left join orders on orders.id = receipts.order_id
-    where orders.site_id = ${siteId} OR orders.site_id IS NULL
+    where orders.site_id = ${siteId} OR (orders.site_id IS NULL AND orders.raw->>'instanceId' = ${instId})
     order by receipts.id desc
     limit ${limit};
   `;
@@ -308,8 +312,10 @@ export async function listReceiptsWithOrdersForPeriod(
 export async function listReceiptsWithOrdersForPeriodForSite(
   startIso: string,
   endIso: string,
-  siteId: string
+  siteId: string,
+  instanceId?: string | null
 ) {
+  const instId = instanceId || siteId;
   const result = await sql`
     select receipts.order_id,
       receipts.id as receipt_id,
@@ -326,7 +332,7 @@ export async function listReceiptsWithOrdersForPeriodForSite(
       orders.raw as order_raw
     from receipts
     left join orders on orders.id = receipts.order_id
-    where (orders.site_id = ${siteId} OR orders.site_id IS NULL)
+    where (orders.site_id = ${siteId} OR (orders.site_id IS NULL AND orders.raw->>'instanceId' = ${instId}))
       and receipts.issued_at between ${startIso} and ${endIso}
     order by receipts.id desc;
   `;
@@ -368,8 +374,10 @@ export async function listReceiptsWithOrdersForPeriodForBusiness(
 export async function listOrdersWithReceiptsForAudit(
   startIso: string,
   endIso: string,
-  siteId: string
+  siteId: string,
+  instanceId?: string | null
 ) {
+  const instId = instanceId || siteId;
   const result = await sql`
     select
       orders.id,
@@ -387,7 +395,7 @@ export async function listOrdersWithReceiptsForAudit(
       sale_receipts.type as receipt_type
     from receipts as sale_receipts
     inner join orders on orders.id = sale_receipts.order_id
-    where (orders.site_id = ${siteId} OR orders.site_id IS NULL)
+    where (orders.site_id = ${siteId} OR (orders.site_id IS NULL AND orders.raw->>'instanceId' = ${instId}))
       and sale_receipts.type = 'sale'
       and sale_receipts.issued_at between ${startIso} and ${endIso}
     order by sale_receipts.id desc;
@@ -402,8 +410,10 @@ export async function listOrdersWithReceiptsForAudit(
 export async function listRefundReceiptsForAudit(
   startIso: string,
   endIso: string,
-  siteId: string
+  siteId: string,
+  instanceId?: string | null
 ) {
+  const instId = instanceId || siteId;
   const result = await sql`
     select
       orders.id,
@@ -420,7 +430,7 @@ export async function listRefundReceiptsForAudit(
       refund_receipts.return_payment_type
     from receipts as refund_receipts
     inner join orders on orders.id = refund_receipts.order_id
-    where (orders.site_id = ${siteId} OR orders.site_id IS NULL)
+    where (orders.site_id = ${siteId} OR (orders.site_id IS NULL AND orders.raw->>'instanceId' = ${instId}))
       and refund_receipts.type = 'refund'
       and refund_receipts.issued_at between ${startIso} and ${endIso}
     order by refund_receipts.id asc;
