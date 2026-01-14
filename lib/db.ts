@@ -1604,23 +1604,26 @@ export async function updateOrderTransactionRef(orderId: string, transactionRef:
 }
 
 export async function updateReceiptSettings(
-  siteId: string,
-  settings: { receiptNumberStart?: number | null; codReceiptsEnabled?: boolean | null }
+  siteId: string | null,
+  settings: { receiptNumberStart?: number | null; codReceiptsEnabled?: boolean | null },
+  instanceId?: string | null
 ) {
+  if (!siteId && !instanceId) return;
   await sql`
     update companies
     set receipt_number_start = ${settings.receiptNumberStart ?? null},
         cod_receipts_enabled = ${settings.codReceiptsEnabled ?? false},
         updated_at = now()
-    where site_id = ${siteId};
+    where site_id = ${siteId} OR instance_id = ${instanceId};
   `;
 }
 
-export async function getReceiptSettings(siteId: string) {
+export async function getReceiptSettings(siteId: string | null, instanceId?: string | null) {
+  if (!siteId && !instanceId) return null;
   const result = await sql`
     select receipt_number_start, cod_receipts_enabled
     from companies
-    where site_id = ${siteId}
+    where site_id = ${siteId} OR instance_id = ${instanceId}
     limit 1;
   `;
   return result.rows[0] ?? null;
