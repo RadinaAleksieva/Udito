@@ -203,6 +203,85 @@ export async function GET(request: Request) {
       });
     }
 
+    if (action === "issue-receipt") {
+      const orderNumber = searchParams.get("number");
+      if (!orderNumber) {
+        return NextResponse.json({ ok: false, error: "Need order number" }, { status: 400 });
+      }
+
+      // Get order from DB
+      const orderResult = await sql`
+        SELECT id, number, site_id, payment_status, total, paid_at, raw
+        FROM orders WHERE number = ${orderNumber}
+      `;
+      if (orderResult.rows.length === 0) {
+        return NextResponse.json({ ok: false, error: "Order not found" }, { status: 404 });
+      }
+
+      const order = orderResult.rows[0];
+
+      // Check if PAID
+      if (order.payment_status !== "PAID") {
+        return NextResponse.json({
+          ok: false,
+          error: `Order is not paid (status: ${order.payment_status})`
+        }, { status: 400 });
+      }
+
+      // Check if receipt already exists
+      const existingReceipt = await sql`
+        SELECT id FROM receipts WHERE order_id = ${order.id} AND type = 'sale' LIMIT 1
+      `;
+      if (existingReceipt.rows.length > 0) {
+        return NextResponse.json({
+          ok: false,
+          error: "Receipt already exists for this order",
+          receiptId: existingReceipt.rows[0].id
+        });
+      }
+
+      // Get company for store_id
+      const { getCompanyBySite } = await import("@/lib/db");
+      const company = await getCompanyBySite(order.site_id, null);
+
+      if (!company?.store_id) {
+        return NextResponse.json({
+          ok: false,
+          error: "Company not found or missing store_id",
+          siteId: order.site_id
+        }, { status: 400 });
+      }
+
+      // Extract transactionRef
+      const { extractTransactionRef } = await import("@/lib/wix");
+      const transactionRef = extractTransactionRef(order.raw);
+
+      if (!transactionRef) {
+        return NextResponse.json({
+          ok: false,
+          error: "Order has no transactionRef",
+          hint: "Use ?action=enrich-order&number=xxx first"
+        }, { status: 400 });
+      }
+
+      // Issue receipt
+      const { issueReceipt } = await import("@/lib/receipts");
+      await issueReceipt({
+        orderId: order.id,
+        payload: order,
+        businessId: null,
+        issuedAt: order.paid_at,
+      });
+
+      return NextResponse.json({
+        ok: true,
+        message: "Receipt issued",
+        orderNumber: order.number,
+        transactionRef,
+        storeId: company.store_id,
+      });
+    }
+
     if (action === "enrich-order") {
       const orderNumber = searchParams.get("number");
       if (!orderNumber) {
@@ -307,7 +386,7 @@ export async function GET(request: Request) {
       connections: connections.rows,
       companies: companies.rows,
       companyCount: companyCount.rows[0]?.count,
-      actions: ["?action=fix-trial", "?action=link-store&email=xxx&siteId=yyy", "?action=fix-roles", "?action=fix-null-orders", "?action=fix-null-orders&siteId=xxx", "?action=fix-company-site&old=xxx&new=yyy", "?action=enrich-order&number=xxx"],
+      actions: ["?action=fix-trial", "?action=link-store&email=xxx&siteId=yyy", "?action=fix-roles", "?action=fix-null-orders", "?action=fix-null-orders&siteId=xxx", "?action=fix-company-site&old=xxx&new=yyy", "?action=enrich-order&number=xxx", "?action=issue-receipt&number=xxx"],
     });
   } catch (error) {
     console.error("Fix data error:", error);
