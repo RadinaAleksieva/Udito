@@ -72,22 +72,33 @@ export async function middleware(request: NextRequest) {
     // Token parsing failed
   }
 
-  // Check for Wix instance cookie (legacy auth)
-  const wixInstance = request.cookies.get("wix_instance");
+  // Check for Wix instance cookies (legacy auth)
+  const uditoInstanceId = request.cookies.get("udito_instance_id");
+  const uditoSiteId = request.cookies.get("udito_site_id");
 
   // Allow if user has valid NextAuth token with id
   if (token && token.id) {
     return NextResponse.next();
   }
 
-  // Allow if user has Wix instance cookie
-  if (wixInstance) {
+  // Allow if user has Wix instance cookies
+  if (uditoInstanceId || uditoSiteId) {
     return NextResponse.next();
   }
 
   // No valid authentication - redirect to login
   const loginUrl = new URL("/login", request.url);
   loginUrl.searchParams.set("callbackUrl", pathname);
+
+  // Preserve Wix params so they can be captured after login
+  const wixParams = ["instance", "instanceId", "instance_id", "siteId", "site_id", "appInstanceId"];
+  for (const param of wixParams) {
+    const value = request.nextUrl.searchParams.get(param);
+    if (value) {
+      loginUrl.searchParams.set(param, value);
+    }
+  }
+
   return NextResponse.redirect(loginUrl);
 }
 
