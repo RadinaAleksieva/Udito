@@ -1,9 +1,11 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import TopNav from "../components/top-nav";
+import TopNavClient from "../components/top-nav-client";
 import Link from "next/link";
 
 type Member = {
@@ -117,7 +119,7 @@ export default function AccessPage() {
   if (status === "loading" || isLoading) {
     return (
       <main>
-        <TopNav title="Управление на достъпа" />
+        <TopNavClient title="Управление на достъпа" />
         <div className="container">
           <div className="billing-loading">
             <div className="login-spinner"></div>
@@ -130,7 +132,7 @@ export default function AccessPage() {
 
   return (
     <main>
-      <TopNav title="Управление на достъпа" />
+      <TopNavClient title="Управление на достъпа" />
       <div className="container">
         <section className="access-header">
           <h1>Управление на достъпа</h1>

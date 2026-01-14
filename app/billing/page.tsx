@@ -1,10 +1,12 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import TopNav from "../components/top-nav";
+import TopNavClient from "../components/top-nav-client";
 
 type SubscriptionStatus = {
   hasSubscription: boolean;
@@ -92,7 +94,7 @@ export default function BillingPage() {
   if (status === "loading" || isLoading) {
     return (
       <main>
-        <TopNav title="Абонамент" />
+        <TopNavClient title="Абонамент" />
         <div className="container">
           <div className="billing-loading">
             <div className="login-spinner"></div>
@@ -105,7 +107,7 @@ export default function BillingPage() {
 
   return (
     <main>
-      <TopNav title="Абонамент" />
+      <TopNavClient title="Абонамент" />
       <div className="container">
         <section className="billing-header">
           <h1>Изберете план</h1>

@@ -22,16 +22,13 @@ export default function StoreSelector({
   currentSiteId: string | null;
   hidden?: boolean;
 }) {
-  // Don't render if hidden (e.g., in Wix iframe context)
-  if (hidden) {
-    return null;
-  }
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
 
   // Persist selection to localStorage when currentSiteId changes
   useEffect(() => {
+    if (hidden) return;
     if (currentSiteId) {
       try {
         localStorage.setItem(STORE_KEY, currentSiteId);
@@ -39,10 +36,11 @@ export default function StoreSelector({
         // Ignore storage errors
       }
     }
-  }, [currentSiteId]);
+  }, [currentSiteId, hidden]);
 
   // Check if we need to restore from localStorage
   useEffect(() => {
+    if (hidden) return;
     const storeParam = searchParams.get("store");
     if (!storeParam && stores.length > 1) {
       try {
@@ -62,7 +60,12 @@ export default function StoreSelector({
         // Ignore storage errors
       }
     }
-  }, [stores, currentSiteId, searchParams, pathname, router]);
+  }, [stores, currentSiteId, searchParams, pathname, router, hidden]);
+
+  // Don't render if hidden (e.g., in Wix iframe context)
+  if (hidden) {
+    return null;
+  }
 
   const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newSiteId = e.target.value;
