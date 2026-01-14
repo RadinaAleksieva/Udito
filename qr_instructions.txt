@@ -1,0 +1,31 @@
+Как е генериран QR кодът
+
+1) Инсталиран е Python пакетът qrcode (и pillow за PNG):
+   python3 -m pip install --user 'qrcode[pil]'
+
+2) Съдържанието на QR кода е в следния формат (разделител '*'):
+   RF0004214*pi_3SmCeJHSjngEG9i016yuiyD6*2026-01-05*14-12-00*32.00*EUR*#10219
+
+3) Генерирането става с кратък Python скрипт:
+
+   import qrcode
+
+   content = "RF0004214*pi_3SmCeJHSjngEG9i016yuiyD6*2026-01-05*14-12-00*32.00*EUR*#10219"
+
+   qr = qrcode.QRCode(
+       version=None,
+       error_correction=qrcode.constants.ERROR_CORRECT_M,
+       box_size=6,
+       border=4,
+   )
+   qr.add_data(content)
+   qr.make(fit=True)
+
+   img = qr.make_image(fill_color="black", back_color="white")
+   img.save("/Users/mac/qr.png")
+
+Бележки:
+- Форматът е: store_id*transaction_ref*yyyy-MM-dd*hh-mm-ss*amount*currency*order_id
+- Файлът с изображението е: /Users/mac/qr.png
+- Данните (transaction_ref, дата/час, сума, order_id) се взимат от поръчката в WIX Store.
+- RF0004214 е фиксиран код на магазина, зададен при регистрация в системата и остава непроменен.
