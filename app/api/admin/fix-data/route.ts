@@ -150,11 +150,17 @@ export async function GET(request: Request) {
       SELECT sc.*, u.email FROM store_connections sc
       LEFT JOIN users u ON u.id = sc.user_id
     `;
+    const companies = await sql`
+      SELECT site_id, instance_id, store_name, store_domain, store_id, bulstat, cod_receipts_enabled, receipts_start_date
+      FROM companies
+      ORDER BY updated_at DESC
+    `;
 
     return NextResponse.json({
       ok: true,
       businesses: businesses.rows,
       connections: connections.rows,
+      companies: companies.rows,
       actions: ["?action=fix-trial", "?action=link-store&email=xxx&siteId=yyy", "?action=fix-roles", "?action=fix-null-orders", "?action=fix-null-orders&siteId=xxx"],
     });
   } catch (error) {
