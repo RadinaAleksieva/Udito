@@ -131,6 +131,45 @@ export async function GET(request: Request) {
       });
     }
 
+    if (action === "fix-all-site-ids") {
+      // Fix all White Rabbit orders to have the correct site_id
+      // The correct site_id is 6240f8a5-7af4-4fdf-96c1-d1f22b205408
+      // Some have null, some have the instance_id 8865cc09-0949-43c4-a09c-5fdfbb352edf
+
+      // First, fix orders with null site_id
+      const fixedNull = await sql`
+        UPDATE orders
+        SET site_id = '6240f8a5-7af4-4fdf-96c1-d1f22b205408'
+        WHERE site_id IS NULL
+        RETURNING id, number
+      `;
+
+      // Second, fix orders with wrong site_id (instance_id instead of site_id)
+      const fixedWrong = await sql`
+        UPDATE orders
+        SET site_id = '6240f8a5-7af4-4fdf-96c1-d1f22b205408'
+        WHERE site_id = '8865cc09-0949-43c4-a09c-5fdfbb352edf'
+        RETURNING id, number
+      `;
+
+      // Also fix the companies table
+      const fixedCompany = await sql`
+        UPDATE companies
+        SET site_id = '6240f8a5-7af4-4fdf-96c1-d1f22b205408'
+        WHERE site_id = '8865cc09-0949-43c4-a09c-5fdfbb352edf'
+        OR instance_id = '8865cc09-0949-43c4-a09c-5fdfbb352edf'
+        RETURNING site_id, instance_id, store_name
+      `;
+
+      return NextResponse.json({
+        ok: true,
+        message: "Fixed all site_ids for White Rabbit",
+        fixedNullOrders: fixedNull.rows.length,
+        fixedWrongOrders: fixedWrong.rows.length,
+        fixedCompanies: fixedCompany.rows,
+      });
+    }
+
     if (action === "fix-null-orders") {
       const targetSiteId = searchParams.get("siteId");
       if (!targetSiteId) {
@@ -175,15 +214,16 @@ export async function GET(request: Request) {
     const companies = await sql`
       SELECT site_id, instance_id, store_name, store_domain, store_id, bulstat, cod_receipts_enabled, receipts_start_date
       FROM companies
-      ORDER BY updated_at DESC
     `;
+    const companyCount = await sql`SELECT COUNT(*) as count FROM companies`;
 
     return NextResponse.json({
       ok: true,
       businesses: businesses.rows,
       connections: connections.rows,
       companies: companies.rows,
-      actions: ["?action=fix-trial", "?action=link-store&email=xxx&siteId=yyy", "?action=fix-roles", "?action=fix-null-orders", "?action=fix-null-orders&siteId=xxx"],
+      companyCount: companyCount.rows[0]?.count,
+      actions: ["?action=fix-trial", "?action=link-store&email=xxx&siteId=yyy", "?action=fix-roles", "?action=fix-null-orders", "?action=fix-null-orders&siteId=xxx", "?action=fix-company-site&old=xxx&new=yyy"],
     });
   } catch (error) {
     console.error("Fix data error:", error);
