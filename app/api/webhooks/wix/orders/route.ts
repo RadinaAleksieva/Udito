@@ -233,21 +233,6 @@ async function handleOrderEvent(event: any) {
       refreshToken: null,
       expiresAt: null,
     });
-
-    // Self-healing: Update store_connections if siteId doesn't match
-    if (mapped.siteId && instanceId) {
-      const mismatchedStore = await sql`
-        SELECT id, site_id FROM store_connections
-        WHERE instance_id = ${instanceId} AND site_id != ${mapped.siteId}
-      `;
-      if (mismatchedStore.rows.length > 0) {
-        console.log(`🔧 Self-healing: Updating store_connection ${mismatchedStore.rows[0].id} siteId from ${mismatchedStore.rows[0].site_id} to ${mapped.siteId}`);
-        await sql`
-          UPDATE store_connections SET site_id = ${mapped.siteId}
-          WHERE instance_id = ${instanceId} AND site_id != ${mapped.siteId}
-        `;
-      }
-    }
   }
   console.log("🔄 Step 3: Calculating isPaid...");
   // Use event timestamp as paidAt when order is marked as PAID

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth, linkStoreToUser } from "@/lib/auth";
 import { initDb, sql } from "@/lib/db";
-import { getAppInstanceDetails } from "@/lib/wix";
 
 export const dynamic = "force-dynamic";
 
@@ -71,22 +70,10 @@ export async function POST(request: Request) {
         siteId = tokenEntry.rows[0].site_id;
         finalInstanceId = tokenEntry.rows[0].instance_id || trimmedInstanceId;
       } else {
-        // No existing record - call Wix API to get the real siteId
-        try {
-          const appInstance = await getAppInstanceDetails({ instanceId: trimmedInstanceId });
-          if (appInstance?.siteId) {
-            siteId = appInstance.siteId;
-            console.log(`✅ Got siteId from Wix API: ${siteId} for instanceId: ${trimmedInstanceId}`);
-          } else {
-            // API didn't return siteId, use instanceId as fallback
-            siteId = trimmedInstanceId;
-            console.log(`⚠️ Wix API didn't return siteId, using instanceId as fallback`);
-          }
-        } catch (apiError) {
-          console.error("Failed to get siteId from Wix API:", apiError);
-          // Fallback to instanceId if API fails
-          siteId = trimmedInstanceId;
-        }
+        // No existing record - the instance_id might be new
+        // We'll create a new store_connection with just the instance_id
+        // The site_id will be populated when the webhook comes from Wix
+        siteId = trimmedInstanceId; // Use instance_id as site_id for now
       }
     }
 
