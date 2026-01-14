@@ -433,6 +433,98 @@ export async function initDb() {
 
   // Add store_name column for user-friendly store naming
   await sql`alter table store_connections add column if not exists store_name text;`;
+
+  // ==========================================
+  // Onboarding & Subscription Plans (2026-01)
+  // ==========================================
+
+  // Billing companies table - for invoicing subscription plans
+  await sql`
+    create table if not exists billing_companies (
+      id text primary key default gen_random_uuid(),
+      business_id text not null,
+      company_name text not null,
+      eik text not null,
+      vat_number text,
+      address text not null,
+      city text,
+      postal_code text,
+      country text default 'България',
+      mol text,
+      use_same_as_store boolean default true,
+      created_at timestamptz default now(),
+      updated_at timestamptz default now()
+    );
+  `;
+  await sql`
+    create unique index if not exists billing_companies_business_id_key
+    on billing_companies (business_id);
+  `;
+
+  // Subscription plans table
+  await sql`
+    create table if not exists subscription_plans (
+      id text primary key,
+      name text not null,
+      orders_per_month integer not null,
+      price_monthly_eur numeric not null,
+      price_per_extra_order_eur numeric default 0.10,
+      is_pay_per_order boolean default false,
+      features jsonb,
+      is_active boolean default true
+    );
+  `;
+
+  // Seed subscription plans if empty
+  const plansCount = await sql`select count(*) as count from subscription_plans`;
+  if (Number(plansCount.rows[0]?.count) === 0) {
+    await sql`
+      insert into subscription_plans (id, name, orders_per_month, price_monthly_eur, price_per_extra_order_eur, is_pay_per_order, features, is_active)
+      values
+        ('starter', 'Starter', 50, 5, 0.10, false, '{"receipts": true}', true),
+        ('business', 'Business', 300, 15, 0.10, false, '{"receipts": true, "priority_support": true}', true),
+        ('corporate', 'Corporate', -1, 15, 0.10, true, '{"receipts": true, "priority_support": true, "unlimited": true}', true)
+      on conflict (id) do nothing;
+    `;
+  }
+
+  // Monthly usage tracking
+  await sql`
+    create table if not exists monthly_usage (
+      id bigserial primary key,
+      business_id text not null,
+      year_month text not null,
+      orders_count integer default 0,
+      receipts_count integer default 0,
+      updated_at timestamptz default now()
+    );
+  `;
+  await sql`
+    create unique index if not exists monthly_usage_business_month_key
+    on monthly_usage (business_id, year_month);
+  `;
+
+  // Monthly extra charges (for over-limit billing)
+  await sql`
+    create table if not exists monthly_extra_charges (
+      id bigserial primary key,
+      business_id text not null,
+      year_month text not null,
+      extra_orders_count integer default 0,
+      extra_charge_eur numeric default 0,
+      invoiced boolean default false,
+      invoiced_at timestamptz
+    );
+  `;
+  await sql`
+    create unique index if not exists monthly_extra_charges_business_month_key
+    on monthly_extra_charges (business_id, year_month);
+  `;
+
+  // Onboarding tracking for businesses
+  await sql`alter table businesses add column if not exists onboarding_completed boolean default false;`;
+  await sql`alter table businesses add column if not exists onboarding_step integer default 0;`;
+  await sql`alter table businesses add column if not exists selected_plan_id text;`;
 }
 
 export async function upsertOrder(order: StoredOrder) {
@@ -1705,4 +1797,130 @@ export async function deleteRefundReceiptsByReference(referenceReceiptId: number
     delete from receipts
     where reference_receipt_id = ${referenceReceiptId};
   `;
+}
+
+// ==================== Usage Tracking Functions ====================
+
+/**
+ * Get business ID from site_id or instance_id
+ */
+export async function getBusinessIdFromStore(siteId: string | null, instanceId: string | null) {
+  if (!siteId && !instanceId) return null;
+
+  const result = await sql`
+    SELECT business_id FROM store_connections
+    WHERE (${siteId}::text IS NOT NULL AND site_id = ${siteId})
+       OR (${instanceId}::text IS NOT NULL AND instance_id = ${instanceId})
+    LIMIT 1;
+  `;
+
+  return result.rows[0]?.business_id ?? null;
+}
+
+/**
+ * Increment order count for a business in the current month
+ */
+export async function incrementOrderCount(businessId: string) {
+  if (!businessId) return;
+
+  const yearMonth = new Date().toISOString().slice(0, 7); // '2026-01'
+
+  await sql`
+    INSERT INTO monthly_usage (business_id, year_month, orders_count, receipts_count)
+    VALUES (${businessId}, ${yearMonth}, 1, 0)
+    ON CONFLICT (business_id, year_month) DO UPDATE SET
+      orders_count = monthly_usage.orders_count + 1,
+      updated_at = NOW();
+  `;
+}
+
+/**
+ * Increment receipt count for a business in the current month
+ */
+export async function incrementReceiptCount(businessId: string) {
+  if (!businessId) return;
+
+  const yearMonth = new Date().toISOString().slice(0, 7);
+
+  await sql`
+    INSERT INTO monthly_usage (business_id, year_month, orders_count, receipts_count)
+    VALUES (${businessId}, ${yearMonth}, 0, 1)
+    ON CONFLICT (business_id, year_month) DO UPDATE SET
+      receipts_count = monthly_usage.receipts_count + 1,
+      updated_at = NOW();
+  `;
+}
+
+/**
+ * Get current month usage for a business
+ */
+export async function getMonthlyUsage(businessId: string) {
+  if (!businessId) return null;
+
+  const yearMonth = new Date().toISOString().slice(0, 7);
+
+  const result = await sql`
+    SELECT mu.orders_count, mu.receipts_count,
+           b.selected_plan_id,
+           sp.orders_per_month as plan_limit,
+           sp.price_per_extra_order_eur,
+           sp.is_pay_per_order
+    FROM businesses b
+    LEFT JOIN monthly_usage mu ON mu.business_id = b.id AND mu.year_month = ${yearMonth}
+    LEFT JOIN subscription_plans sp ON sp.id = b.selected_plan_id
+    WHERE b.id = ${businessId};
+  `;
+
+  if (result.rows.length === 0) return null;
+
+  const row = result.rows[0];
+  const ordersCount = row.orders_count ?? 0;
+  const planLimit = row.plan_limit ?? 0;
+  const isPayPerOrder = row.is_pay_per_order ?? false;
+  const pricePerExtraOrder = Number(row.price_per_extra_order_eur) || 0.10;
+
+  // Calculate overage
+  const isOverLimit = planLimit > 0 && ordersCount > planLimit;
+  const extraOrders = isOverLimit ? ordersCount - planLimit : 0;
+  const extraCharge = extraOrders * pricePerExtraOrder;
+
+  return {
+    ordersCount,
+    receiptsCount: row.receipts_count ?? 0,
+    planLimit,
+    isPayPerOrder,
+    isOverLimit,
+    extraOrders,
+    extraCharge,
+    yearMonth,
+  };
+}
+
+/**
+ * Track usage when a new order comes in via webhook
+ */
+export async function trackOrderUsage(siteId: string | null, instanceId: string | null) {
+  try {
+    const businessId = await getBusinessIdFromStore(siteId, instanceId);
+    if (businessId) {
+      await incrementOrderCount(businessId);
+    }
+  } catch (error) {
+    console.warn("Failed to track order usage:", error);
+    // Don't throw - usage tracking failure shouldn't break order processing
+  }
+}
+
+/**
+ * Track usage when a receipt is issued
+ */
+export async function trackReceiptUsage(siteId: string | null, instanceId: string | null) {
+  try {
+    const businessId = await getBusinessIdFromStore(siteId, instanceId);
+    if (businessId) {
+      await incrementReceiptCount(businessId);
+    }
+  } catch (error) {
+    console.warn("Failed to track receipt usage:", error);
+  }
 }

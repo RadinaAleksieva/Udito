@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { AppStrategy, createClient } from "@wix/sdk";
 import { orders } from "@wix/ecom";
 import { sql } from "@vercel/postgres";
-import { getCompanyBySite, getLatestWixToken, getOrderById, initDb, saveWixTokens, upsertOrder } from "@/lib/db";
+import { getCompanyBySite, getLatestWixToken, getOrderById, initDb, saveWixTokens, upsertOrder, trackOrderUsage, trackReceiptUsage } from "@/lib/db";
 import { issueReceipt, issueRefundReceipt, getSaleReceiptByOrderId } from "@/lib/receipts";
 import {
   extractTransactionRef,
@@ -278,6 +278,9 @@ async function handleOrderEvent(event: any) {
 
   console.log("✅ Order saved successfully:", mapped.number);
 
+  // Track order usage for plan limits
+  await trackOrderUsage(mapped.siteId, instanceId);
+
   // Read the order back from OUR database for receipt logic
   // This ensures we use the enriched data we've already processed
   const savedOrder = await getOrderById(mapped.id);
@@ -458,6 +461,8 @@ async function handleOrderEvent(event: any) {
         businessId: null,
         issuedAt: savedPaidAt ?? mapped.createdAt ?? null,
       });
+      // Track receipt usage for plan limits
+      await trackReceiptUsage(mapped.siteId, instanceId);
       console.log(`✅ Receipt issued for ${isCOD ? 'COD' : 'card'} payment:`, mapped.number);
     } else if (!hasValue) {
       console.warn("❌ Skipping receipt: zero value order", orderTotal);

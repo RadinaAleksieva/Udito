@@ -20,6 +20,7 @@ import { auth, getUserStores, linkStoreToUser, getActiveStore } from "@/lib/auth
 import Link from "next/link";
 import StoreSelector from "../components/store-selector";
 import SubscriptionBanner from "../components/subscription-banner";
+import PlanWarning from "../components/plan-warning";
 
 export const dynamic = "force-dynamic";
 
@@ -119,27 +120,36 @@ export default async function OverviewPage({
 
   const session = await auth();
 
-  // Check if user needs onboarding (has logged in but hasn't completed company data)
+  // Check if user needs onboarding (has logged in but hasn't completed onboarding flow)
   if (session?.user?.id) {
     const { redirect } = await import("next/navigation");
     const { sql } = await import("@vercel/postgres");
 
-    // Check if user has completed onboarding
+    // Check if user has completed onboarding via businesses table
     const businessResult = await sql`
-      SELECT bp.bulstat, bp.store_id
+      SELECT b.onboarding_completed, b.onboarding_step, b.selected_plan_id
       FROM business_users bu
-      JOIN business_profiles bp ON bp.business_id = bu.business_id
+      JOIN businesses b ON b.id = bu.business_id
       WHERE bu.user_id = ${session.user.id}
       LIMIT 1
     `;
 
-    const needsOnboarding = businessResult.rows.length === 0 ||
-      !businessResult.rows[0].bulstat ||
-      !businessResult.rows[0].store_id;
+    if (businessResult.rows.length > 0) {
+      const { onboarding_completed, onboarding_step } = businessResult.rows[0];
 
-    if (needsOnboarding) {
-      redirect("/onboarding");
+      if (!onboarding_completed) {
+        // Redirect to appropriate onboarding step
+        const stepRoutes = ["/onboarding/company", "/onboarding/settings", "/onboarding/plan"];
+        const currentStep = onboarding_step ?? 0;
+
+        if (currentStep < stepRoutes.length) {
+          redirect(stepRoutes[currentStep]);
+        } else {
+          redirect("/onboarding");
+        }
+      }
     }
+    // If no business found, user might be Wix-only - allow access
   }
 
   let userStores = session?.user?.id ? await getUserStores(session.user.id) : [];
@@ -361,6 +371,7 @@ export default async function OverviewPage({
       <AutoSync />
       <TopNav title="UDITO Табло" />
       <SubscriptionBanner />
+      <PlanWarning />
       <div className="container">
         <section className="hero">
           <div>

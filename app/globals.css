@@ -6636,3 +6636,524 @@ main {
 [data-theme="light"] .access-code-display {
   background: rgba(0, 0, 0, 0.03);
 }
+
+/* ========== Onboarding Styles ========== */
+.onboarding-progress {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  margin: 16px 0 32px;
+}
+
+.onboarding-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.onboarding-step__number {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  background: var(--bg-secondary);
+  color: var(--ink-secondary);
+  border: 2px solid var(--border-color);
+  transition: all 0.3s ease;
+}
+
+.onboarding-step__number svg {
+  width: 18px;
+  height: 18px;
+}
+
+.onboarding-step__label {
+  font-size: 12px;
+  color: var(--ink-secondary);
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+}
+
+.onboarding-step--active .onboarding-step__number {
+  background: var(--purple);
+  color: white;
+  border-color: var(--purple);
+}
+
+.onboarding-step--active .onboarding-step__label {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.onboarding-step--completed .onboarding-step__number {
+  background: var(--green);
+  color: white;
+  border-color: var(--green);
+}
+
+.onboarding-step__line {
+  width: 48px;
+  height: 2px;
+  background: var(--border-color);
+  margin: 0 8px;
+  margin-bottom: 24px;
+}
+
+.onboarding-step__line--completed {
+  background: var(--green);
+}
+
+/* Wide card variant */
+.login-card--wide {
+  max-width: 600px;
+}
+
+/* Form sections */
+.form-section {
+  margin: 24px 0;
+  text-align: left;
+}
+
+.form-section__title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0 0 8px;
+}
+
+.form-section__subtitle {
+  font-size: 14px;
+  color: var(--ink-secondary);
+  margin: 0 0 16px;
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+}
+
+.form-section__nested {
+  margin-top: 16px;
+  padding: 16px;
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Form row for side-by-side inputs */
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 500px) {
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Form groups */
+.form-group {
+  margin: 16px 0;
+  text-align: left;
+}
+
+.form-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 8px;
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+}
+
+/* Date input styling */
+.form-input--date {
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--ink);
+  font-size: 14px;
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+}
+
+.form-input--date:focus {
+  outline: none;
+  border-color: var(--purple);
+}
+
+/* Checkbox/radio group */
+.form-checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 12px 0;
+}
+
+.form-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  font-size: 14px;
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+  color: var(--ink);
+}
+
+.form-checkbox input {
+  display: none;
+}
+
+.form-checkbox__mark {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--border-color);
+  background: var(--bg-secondary);
+  position: relative;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.form-checkbox input:checked + .form-checkbox__mark {
+  border-color: var(--purple);
+  background: var(--purple);
+}
+
+.form-checkbox input:checked + .form-checkbox__mark::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: white;
+}
+
+/* Form buttons row */
+.form-buttons {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.form-buttons .login-btn {
+  flex: 1;
+}
+
+/* Register hint */
+.register-hint {
+  font-size: 12px;
+  color: var(--ink-secondary);
+  margin: 4px 0 12px;
+  text-align: left;
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+}
+
+/* ========== Plan Selection Styles ========== */
+.plan-selection-form {
+  text-align: left;
+}
+
+.plan-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin: 24px 0;
+}
+
+@media (max-width: 700px) {
+  .plan-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+.plan-card {
+  background: var(--bg-card);
+  border: 2px solid var(--border-color);
+  border-radius: 16px;
+  padding: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.plan-card:hover {
+  border-color: var(--border-color-strong);
+  background: var(--bg-card-hover);
+}
+
+.plan-card--selected {
+  border-color: var(--purple);
+  background: rgba(94, 92, 230, 0.08);
+}
+
+.plan-card--popular {
+  border-color: var(--purple);
+}
+
+.plan-card__badge {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--purple);
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+}
+
+.plan-card__header {
+  margin-bottom: 16px;
+}
+
+.plan-card__name {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0;
+}
+
+.plan-card__subtitle {
+  font-size: 13px;
+  color: var(--ink-secondary);
+  margin: 4px 0 0;
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+}
+
+.plan-card__price {
+  margin-bottom: 16px;
+}
+
+.plan-card__amount {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.plan-card__currency {
+  font-size: 14px;
+  color: var(--ink-secondary);
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+}
+
+.plan-card__per-order {
+  display: block;
+  font-size: 12px;
+  color: var(--ink-secondary);
+  margin-top: 4px;
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+}
+
+.plan-card__features {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.plan-card__features li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ink-secondary);
+  padding: 6px 0;
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+}
+
+.plan-card__features svg {
+  width: 16px;
+  height: 16px;
+  color: var(--green);
+  flex-shrink: 0;
+}
+
+.plan-card__check {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--purple);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.plan-card--selected .plan-card__check {
+  opacity: 1;
+}
+
+.plan-card__check svg {
+  width: 14px;
+  height: 14px;
+  color: white;
+}
+
+.plan-overage-note {
+  font-size: 13px;
+  color: var(--ink-secondary);
+  text-align: center;
+  margin: 0 0 24px;
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+}
+
+.plan-overage-note strong {
+  color: var(--ink);
+}
+
+/* ========== Plan Warning Component ========== */
+.plan-warning {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 24px;
+}
+
+.plan-warning--warning {
+  background: rgba(255, 159, 10, 0.1);
+  border-color: rgba(255, 159, 10, 0.3);
+}
+
+.plan-warning--exceeded {
+  background: rgba(255, 69, 58, 0.1);
+  border-color: rgba(255, 69, 58, 0.3);
+}
+
+.plan-warning__content {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.plan-warning__icon {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+}
+
+.plan-warning--warning .plan-warning__icon {
+  color: #ff9f0a;
+}
+
+.plan-warning--exceeded .plan-warning__icon {
+  color: #ff453a;
+}
+
+.plan-warning__icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.plan-warning__text {
+  flex: 1;
+}
+
+.plan-warning__text strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.plan-warning--warning .plan-warning__text strong {
+  color: #ff9f0a;
+}
+
+.plan-warning--exceeded .plan-warning__text strong {
+  color: #ff453a;
+}
+
+.plan-warning__text p {
+  font-size: 13px;
+  color: var(--ink-secondary);
+  margin: 0;
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+}
+
+.plan-warning__text p strong {
+  display: inline;
+  color: var(--ink);
+}
+
+.plan-warning__dismiss {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: var(--ink-secondary);
+  transition: color 0.2s;
+}
+
+.plan-warning__dismiss:hover {
+  color: var(--ink);
+}
+
+.plan-warning__dismiss svg {
+  width: 20px;
+  height: 20px;
+}
+
+.plan-warning__progress {
+  margin-top: 12px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.plan-warning--warning .plan-warning__progress {
+  background: rgba(255, 159, 10, 0.2);
+}
+
+.plan-warning--exceeded .plan-warning__progress {
+  background: rgba(255, 69, 58, 0.2);
+}
+
+.plan-warning__progress-bar {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.plan-warning--warning .plan-warning__progress-bar {
+  background: #ff9f0a;
+}
+
+.plan-warning--exceeded .plan-warning__progress-bar {
+  background: #ff453a;
+}
+
+/* ========== Onboarding Blocked State ========== */
+.onboarding-blocked-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: rgba(255, 159, 10, 0.1);
+  margin: 0 auto 24px;
+}
+
+.onboarding-blocked-icon svg {
+  width: 32px;
+  height: 32px;
+  color: #ff9f0a;
+}

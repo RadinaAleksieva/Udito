@@ -11,6 +11,18 @@ const protectedRoutes = [
   "/audit",
   "/settings",
   "/debug",
+  "/onboarding",
+];
+
+// Routes that require completed onboarding (checked client-side via API)
+const requiresOnboarding = [
+  "/overview",
+  "/orders",
+  "/receipts",
+  "/reports",
+  "/audit",
+  "/settings",
+  "/debug",
 ];
 
 // Routes that are always public (use exact match for "/" to avoid matching everything)
