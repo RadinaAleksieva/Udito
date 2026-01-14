@@ -109,6 +109,28 @@ export async function GET(request: Request) {
       });
     }
 
+    if (action === "fix-company-site") {
+      const oldSiteId = searchParams.get("old");
+      const newSiteId = searchParams.get("new");
+
+      if (!oldSiteId || !newSiteId) {
+        return NextResponse.json({ ok: false, error: "Need old and new siteId" }, { status: 400 });
+      }
+
+      const result = await sql`
+        UPDATE companies
+        SET site_id = ${newSiteId}
+        WHERE site_id = ${oldSiteId}
+        RETURNING site_id, instance_id, store_name
+      `;
+
+      return NextResponse.json({
+        ok: true,
+        message: "Fixed company site_id",
+        updated: result.rows,
+      });
+    }
+
     if (action === "fix-null-orders") {
       const targetSiteId = searchParams.get("siteId");
       if (!targetSiteId) {
