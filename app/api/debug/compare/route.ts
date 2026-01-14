@@ -8,13 +8,22 @@ import {
   extractTransactionRefFromPayment,
 } from "@/lib/wix";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     await initDb();
-    const { siteId, instanceId } = await getActiveWixContext();
+    const url = new URL(request.url);
+
+    // Allow URL params to override context
+    const urlSiteId = url.searchParams.get("siteId");
+    const urlInstanceId = url.searchParams.get("instanceId");
+
+    const context = await getActiveWixContext();
+    const siteId = urlSiteId || context.siteId;
+    const instanceId = urlInstanceId || context.instanceId;
+
     if (!siteId) {
       return NextResponse.json(
-        { ok: false, error: "Missing site context." },
+        { ok: false, error: "Missing site context. Pass ?siteId= parameter." },
         { status: 400 }
       );
     }
