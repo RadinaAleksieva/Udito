@@ -23,6 +23,16 @@ export async function GET() {
       LIMIT 20
     `;
 
+    // Get all store_connections
+    const storeConnectionsResult = await sql`
+      SELECT sc.id, sc.site_id, sc.instance_id, sc.user_id, sc.store_name, sc.connected_at,
+             u.email as user_email
+      FROM store_connections sc
+      LEFT JOIN users u ON u.id = sc.user_id
+      ORDER BY sc.connected_at DESC
+      LIMIT 50
+    `;
+
     // Get total orders
     const totalResult = await sql`SELECT COUNT(*) as total FROM orders`;
 
@@ -56,6 +66,7 @@ export async function GET() {
         ordersForCurrentSite: currentOrdersResult.rows[0]?.count,
         siteIds: siteIdsResult.rows,
       },
+      storeConnections: storeConnectionsResult.rows,
     });
   } catch (error) {
     console.error("Debug stores error:", error);
