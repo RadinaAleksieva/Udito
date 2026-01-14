@@ -203,6 +203,90 @@ export async function GET(request: Request) {
       });
     }
 
+    if (action === "enrich-order") {
+      const orderNumber = searchParams.get("number");
+      if (!orderNumber) {
+        return NextResponse.json({ ok: false, error: "Need order number" }, { status: 400 });
+      }
+
+      // Get order from DB
+      const orderResult = await sql`
+        SELECT id, number, site_id, raw FROM orders WHERE number = ${orderNumber}
+      `;
+      if (orderResult.rows.length === 0) {
+        return NextResponse.json({ ok: false, error: "Order not found" }, { status: 404 });
+      }
+
+      const order = orderResult.rows[0];
+      const raw = order.raw as any;
+
+      // Import necessary functions
+      const { fetchOrderTransactionsForOrder, extractPaymentSummaryFromPayment, pickOrderFields } = await import("@/lib/wix");
+      const { upsertOrder } = await import("@/lib/db");
+
+      // Fetch orderTransactions from Wix
+      const orderTx = await fetchOrderTransactionsForOrder({
+        orderId: order.id,
+        siteId: order.site_id,
+        instanceId: null,
+      });
+
+      if (!orderTx?.orderTransactions && !orderTx?.payments) {
+        return NextResponse.json({
+          ok: false,
+          error: "No payment data found in Wix",
+          orderId: order.id,
+        });
+      }
+
+      // Merge orderTransactions into raw
+      const enrichedRaw = {
+        ...raw,
+        orderTransactions: orderTx.orderTransactions ?? { payments: orderTx.payments },
+      };
+
+      // Extract payment summary
+      const payments = orderTx.payments ?? orderTx.orderTransactions?.payments;
+      let transactionRef: string | null = null;
+      if (Array.isArray(payments) && payments.length > 0) {
+        const validStatuses = ['APPROVED', 'COMPLETED', 'REFUNDED'];
+        const bestPayment = payments.find(
+          (p: any) => validStatuses.includes(p?.regularPaymentDetails?.status)
+        ) || payments[0];
+
+        const paymentSummary = extractPaymentSummaryFromPayment(bestPayment);
+
+        transactionRef =
+          bestPayment?.regularPaymentDetails?.gatewayTransactionId ??
+          bestPayment?.regularPaymentDetails?.providerTransactionId ??
+          bestPayment?.id ??
+          null;
+
+        enrichedRaw.udito = {
+          ...(enrichedRaw.udito ?? {}),
+          ...(paymentSummary ? { paymentSummary } : {}),
+          ...(transactionRef ? { transactionRef } : {}),
+        };
+      }
+
+      // Update order in DB
+      const mapped = pickOrderFields(enrichedRaw, "backfill");
+      await upsertOrder({
+        ...mapped,
+        siteId: order.site_id,
+        businessId: null,
+        raw: enrichedRaw,
+      });
+
+      return NextResponse.json({
+        ok: true,
+        message: "Order enriched with payment data",
+        orderNumber: order.number,
+        transactionRef,
+        payments: payments?.length || 0,
+      });
+    }
+
     // Default: show current state
     const businesses = await sql`
       SELECT id, name, subscription_status, trial_ends_at FROM businesses
@@ -223,7 +307,7 @@ export async function GET(request: Request) {
       connections: connections.rows,
       companies: companies.rows,
       companyCount: companyCount.rows[0]?.count,
-      actions: ["?action=fix-trial", "?action=link-store&email=xxx&siteId=yyy", "?action=fix-roles", "?action=fix-null-orders", "?action=fix-null-orders&siteId=xxx", "?action=fix-company-site&old=xxx&new=yyy"],
+      actions: ["?action=fix-trial", "?action=link-store&email=xxx&siteId=yyy", "?action=fix-roles", "?action=fix-null-orders", "?action=fix-null-orders&siteId=xxx", "?action=fix-company-site&old=xxx&new=yyy", "?action=enrich-order&number=xxx"],
     });
   } catch (error) {
     console.error("Fix data error:", error);
