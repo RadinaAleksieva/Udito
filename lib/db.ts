@@ -344,6 +344,7 @@ export async function initDb() {
   await sql`alter table businesses add column if not exists subscription_expires_at timestamptz;`;
   await sql`alter table businesses add column if not exists stripe_customer_id text;`;
   await sql`alter table businesses add column if not exists stripe_subscription_id text;`;
+  await sql`alter table businesses add column if not exists stripe_payment_method_id text;`;
 
   // Access management migrations
   await sql`alter table store_connections add column if not exists role text default 'member';`; // owner, admin, member, accountant

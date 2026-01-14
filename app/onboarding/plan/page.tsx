@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
+import PaymentForm from "@/app/components/payment-form";
 
 interface Plan {
   id: string;
@@ -19,10 +20,11 @@ export default function OnboardingPlanPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [plans, setPlans] = useState<Plan[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
+  const [businessId, setBusinessId] = useState<string | null>(null);
+  const [showPaymentForm, setShowPaymentForm] = useState(false);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -51,6 +53,11 @@ export default function OnboardingPlanPage() {
         return;
       }
 
+      // Save business ID for payment
+      if (data.businessId) {
+        setBusinessId(data.businessId);
+      }
+
       // Load plans
       if (data.plans && data.plans.length > 0) {
         setPlans(data.plans);
@@ -65,7 +72,7 @@ export default function OnboardingPlanPage() {
     }
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  function handleContinueToPayment(e: React.FormEvent) {
     e.preventDefault();
     setStatusMessage("");
 
@@ -74,29 +81,21 @@ export default function OnboardingPlanPage() {
       return;
     }
 
-    setIsSaving(true);
-    try {
-      const response = await fetch("/api/onboarding/plan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ planId: selectedPlan }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Грешка при избор на план");
-      }
-
-      // Onboarding complete! Redirect to dashboard
-      router.push("/overview");
-    } catch (error) {
-      setStatusMessage(
-        error instanceof Error ? error.message : "Възникна грешка. Опитайте отново."
-      );
-    } finally {
-      setIsSaving(false);
+    if (!businessId) {
+      setStatusMessage("Грешка при зареждане. Моля презаредете страницата.");
+      return;
     }
+
+    setShowPaymentForm(true);
+  }
+
+  function handlePaymentSuccess() {
+    // Payment verified! Redirect to dashboard
+    router.push("/overview");
+  }
+
+  function handlePaymentCancel() {
+    setShowPaymentForm(false);
   }
 
   if (status === "loading" || isLoading) {
@@ -113,6 +112,25 @@ export default function OnboardingPlanPage() {
               <div className="login-spinner"></div>
             </div>
           </div>
+        </div>
+      </main>
+    );
+  }
+
+  // Show payment form modal
+  if (showPaymentForm && selectedPlan && businessId) {
+    const planName = plans.find((p) => p.id === selectedPlan)?.name || selectedPlan;
+
+    return (
+      <main className="login-page">
+        <div className="payment-modal-overlay">
+          <PaymentForm
+            businessId={businessId}
+            planId={selectedPlan}
+            planName={planName}
+            onSuccess={handlePaymentSuccess}
+            onCancel={handlePaymentCancel}
+          />
         </div>
       </main>
     );
@@ -170,10 +188,10 @@ export default function OnboardingPlanPage() {
 
           <h1>Изберете план</h1>
           <p className="login-subtitle">
-            Започнете с <strong>10 дни безплатен пробен период</strong>. Няма да ви таксуваме докато не изтече.
+            Започнете с <strong>10 дни безплатен пробен период</strong>. Ще направим тестова такса от 1 EUR за верификация на картата (веднага възстановена).
           </p>
 
-          <form className="plan-selection-form" onSubmit={handleSubmit}>
+          <form className="plan-selection-form" onSubmit={handleContinueToPayment}>
             <div className="plan-cards">
               {plans.map((plan) => {
                 const desc = planDescriptions[plan.id] || { subtitle: "", features: [] };
@@ -234,16 +252,15 @@ export default function OnboardingPlanPage() {
                 type="button"
                 className="login-btn login-btn--secondary"
                 onClick={() => router.push("/onboarding/settings")}
-                disabled={isSaving}
               >
                 Назад
               </button>
               <button
                 type="submit"
                 className="login-btn login-btn--primary"
-                disabled={isSaving || !selectedPlan}
+                disabled={!selectedPlan}
               >
-                {isSaving ? "Запазване..." : "Започни пробния период"}
+                Продължи към плащане
               </button>
             </div>
           </form>

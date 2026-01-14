@@ -7326,3 +7326,118 @@ main {
   color: var(--ink-secondary);
   margin-bottom: 16px;
 }
+
+/* ========== Payment Form Styles ========== */
+.payment-form {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 32px;
+  max-width: 500px;
+  margin: 0 auto;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.1);
+}
+
+.payment-form--loading,
+.payment-form--error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  gap: 16px;
+}
+
+.payment-form--loading p,
+.payment-form--error p {
+  color: #1a1a1a;
+}
+
+.payment-form__header {
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.payment-form__header h3 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 8px;
+  color: #1a1a1a;
+}
+
+.payment-form__note {
+  font-size: 14px;
+  color: #666666;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.payment-form__element {
+  margin-bottom: 24px;
+}
+
+.payment-form__error {
+  background: rgba(255, 69, 58, 0.1);
+  color: #dc3545;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.payment-form__actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.payment-form__actions .btn-secondary {
+  background: #f5f5f5;
+  color: #1a1a1a;
+  border: 1px solid #e0e0e0;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.payment-form__actions .btn-secondary:hover {
+  background: #e8e8e8;
+}
+
+.payment-form__actions .btn-primary {
+  background: #0066FF;
+  color: #ffffff;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.payment-form__actions .btn-primary:hover {
+  background: #0052cc;
+}
+
+.payment-form__actions .btn-primary:disabled {
+  background: #cccccc;
+  cursor: not-allowed;
+}
+
+/* Payment modal overlay */
+.payment-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
