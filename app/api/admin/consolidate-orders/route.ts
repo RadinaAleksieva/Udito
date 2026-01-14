@@ -91,13 +91,28 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { fromSiteId, toSiteId, orderNumber } = body;
+    const { fromSiteId, toSiteId, orderNumber, orderId } = body;
 
     if (!toSiteId) {
       return NextResponse.json({ ok: false, error: "Missing toSiteId" }, { status: 400 });
     }
 
-    // If orderNumber provided, move single order
+    // If orderId provided, move single order by ID
+    if (orderId) {
+      const updateResult = await sql`
+        UPDATE orders SET site_id = ${toSiteId} WHERE id = ${orderId}
+        RETURNING id, number, site_id
+      `;
+      return NextResponse.json({
+        ok: true,
+        orderId,
+        toSiteId,
+        updated: updateResult.rowCount,
+        order: updateResult.rows[0],
+      });
+    }
+
+    // If orderNumber provided, move single order by number
     if (orderNumber) {
       const updateResult = await sql`
         UPDATE orders SET site_id = ${toSiteId} WHERE number = ${orderNumber}
