@@ -250,7 +250,9 @@ export async function auth() {
 // Helper to get current user's connected stores
 export async function getUserStores(userId: string) {
   const result = await sql`
-    SELECT sc.*, c.store_name, c.store_domain
+    SELECT sc.id, sc.site_id, sc.instance_id, sc.user_id, sc.connected_at,
+           COALESCE(sc.store_name, c.store_name) as store_name,
+           c.store_domain
     FROM store_connections sc
     LEFT JOIN companies c ON c.site_id = sc.site_id
     WHERE sc.user_id = ${userId}

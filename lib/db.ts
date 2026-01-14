@@ -410,6 +410,9 @@ export async function initDb() {
     on store_connections (user_id)
     where user_id is not null;
   `;
+
+  // Add store_name column for user-friendly store naming
+  await sql`alter table store_connections add column if not exists store_name text;`;
 }
 
 export async function upsertOrder(order: StoredOrder) {

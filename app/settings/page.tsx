@@ -1,6 +1,7 @@
 import TopNav from "../components/top-nav";
 import CompanyForm from "./company-form";
 import StoreConnectForm from "./store-connect-form";
+import StoresList from "./stores-list";
 import { initDb, sql } from "@/lib/db";
 import { getActiveWixContext, getActiveWixToken } from "@/lib/wix-context";
 import { auth, getUserStores, linkStoreToUser } from "@/lib/auth";
@@ -47,7 +48,7 @@ export default async function SettingsPage() {
     instanceId = cookieInstanceId ?? null;
   }
 
-  // Get company info for connected stores
+  // Get company info for connected stores (store_name priority: store_connections > companies)
   const storesWithInfo = await Promise.all(
     userStores.map(async (store: any) => {
       const companyResult = await sql`
@@ -57,7 +58,8 @@ export default async function SettingsPage() {
       `;
       return {
         ...store,
-        store_name: companyResult.rows[0]?.store_name || null,
+        // Prefer store_name from store_connections, fall back to companies
+        store_name: store.store_name || companyResult.rows[0]?.store_name || null,
         store_domain: companyResult.rows[0]?.store_domain || null,
       };
     })
@@ -91,25 +93,7 @@ export default async function SettingsPage() {
         {session?.user && (
           <section className="settings-section">
             <h2>Свързани магазини</h2>
-            {storesWithInfo.length > 0 ? (
-              <div className="stores-list">
-                {storesWithInfo.map((store: any, index: number) => (
-                  <div key={store.id || index} className="store-item">
-                    <div className="store-item__info">
-                      <strong>{store.store_name || store.store_domain || "Неименуван магазин"}</strong>
-                      {store.store_domain && (
-                        <span className="store-item__domain">{store.store_domain}</span>
-                      )}
-                    </div>
-                    <div className="store-item__id">
-                      <code>{store.site_id || store.instance_id}</code>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="empty-state">Няма свързани магазини.</p>
-            )}
+            <StoresList stores={storesWithInfo} />
           </section>
         )}
 
