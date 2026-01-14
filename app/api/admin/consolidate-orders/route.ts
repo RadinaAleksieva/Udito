@@ -21,17 +21,34 @@ export async function GET(request: Request) {
     // If list parameter provided, show orders for that site_id
     if (listSiteId) {
       const orders = await sql`
-        SELECT id, number, status, payment_status, created_at, customer_name
+        SELECT id, number, status, payment_status, created_at, customer_name, raw
         FROM orders
         WHERE site_id = ${listSiteId}
         ORDER BY created_at DESC
         LIMIT 50
       `;
+      // Extract line items from raw
+      const ordersWithItems = orders.rows.map((order: any) => {
+        const raw = order.raw as any;
+        const lineItems = raw?.lineItems ?? raw?.items ?? [];
+        const items = Array.isArray(lineItems)
+          ? lineItems.map((item: any) => item?.productName?.translated ?? item?.productName?.original ?? item?.name ?? "Unknown")
+          : [];
+        return {
+          id: order.id,
+          number: order.number,
+          status: order.status,
+          payment_status: order.payment_status,
+          created_at: order.created_at,
+          customer_name: order.customer_name,
+          items,
+        };
+      });
       return NextResponse.json({
         ok: true,
         siteId: listSiteId,
         count: orders.rowCount,
-        orders: orders.rows,
+        orders: ordersWithItems,
       });
     }
 
