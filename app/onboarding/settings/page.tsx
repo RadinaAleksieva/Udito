@@ -13,7 +13,6 @@ export default function OnboardingSettingsPage() {
   const [statusMessage, setStatusMessage] = useState("");
 
   // Settings
-  const [receiptsStartDate, setReceiptsStartDate] = useState("");
   const [codReceiptsEnabled, setCodReceiptsEnabled] = useState(true);
   const [initialReceiptNumber, setInitialReceiptNumber] = useState("");
 
@@ -46,13 +45,8 @@ export default function OnboardingSettingsPage() {
 
       // Pre-fill with existing data if available
       if (data.settings) {
-        setReceiptsStartDate(data.settings.receiptsStartDate || "");
         setCodReceiptsEnabled(data.settings.codReceiptsEnabled ?? true);
         setInitialReceiptNumber(data.settings.initialReceiptNumber || "");
-      } else {
-        // Default: start from today
-        const today = new Date().toISOString().split("T")[0];
-        setReceiptsStartDate(today);
       }
 
       setIsLoading(false);
@@ -65,19 +59,13 @@ export default function OnboardingSettingsPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setStatusMessage("");
-
-    if (!receiptsStartDate) {
-      setStatusMessage("Моля изберете дата за начало на издаване на бележки");
-      return;
-    }
-
     setIsSaving(true);
+
     try {
       const response = await fetch("/api/onboarding/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          receiptsStartDate,
           codReceiptsEnabled,
           initialReceiptNumber: initialReceiptNumber.trim() || null,
         }),
@@ -155,21 +143,6 @@ export default function OnboardingSettingsPage() {
           </p>
 
           <form className="login-email-form" onSubmit={handleSubmit}>
-            <div className="form-group">
-              <label className="form-label">Начална дата за издаване на бележки</label>
-              <input
-                type="date"
-                value={receiptsStartDate}
-                onChange={(e) => setReceiptsStartDate(e.target.value)}
-                required
-                disabled={isSaving}
-                className="form-input--date"
-              />
-              <p className="register-hint">
-                Бележки ще се издават само за поръчки платени след тази дата.
-              </p>
-            </div>
-
             <div className="form-group">
               <label className="form-label">Издаване на бележки при наложен платеж (COD)</label>
               <div className="form-checkbox-group">

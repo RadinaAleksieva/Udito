@@ -6710,7 +6710,12 @@ main {
 
 /* Wide card variant */
 .login-card--wide {
-  max-width: 600px;
+  max-width: 900px;
+}
+
+.login-card--plans {
+  max-width: 1000px;
+  width: 95%;
 }
 
 /* Form sections */
@@ -6866,21 +6871,24 @@ main {
 .plan-cards {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-  margin: 24px 0;
+  gap: 24px;
+  margin: 32px 0;
 }
 
-@media (max-width: 700px) {
+@media (max-width: 900px) {
   .plan-cards {
     grid-template-columns: 1fr;
+    max-width: 400px;
+    margin-left: auto;
+    margin-right: auto;
   }
 }
 
 .plan-card {
   background: var(--bg-card);
   border: 2px solid var(--border-color);
-  border-radius: 16px;
-  padding: 20px;
+  border-radius: 20px;
+  padding: 28px;
   cursor: pointer;
   transition: all 0.2s ease;
   position: relative;

@@ -136,7 +136,7 @@ export default function OnboardingPlanPage() {
   return (
     <main className="login-page">
       <div className="login-container">
-        <div className="login-card login-card--wide">
+        <div className="login-card login-card--plans">
           <Link href="/" className="login-logo">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/brand/udito-logo.png" alt="UDITO" />
@@ -220,7 +220,7 @@ export default function OnboardingPlanPage() {
             </div>
 
             <p className="plan-overage-note">
-              При надвишаване на лимита се начислява <strong>0.10 EUR</strong> за всяка допълнителна поръчка.
+              При надвишаване на лимита на Starter плана, автоматично преминавате на Business план от следващия месец.
             </p>
 
             {statusMessage && (
