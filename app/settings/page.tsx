@@ -2,6 +2,7 @@ import TopNav from "../components/top-nav";
 import CompanyForm from "./company-form";
 import StoreConnectForm from "./store-connect-form";
 import StoresList from "./stores-list";
+import UserAccess from "./user-access";
 import { initDb, sql } from "@/lib/db";
 import { getActiveWixContext } from "@/lib/wix-context";
 import { auth, getUserStores, linkStoreToUser, getActiveStore } from "@/lib/auth";
@@ -31,20 +32,24 @@ export default async function SettingsPage() {
 
   // Get company info for connected stores (store_name priority: store_connections > companies)
   const storesWithInfo = await Promise.all(
-    userStores.map(async (store: any) => {
+    userStores.map(async (s: any) => {
       const companyResult = await sql`
         SELECT store_name, store_domain FROM companies
-        WHERE site_id = ${store.site_id}
+        WHERE site_id = ${s.site_id}
         LIMIT 1
       `;
       return {
-        ...store,
+        ...s,
         // Prefer store_name from store_connections, fall back to companies
-        store_name: store.store_name || companyResult.rows[0]?.store_name || null,
+        store_name: s.store_name || companyResult.rows[0]?.store_name || null,
         store_domain: companyResult.rows[0]?.store_domain || null,
       };
     })
   );
+
+  // Get user's role for current store
+  const currentStore = storesWithInfo.find((s: any) => s.site_id === store?.siteId);
+  const userRole = currentStore?.role || "member";
 
   return (
     <main>
@@ -76,6 +81,15 @@ export default async function SettingsPage() {
             <h2>Свързани магазини</h2>
             <StoresList stores={storesWithInfo} />
           </section>
+        )}
+
+        {/* User Access Management */}
+        {session?.user && store?.siteId && (
+          <UserAccess
+            siteId={store.siteId}
+            currentUserId={session.user.id}
+            userRole={userRole}
+          />
         )}
 
         {/* Company Form - Store Data */}

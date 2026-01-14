@@ -7165,3 +7165,164 @@ main {
   height: 32px;
   color: #ff9f0a;
 }
+
+/* ========== User Access Section ========== */
+.access-code-box {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 20px;
+  margin: 16px 0;
+}
+
+.access-code-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.access-code-header h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.access-code-display {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--soft);
+  padding: 12px 16px;
+  border-radius: 12px;
+}
+
+.access-code {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 4px;
+  color: var(--ink);
+  font-family: ui-monospace, "SF Mono", monospace;
+}
+
+.access-code-empty {
+  color: var(--ink-secondary);
+  font-size: 14px;
+}
+
+.access-code-expires {
+  font-size: 12px;
+  color: var(--ink-secondary);
+  margin-top: 12px;
+}
+
+.btn-copy {
+  background: transparent;
+  border: none;
+  padding: 8px;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+
+.btn-copy:hover {
+  background: var(--bg-card-hover);
+}
+
+.btn-copy svg {
+  display: block;
+  color: var(--ink-secondary);
+}
+
+.users-list {
+  margin-top: 24px;
+}
+
+.users-list h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  margin: 0 0 12px;
+}
+
+.users-table {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.user-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+}
+
+.user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.user-email {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.user-role {
+  font-size: 12px;
+  color: var(--ink-secondary);
+}
+
+.btn-small {
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.btn-secondary {
+  background: var(--soft);
+  color: var(--ink);
+}
+
+.btn-secondary:hover {
+  background: var(--bg-card-hover);
+}
+
+.btn-danger {
+  background: rgba(255, 69, 58, 0.2);
+  color: #ff453a;
+}
+
+.btn-danger:hover {
+  background: rgba(255, 69, 58, 0.3);
+}
+
+.settings-status {
+  margin-top: 16px;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.settings-status--success {
+  background: rgba(52, 199, 89, 0.1);
+  color: #34c759;
+}
+
+.settings-status--error {
+  background: rgba(255, 69, 58, 0.1);
+  color: #ff453a;
+}
+
+.settings-hint {
+  font-size: 14px;
+  color: var(--ink-secondary);
+  margin-bottom: 16px;
+}
