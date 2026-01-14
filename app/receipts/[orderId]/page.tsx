@@ -450,12 +450,12 @@ export default async function ReceiptPage({
   }
   const receiptRecord = await getReceiptByOrderIdAndType(orderId, receiptType);
   const companySiteId = record.site_id || siteId;
-  const company = companySiteId ? await getCompanyBySite(companySiteId) : null;
+  const instanceId = token?.instance_id ?? null;
+  const company = companySiteId ? await getCompanyBySite(companySiteId, instanceId) : null;
   const currency = record.currency || "BGN";
   const raw = (record.raw ?? {}) as any;
   let orderRaw: any = raw;
   const orderSiteId = record.site_id ?? siteId;
-  const instanceId = token?.instance_id ?? null;
   let shouldUpdate = false;
   if (needsOrderEnrichment(orderRaw)) {
     const enriched = await fetchOrderDetails({
