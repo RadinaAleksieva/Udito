@@ -94,6 +94,21 @@ export async function GET(request: Request) {
       });
     }
 
+    if (action === "fix-roles") {
+      // Set role = 'owner' for all store_connections that have null role
+      const result = await sql`
+        UPDATE store_connections
+        SET role = 'owner'
+        WHERE role IS NULL AND user_id IS NOT NULL
+        RETURNING id, site_id, user_id, role
+      `;
+      return NextResponse.json({
+        ok: true,
+        message: "Fixed roles for store connections",
+        updated: result.rows,
+      });
+    }
+
     // Default: show current state
     const businesses = await sql`
       SELECT id, name, subscription_status, trial_ends_at FROM businesses

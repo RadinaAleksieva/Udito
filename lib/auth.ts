@@ -363,10 +363,10 @@ export async function linkStoreToUser(userId: string, siteId: string, instanceId
       `;
     }
 
-    // Create store connection
+    // Create store connection with role = 'owner' (first user to connect)
     await sql`
-      INSERT INTO store_connections (business_id, site_id, instance_id, user_id, provider, connected_at)
-      VALUES (${businessId}, ${siteId || null}, ${instanceId || null}, ${userId}, 'wix', NOW())
+      INSERT INTO store_connections (business_id, site_id, instance_id, user_id, provider, role, connected_at)
+      VALUES (${businessId}, ${siteId || null}, ${instanceId || null}, ${userId}, 'wix', 'owner', NOW())
       ON CONFLICT DO NOTHING
     `;
   }

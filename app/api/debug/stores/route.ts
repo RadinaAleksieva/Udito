@@ -26,7 +26,7 @@ export async function GET() {
     // Get all store_connections
     const storeConnectionsResult = await sql`
       SELECT sc.id, sc.site_id, sc.instance_id, sc.user_id, sc.store_name, sc.connected_at,
-             u.email as user_email
+             sc.role, u.email as user_email
       FROM store_connections sc
       LEFT JOIN users u ON u.id = sc.user_id
       ORDER BY sc.connected_at DESC
