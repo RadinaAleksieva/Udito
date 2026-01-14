@@ -33,6 +33,26 @@ export async function GET() {
       LIMIT 50
     `;
 
+    // Get all users
+    const usersResult = await sql`
+      SELECT u.id, u.email, u.name, u.created_at,
+             (SELECT COUNT(*) FROM store_connections WHERE user_id = u.id) as store_count
+      FROM users u
+      ORDER BY u.created_at DESC
+      LIMIT 20
+    `;
+
+    // Get all businesses with subscription info
+    const businessesResult = await sql`
+      SELECT b.id, b.name, b.subscription_status, b.trial_ends_at, b.created_at,
+             bu.user_id, u.email as owner_email
+      FROM businesses b
+      LEFT JOIN business_users bu ON bu.business_id = b.id AND bu.role = 'owner'
+      LEFT JOIN users u ON u.id = bu.user_id
+      ORDER BY b.created_at DESC
+      LIMIT 20
+    `;
+
     // Get total orders
     const totalResult = await sql`SELECT COUNT(*) as total FROM orders`;
 
@@ -67,6 +87,8 @@ export async function GET() {
         siteIds: siteIdsResult.rows,
       },
       storeConnections: storeConnectionsResult.rows,
+      users: usersResult.rows,
+      businesses: businessesResult.rows,
     });
   } catch (error) {
     console.error("Debug stores error:", error);
