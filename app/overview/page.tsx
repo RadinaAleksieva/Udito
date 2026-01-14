@@ -25,6 +25,33 @@ export const dynamic = "force-dynamic";
 
 const WIX_API_BASE = process.env.WIX_API_BASE || "https://www.wixapis.com";
 
+// Parse Wix authorizationCode JWT to extract siteId (server-side)
+function parseAuthorizationCode(raw: string): { siteId: string | null; instanceId: string | null } {
+  try {
+    const parts = raw.split(".");
+    if (parts.length < 2) return { siteId: null, instanceId: null };
+
+    // Decode base64url to base64
+    const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const json = Buffer.from(base64, "base64").toString("utf-8");
+    const payload = JSON.parse(json) as { data?: string };
+
+    if (!payload?.data) return { siteId: null, instanceId: null };
+
+    const data = JSON.parse(payload.data) as {
+      decodedToken?: { siteId?: string; instanceId?: string };
+      tokenMetadata?: { siteId?: string };
+    };
+
+    return {
+      siteId: data?.decodedToken?.siteId ?? data?.tokenMetadata?.siteId ?? null,
+      instanceId: data?.decodedToken?.instanceId ?? null,
+    };
+  } catch {
+    return { siteId: null, instanceId: null };
+  }
+}
+
 function formatMoney(amount: number | null | undefined, currency: string | null) {
   if (amount == null || !currency) return "—";
   const parsed = Number(amount);
@@ -86,7 +113,7 @@ async function fetchSiteLabel(siteId: string | null, instanceId: string | null) 
 export default async function OverviewPage({
   searchParams,
 }: {
-  searchParams?: { debug?: string; month?: string; store?: string; instanceId?: string; instance_id?: string; siteId?: string; site_id?: string; instance?: string; loginBroadcast?: string };
+  searchParams?: { debug?: string; month?: string; store?: string; instanceId?: string; instance_id?: string; siteId?: string; site_id?: string; instance?: string; loginBroadcast?: string; authorizationCode?: string };
 }) {
   await initDb();
 
@@ -122,28 +149,40 @@ export default async function OverviewPage({
   const urlInstanceId = searchParams?.instanceId || searchParams?.instance_id || null;
   const urlSiteId = searchParams?.siteId || searchParams?.site_id || null;
   const urlInstance = searchParams?.instance || null;
-  const selectedStoreId = searchParams?.store || urlSiteId || urlInstanceId || null;
+  const urlAuthCode = searchParams?.authorizationCode || null;
+
+  // Parse authorizationCode JWT to get the REAL siteId (critical for store switching)
+  const authCodeData = urlAuthCode ? parseAuthorizationCode(urlAuthCode) : null;
+  const effectiveSiteIdFromAuth = authCodeData?.siteId || null;
+
+  // Priority: authorizationCode siteId > explicit URL params > store selector
+  const selectedStoreId = effectiveSiteIdFromAuth || searchParams?.store || urlSiteId || urlInstanceId || null;
 
   // Detect if we're in Wix context (came from Wix iframe with instance params)
   // In Wix context, we should only show the current store, not a selector
-  const isWixContext = Boolean(urlInstance || urlInstanceId || urlSiteId);
+  const isWixContext = Boolean(urlInstance || urlInstanceId || urlSiteId || urlAuthCode);
 
   // Auto-link Wix store from URL params (handles switching between Wix stores)
-  if (session?.user?.id && (urlSiteId || urlInstanceId)) {
-    const storeIdToCheck = urlSiteId || urlInstanceId;
+  // Use siteId from authorizationCode as the primary source
+  const storeIdFromUrl = effectiveSiteIdFromAuth || urlSiteId || urlInstanceId;
+  if (session?.user?.id && storeIdFromUrl) {
+    const storeIdToCheck = storeIdFromUrl;
     const isStoreLinked = userStores.some(
       (s: any) => s.site_id === storeIdToCheck || s.instance_id === storeIdToCheck
     );
     if (!isStoreLinked) {
       try {
-        await linkStoreToUser(session.user.id, urlSiteId || "", urlInstanceId || undefined);
+        // Use siteId from authorizationCode if available
+        const siteIdToLink = effectiveSiteIdFromAuth || urlSiteId || "";
+        const instanceIdToLink = authCodeData?.instanceId || urlInstanceId || undefined;
+        await linkStoreToUser(session.user.id, siteIdToLink, instanceIdToLink);
         userStores = await getUserStores(session.user.id);
         console.log("Auto-linked new store from URL params:", storeIdToCheck);
       } catch (e) {
         console.error("Auto-link store failed:", e);
       }
     }
-  } else if (session?.user?.id && userStores.length === 0) {
+  } else if (session?.user?.id && userStores.length === 0 && !storeIdFromUrl) {
     // Fallback: try to get from cookies/context
     const wixContext = await getActiveWixContext();
     if (wixContext.siteId || wixContext.instanceId) {
