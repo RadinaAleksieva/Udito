@@ -1,13 +1,29 @@
 import Stripe from "stripe";
 
-if (!process.env.STRIPE_SECRET_KEY) {
-  throw new Error("STRIPE_SECRET_KEY is not set");
+// Lazy initialization - don't throw during build
+let stripeInstance: Stripe | null = null;
+
+export function getStripe(): Stripe {
+  if (!stripeInstance) {
+    if (!process.env.STRIPE_SECRET_KEY) {
+      throw new Error("STRIPE_SECRET_KEY is not set");
+    }
+    stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY, {
+      apiVersion: "2024-12-18.acacia",
+      typescript: true,
+    });
+  }
+  return stripeInstance;
 }
 
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2024-12-18.acacia",
-  typescript: true,
-});
+// For backwards compatibility - use getStripe() instead
+export const stripe = {
+  get customers() { return getStripe().customers; },
+  get paymentMethods() { return getStripe().paymentMethods; },
+  get paymentIntents() { return getStripe().paymentIntents; },
+  get setupIntents() { return getStripe().setupIntents; },
+  get refunds() { return getStripe().refunds; },
+};
 
 // Plan to Stripe Price ID mapping
 export const PLAN_PRICE_IDS: Record<string, { monthly: string }> = {
