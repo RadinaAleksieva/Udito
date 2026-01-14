@@ -5,7 +5,7 @@ import {
   deleteReceiptById,
   deleteRefundReceiptsByReference,
 } from "@/lib/db";
-import { getActiveWixToken } from "@/lib/wix-context";
+import { getActiveStore } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -27,9 +27,9 @@ export async function POST(request: Request) {
     }
 
     await initDb();
-    const token = await getActiveWixToken();
+    const store = await getActiveStore();
 
-    if (!token?.site_id) {
+    if (!store?.siteId && !store?.instanceId) {
       return NextResponse.json(
         { ok: false, error: "Не сте влезли в системата" },
         { status: 401 }
@@ -46,8 +46,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // Verify the receipt belongs to the current site
-    if (receipt.site_id && receipt.site_id !== token.site_id) {
+    // Verify the receipt belongs to the current store
+    const storeId = store.siteId || store.instanceId;
+    if (receipt.site_id && receipt.site_id !== storeId && receipt.site_id !== store.instanceId) {
       return NextResponse.json(
         { ok: false, error: "Нямате права да анулирате тази бележка" },
         { status: 403 }

@@ -1,8 +1,7 @@
 import Image from "next/image";
 import QRCode from "qrcode";
 import { initDb, getCompanyBySite, getOrderByIdForSite, upsertOrder } from "@/lib/db";
-import { getActiveWixToken } from "@/lib/wix-context";
-import { auth, getUserStores } from "@/lib/auth";
+import { getActiveStore } from "@/lib/auth";
 import {
   extractTransactionRef,
   extractPaymentId,
@@ -403,41 +402,12 @@ export default async function ReceiptPage({
   const isRefund = receiptType === "refund";
 
   // Security: Check user authentication and store access
-  const session = await auth();
-  let siteId: string | null = null;
-  let token: any = null;
-
-  if (session?.user?.id) {
-    const userStores = await getUserStores(session.user.id);
-    if (userStores.length === 0) {
-      redirect("/overview");
-    }
-    // Check if a specific store is requested via query param
-    const storeParam = searchParams?.store;
-    if (storeParam) {
-      const selectedStore = userStores.find(
-        (s: any) => s.site_id === storeParam || s.instance_id === storeParam
-      );
-      if (selectedStore) {
-        siteId = selectedStore.site_id || selectedStore.instance_id;
-        // Also get the token info for this store
-        token = selectedStore;
-      }
-    }
-    // Fallback to first connected store
-    if (!siteId) {
-      siteId = userStores[0].site_id || userStores[0].instance_id;
-      token = userStores[0];
-    }
-  } else {
-    // Legacy flow: User not logged in via NextAuth, check Wix cookies
-    token = await getActiveWixToken();
-    siteId = token?.site_id ?? token?.instance_id ?? null;
-
-    if (!siteId) {
-      redirect("/login");
-    }
+  const store = await getActiveStore(searchParams?.store);
+  if (!store) {
+    redirect("/login");
   }
+  const siteId = store.instanceId || store.siteId;
+  const instanceId = store.instanceId;
 
   // TypeScript guard - this should never happen due to above redirects
   if (!siteId) {
@@ -450,7 +420,6 @@ export default async function ReceiptPage({
   }
   const receiptRecord = await getReceiptByOrderIdAndType(orderId, receiptType);
   const companySiteId = record.site_id || siteId;
-  const instanceId = token?.instance_id ?? null;
   const company = companySiteId ? await getCompanyBySite(companySiteId, instanceId) : null;
   const currency = record.currency || "BGN";
   const raw = (record.raw ?? {}) as any;

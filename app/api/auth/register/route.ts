@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 
 export async function POST(request: Request) {
   try {
-    const { email, password, companyName, eik } = await request.json();
+    const { email, password, companyName, eik, napStoreNumber } = await request.json();
 
     // Validate input
     if (!email || !password) {
@@ -35,6 +35,13 @@ export async function POST(request: Request) {
       );
     }
 
+    if (!napStoreNumber || !napStoreNumber.trim()) {
+      return NextResponse.json(
+        { error: "Номерът на обект в НАП е задължителен" },
+        { status: 400 }
+      );
+    }
+
     // Check if user already exists
     const existingUser = await sql`
       SELECT id FROM users WHERE email = ${email}
@@ -58,11 +65,11 @@ export async function POST(request: Request) {
       VALUES (${userId}, ${email}, ${companyName.trim()}, ${passwordHash}, ${salt}, NULL)
     `;
 
-    // Create business
+    // Create business with 10-day trial
     const businessId = crypto.randomUUID();
     await sql`
-      INSERT INTO businesses (id, name, created_at, updated_at)
-      VALUES (${businessId}, ${companyName.trim()}, NOW(), NOW())
+      INSERT INTO businesses (id, name, trial_ends_at, subscription_status, created_at, updated_at)
+      VALUES (${businessId}, ${companyName.trim()}, NOW() + INTERVAL '10 days', 'trial', NOW(), NOW())
     `;
 
     // Link user to business as owner
@@ -78,18 +85,21 @@ export async function POST(request: Request) {
         store_name,
         legal_name,
         bulstat,
+        store_id,
         updated_at
       ) VALUES (
         ${businessId},
         ${companyName.trim()},
         ${companyName.trim()},
         ${eik.trim()},
+        ${napStoreNumber.trim()},
         NOW()
       )
       ON CONFLICT (business_id) DO UPDATE SET
         store_name = ${companyName.trim()},
         legal_name = ${companyName.trim()},
         bulstat = ${eik.trim()},
+        store_id = ${napStoreNumber.trim()},
         updated_at = NOW()
     `;
 

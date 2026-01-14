@@ -9,7 +9,7 @@ import {
 } from "@/lib/auditXml";
 import { getCompanyBySite, initDb, getOrderByIdForSite } from "@/lib/db";
 import { listOrdersWithReceiptsForAudit, listRefundReceiptsForAudit } from "@/lib/receipts";
-import { getActiveWixToken } from "@/lib/wix-context";
+import { getActiveStore } from "@/lib/auth";
 import { extractTransactionRef } from "@/lib/wix";
 
 export const dynamic = "force-dynamic";
@@ -216,17 +216,18 @@ export async function GET(request: Request) {
   const endIso = endDate.toISOString();
 
   await initDb();
-  const token = await getActiveWixToken();
-  const siteId = token?.site_id ?? null;
+  const storeParam = searchParams.get("store");
+  const store = await getActiveStore(storeParam);
 
-  if (!siteId) {
+  if (!store?.siteId && !store?.instanceId) {
     return NextResponse.json(
       { ok: false, error: "Липсва връзка с магазин. Отворете приложението от Wix." },
       { status: 400 }
     );
   }
+  const siteId = store.instanceId || store.siteId;
 
-  const company = await getCompanyBySite(siteId);
+  const company = await getCompanyBySite(siteId, store.instanceId);
 
   if (!company?.bulstat) {
     return NextResponse.json(
@@ -243,14 +244,14 @@ export async function GET(request: Request) {
   }
 
   // Get orders with receipts for the period
-  const rows = await listOrdersWithReceiptsForAudit(startIso, endIso, siteId);
+  const rows = await listOrdersWithReceiptsForAudit(startIso, endIso, siteId!);
 
   // Build audit orders
   const auditOrders: AuditOrder[] = [];
 
   for (const row of rows) {
     // Get full order details
-    const fullOrder = await getOrderByIdForSite(row.id, siteId);
+    const fullOrder = await getOrderByIdForSite(row.id, siteId!);
     const raw = (fullOrder?.raw ?? row.raw ?? {}) as any;
     const currency = row.currency || fullOrder?.currency || "BGN";
 
@@ -325,7 +326,7 @@ export async function GET(request: Request) {
   }
 
   // Get refund receipts for the period
-  const refundRows = await listRefundReceiptsForAudit(startIso, endIso, siteId);
+  const refundRows = await listRefundReceiptsForAudit(startIso, endIso, siteId!);
 
   // Build audit returns (сторна)
   const auditReturns: AuditReturn[] = [];

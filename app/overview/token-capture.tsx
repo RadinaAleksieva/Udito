@@ -2,9 +2,31 @@
 
 import { useEffect } from "react";
 
+// Broadcast channel for cross-window communication (Wix iframe refresh)
+const LOGIN_CHANNEL = "udito-login-channel";
+
 export default function TokenCapture() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+
+    // Check if we need to broadcast login success (after Google OAuth redirect)
+    const shouldBroadcast = params.get("loginBroadcast") === "1";
+    if (shouldBroadcast) {
+      console.log("📢 Broadcasting login success after OAuth redirect");
+      try {
+        const channel = new BroadcastChannel(LOGIN_CHANNEL);
+        channel.postMessage({ type: "LOGIN_SUCCESS", timestamp: Date.now() });
+        channel.close();
+      } catch {
+        // Fallback for browsers without BroadcastChannel
+        localStorage.setItem("udito-login-event", Date.now().toString());
+      }
+
+      // Clean up URL by removing the loginBroadcast param
+      const cleanUrl = new URL(window.location.href);
+      cleanUrl.searchParams.delete("loginBroadcast");
+      window.history.replaceState({}, "", cleanUrl.toString());
+    }
     const instanceId =
       params.get("instanceId") ||
       params.get("instance_id") ||

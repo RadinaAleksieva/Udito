@@ -16,10 +16,16 @@ const STORE_KEY = "udito_selected_store";
 export default function StoreSelector({
   stores,
   currentSiteId,
+  hidden = false,
 }: {
   stores: Store[];
   currentSiteId: string | null;
+  hidden?: boolean;
 }) {
+  // Don't render if hidden (e.g., in Wix iframe context)
+  if (hidden) {
+    return null;
+  }
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();

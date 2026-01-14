@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSyncState, initDb, upsertSyncState } from "@/lib/db";
 import { syncOrdersForSite } from "@/lib/sync";
-import { getActiveWixContext } from "@/lib/wix-context";
+import { getActiveStore } from "@/lib/auth";
 
 function resolveStartDateIso(startParam?: string | null) {
   if (startParam) {
@@ -17,14 +17,17 @@ function resolveStartDateIso(startParam?: string | null) {
 export async function POST(request: Request) {
   try {
     await initDb();
-    const { siteId, instanceId } = await getActiveWixContext();
+    const url = new URL(request.url);
+    const storeParam = url.searchParams.get("store");
+    const store = await getActiveStore(storeParam);
+    const siteId = store?.siteId ?? null;
+    const instanceId = store?.instanceId ?? null;
     if (!siteId && !instanceId) {
       return NextResponse.json(
         { ok: false, error: "Missing Wix context." },
         { status: 400 }
       );
     }
-    const url = new URL(request.url);
     const startDateIso = resolveStartDateIso(url.searchParams.get("start"));
     const limit = Number(url.searchParams.get("limit") || 100);
     const maxPages = Number(url.searchParams.get("maxPages") || 10);
@@ -94,11 +97,11 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("Backfill failed", error);
-    const url = new URL(request.url);
-    const { siteId } = await getActiveWixContext();
-    if (siteId) {
+    const store = await getActiveStore();
+    const errorSiteId = store?.siteId ?? store?.instanceId ?? null;
+    if (errorSiteId) {
       await upsertSyncState({
-        siteId,
+        siteId: errorSiteId,
         cursor: null,
         status: "error",
         lastError: (error as Error).message,

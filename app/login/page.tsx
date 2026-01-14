@@ -1,10 +1,13 @@
 "use client";
 
 import { signIn } from "next-auth/react";
-import { useState, Suspense, useEffect } from "react";
+import { useState, Suspense, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import WinkingFace from "@/app/components/winking-face";
+
+// Broadcast channel for cross-window communication
+const LOGIN_CHANNEL = "udito-login-channel";
 
 function LoginForm() {
   const searchParams = useSearchParams();
@@ -24,6 +27,20 @@ function LoginForm() {
     siteId?: string;
   }>({});
 
+  // Notify other tabs/windows about login (for Wix iframe refresh)
+  const broadcastLoginSuccess = useCallback(() => {
+    try {
+      const channel = new BroadcastChannel(LOGIN_CHANNEL);
+      channel.postMessage({ type: "LOGIN_SUCCESS", timestamp: Date.now() });
+      channel.close();
+      console.log("📢 Broadcasted login success to other tabs");
+    } catch (err) {
+      console.log("BroadcastChannel not supported, trying localStorage fallback");
+      // Fallback for browsers without BroadcastChannel
+      localStorage.setItem("udito-login-event", Date.now().toString());
+    }
+  }, []);
+
   useEffect(() => {
     // Detect if we're in an iframe (embedded in Wix)
     let inIframe = false;
@@ -33,6 +50,45 @@ function LoginForm() {
     } catch {
       inIframe = true;
       setIsInIframe(true);
+    }
+
+    // If in iframe, listen for login broadcasts from popup windows
+    if (inIframe) {
+      const handleLoginBroadcast = (event: MessageEvent) => {
+        if (event.data?.type === "LOGIN_SUCCESS") {
+          console.log("🔄 Received login broadcast, refreshing iframe...");
+          window.location.reload();
+        }
+      };
+
+      try {
+        const channel = new BroadcastChannel(LOGIN_CHANNEL);
+        channel.addEventListener("message", handleLoginBroadcast);
+
+        // Also listen for localStorage changes (fallback)
+        const handleStorage = (e: StorageEvent) => {
+          if (e.key === "udito-login-event") {
+            console.log("🔄 Received login event via localStorage, refreshing...");
+            window.location.reload();
+          }
+        };
+        window.addEventListener("storage", handleStorage);
+
+        return () => {
+          channel.close();
+          window.removeEventListener("storage", handleStorage);
+        };
+      } catch {
+        // BroadcastChannel not supported, use localStorage only
+        const handleStorage = (e: StorageEvent) => {
+          if (e.key === "udito-login-event") {
+            console.log("🔄 Received login event via localStorage, refreshing...");
+            window.location.reload();
+          }
+        };
+        window.addEventListener("storage", handleStorage);
+        return () => window.removeEventListener("storage", handleStorage);
+      }
     }
 
     // Capture Wix params from URL
@@ -149,6 +205,8 @@ function LoginForm() {
         if (wixParams.instanceId) redirectUrl.searchParams.set("instanceId", wixParams.instanceId);
         if (wixParams.instance) redirectUrl.searchParams.set("instance", wixParams.instance);
         if (wixParams.siteId) redirectUrl.searchParams.set("siteId", wixParams.siteId);
+        // Broadcast login success to iframe before redirect
+        broadcastLoginSuccess();
         window.location.href = redirectUrl.toString();
       }
     } catch {
@@ -177,6 +235,8 @@ function LoginForm() {
         );
       }
       setStatus("Успешно свързване. Пренасочване...");
+      // Broadcast login success to iframe before redirect
+      broadcastLoginSuccess();
       window.location.href = callbackUrl;
     } catch (err) {
       setStatus(
@@ -258,6 +318,8 @@ function LoginForm() {
                       if (wixParams.instanceId) redirectUrl.searchParams.set("instanceId", wixParams.instanceId);
                       if (wixParams.instance) redirectUrl.searchParams.set("instance", wixParams.instance);
                       if (wixParams.siteId) redirectUrl.searchParams.set("siteId", wixParams.siteId);
+                      // Flag to broadcast login success after OAuth redirect
+                      redirectUrl.searchParams.set("loginBroadcast", "1");
                       signIn("google", { callbackUrl: redirectUrl.toString() });
                     }}
                     disabled={isLoading !== null}

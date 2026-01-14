@@ -128,7 +128,7 @@ export async function countReceiptsForPeriodForSite(
     SELECT COUNT(*) as total
     FROM receipts r
     LEFT JOIN orders o ON o.id = r.order_id
-    WHERE (o.site_id = ${siteId} OR o.site_id IS NULL)
+    WHERE o.site_id = ${siteId}
       AND r.issued_at BETWEEN ${startIso} AND ${endIso}
   `;
   return Number(result.rows[0]?.total ?? 0);
@@ -245,7 +245,7 @@ export async function listReceiptsWithOrdersForSite(
       orders.raw as order_raw
     from receipts
     left join orders on orders.id = receipts.order_id
-    where orders.site_id = ${siteId} OR orders.site_id IS NULL
+    where orders.site_id = ${siteId}
     order by receipts.id desc
     limit ${limit};
   `;
@@ -326,7 +326,7 @@ export async function listReceiptsWithOrdersForPeriodForSite(
       orders.raw as order_raw
     from receipts
     left join orders on orders.id = receipts.order_id
-    where (orders.site_id = ${siteId} OR orders.site_id IS NULL)
+    where (orders.site_id = ${siteId})
       and receipts.issued_at between ${startIso} and ${endIso}
     order by receipts.id desc;
   `;
@@ -387,7 +387,7 @@ export async function listOrdersWithReceiptsForAudit(
       sale_receipts.type as receipt_type
     from receipts as sale_receipts
     inner join orders on orders.id = sale_receipts.order_id
-    where (orders.site_id = ${siteId} OR orders.site_id IS NULL)
+    where (orders.site_id = ${siteId})
       and sale_receipts.type = 'sale'
       and sale_receipts.issued_at between ${startIso} and ${endIso}
     order by sale_receipts.id desc;
@@ -420,7 +420,7 @@ export async function listRefundReceiptsForAudit(
       refund_receipts.return_payment_type
     from receipts as refund_receipts
     inner join orders on orders.id = refund_receipts.order_id
-    where (orders.site_id = ${siteId} OR orders.site_id IS NULL)
+    where (orders.site_id = ${siteId})
       and refund_receipts.type = 'refund'
       and refund_receipts.issued_at between ${startIso} and ${endIso}
     order by refund_receipts.id asc;

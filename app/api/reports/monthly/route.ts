@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { sql } from "@vercel/postgres";
 import { initDb } from "@/lib/db";
-import { getActiveWixToken } from "@/lib/wix-context";
-import { auth, getUserStores } from "@/lib/auth";
+import { getActiveStore } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -102,42 +101,15 @@ export async function GET(request: Request) {
   const storeParam = searchParams.get("store");
 
   // Check user authentication and store access
-  const session = await auth();
-  let siteId: string | null = null;
+  const store = await getActiveStore(storeParam);
 
-  if (session?.user?.id) {
-    const userStores = await getUserStores(session.user.id);
-    if (userStores.length === 0) {
-      return NextResponse.json(
-        { ok: false, error: "No connected stores." },
-        { status: 400 }
-      );
-    }
-    // Check if a specific store is requested via query param
-    if (storeParam) {
-      const selectedStore = userStores.find(
-        (s: any) => s.site_id === storeParam || s.instance_id === storeParam
-      );
-      if (selectedStore) {
-        siteId = selectedStore.site_id || selectedStore.instance_id;
-      }
-    }
-    // Fallback to first connected store
-    if (!siteId) {
-      siteId = userStores[0].site_id || userStores[0].instance_id;
-    }
-  } else {
-    // Legacy flow: User not logged in via NextAuth, check Wix cookies
-    const token = await getActiveWixToken();
-    siteId = token?.site_id ?? token?.instance_id ?? null;
-  }
-
-  if (!siteId) {
+  if (!store?.siteId && !store?.instanceId) {
     return NextResponse.json(
       { ok: false, error: "Missing Wix site id." },
       { status: 400 }
     );
   }
+  const siteId = store.instanceId || store.siteId;
 
   // Create date range for the month
   const startDate = new Date(year, month - 1, 1);
@@ -165,7 +137,7 @@ export async function GET(request: Request) {
         o.raw
       FROM receipts r
       JOIN orders o ON r.order_id = o.id
-      WHERE (o.site_id = ${siteId} OR o.site_id IS NULL)
+      WHERE o.site_id = ${siteId}
         AND r.issued_at >= ${startDate.toISOString()}
         AND r.issued_at <= ${endDate.toISOString()}
       ORDER BY r.issued_at DESC

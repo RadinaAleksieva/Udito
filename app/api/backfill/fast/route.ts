@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { initDb, upsertOrder, upsertSyncState, getSyncState } from "@/lib/db";
 import { queryOrders, pickOrderFields, extractTransactionRef, extractDeliveryMethodFromOrder } from "@/lib/wix";
-import { getActiveWixContext } from "@/lib/wix-context";
+import { getActiveStore } from "@/lib/auth";
 
 /**
  * Fast Sync API - Bulk imports orders WITHOUT per-order enrichment API calls.
@@ -43,9 +43,9 @@ export async function POST(request: Request) {
 
     // Only fall back to context if no URL params provided
     if (!siteId && !instanceId) {
-      const context = await getActiveWixContext();
-      siteId = context.siteId;
-      instanceId = context.instanceId;
+      const store = await getActiveStore();
+      siteId = store?.siteId ?? null;
+      instanceId = store?.instanceId ?? null;
     }
 
     console.log("🔄 Backfill using store:", { siteId, instanceId, fromUrl: Boolean(urlSiteId || urlInstanceId) });
@@ -177,11 +177,12 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("Fast sync failed", error);
-    const { siteId } = await getActiveWixContext();
+    const store = await getActiveStore();
+    const errorSiteId = store?.siteId ?? store?.instanceId ?? null;
 
-    if (siteId) {
+    if (errorSiteId) {
       await upsertSyncState({
-        siteId,
+        siteId: errorSiteId,
         cursor: null,
         status: "error",
         lastError: (error as Error).message,

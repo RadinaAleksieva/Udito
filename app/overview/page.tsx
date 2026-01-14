@@ -19,6 +19,7 @@ import AutoSync from "./auto-sync";
 import { auth, getUserStores, linkStoreToUser, getActiveStore } from "@/lib/auth";
 import Link from "next/link";
 import StoreSelector from "../components/store-selector";
+import SubscriptionBanner from "../components/subscription-banner";
 
 export const dynamic = "force-dynamic";
 
@@ -85,18 +86,47 @@ async function fetchSiteLabel(siteId: string | null, instanceId: string | null) 
 export default async function OverviewPage({
   searchParams,
 }: {
-  searchParams?: { debug?: string; month?: string; store?: string; instanceId?: string; instance_id?: string; siteId?: string; site_id?: string; instance?: string };
+  searchParams?: { debug?: string; month?: string; store?: string; instanceId?: string; instance_id?: string; siteId?: string; site_id?: string; instance?: string; loginBroadcast?: string };
 }) {
   await initDb();
 
   const session = await auth();
+
+  // Check if user needs onboarding (has logged in but hasn't completed company data)
+  if (session?.user?.id) {
+    const { redirect } = await import("next/navigation");
+    const { sql } = await import("@vercel/postgres");
+
+    // Check if user has completed onboarding
+    const businessResult = await sql`
+      SELECT bp.bulstat, bp.store_id
+      FROM business_users bu
+      JOIN business_profiles bp ON bp.business_id = bu.business_id
+      WHERE bu.user_id = ${session.user.id}
+      LIMIT 1
+    `;
+
+    const needsOnboarding = businessResult.rows.length === 0 ||
+      !businessResult.rows[0].bulstat ||
+      !businessResult.rows[0].store_id;
+
+    if (needsOnboarding) {
+      redirect("/onboarding");
+    }
+  }
+
   let userStores = session?.user?.id ? await getUserStores(session.user.id) : [];
   let needsStoreConnection = false;
 
   // Check for Wix params in URL (for iframe context)
   const urlInstanceId = searchParams?.instanceId || searchParams?.instance_id || null;
   const urlSiteId = searchParams?.siteId || searchParams?.site_id || null;
+  const urlInstance = searchParams?.instance || null;
   const selectedStoreId = searchParams?.store || urlSiteId || urlInstanceId || null;
+
+  // Detect if we're in Wix context (came from Wix iframe with instance params)
+  // In Wix context, we should only show the current store, not a selector
+  const isWixContext = Boolean(urlInstance || urlInstanceId || urlSiteId);
 
   // Auto-link Wix store if user logged in but no stores connected
   if (session?.user?.id && userStores.length === 0) {
@@ -276,6 +306,7 @@ export default async function OverviewPage({
       <TokenCapture />
       <AutoSync />
       <TopNav title="UDITO Табло" />
+      <SubscriptionBanner />
       <div className="container">
         <section className="hero">
           <div>
@@ -294,6 +325,7 @@ export default async function OverviewPage({
                   store_domain: s.store_domain,
                 }))}
                 currentSiteId={siteId || instanceId}
+                hidden={isWixContext}
               />
             )}
             <div className="status-grid">

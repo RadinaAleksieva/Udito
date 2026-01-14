@@ -337,6 +337,26 @@ export async function initDb() {
   await sql`alter table companies add column if not exists receipts_start_date timestamptz;`;
   await sql`alter table companies add column if not exists accent_color text default 'green';`;
 
+  // Subscription/billing migrations
+  await sql`alter table businesses add column if not exists trial_ends_at timestamptz;`;
+  await sql`alter table businesses add column if not exists subscription_status text default 'trial';`; // trial, active, expired, cancelled
+  await sql`alter table businesses add column if not exists plan_id text;`; // basic, pro, enterprise
+  await sql`alter table businesses add column if not exists subscription_expires_at timestamptz;`;
+  await sql`alter table businesses add column if not exists stripe_customer_id text;`;
+  await sql`alter table businesses add column if not exists stripe_subscription_id text;`;
+
+  // Access management migrations
+  await sql`alter table store_connections add column if not exists role text default 'member';`; // owner, admin, member, accountant
+  await sql`alter table store_connections add column if not exists access_code text;`;
+  await sql`alter table store_connections add column if not exists access_code_expires_at timestamptz;`;
+  await sql`alter table store_connections add column if not exists invited_by text;`;
+  await sql`alter table store_connections add column if not exists invited_at timestamptz;`;
+  await sql`
+    create unique index if not exists store_connections_access_code_key
+    on store_connections (access_code)
+    where access_code is not null;
+  `;
+
   // Drop old unique indexes that prevent multiple users connecting to same store
   await sql`drop index if exists store_connections_site_id_key;`;
   await sql`drop index if exists store_connections_instance_id_key;`;
@@ -641,7 +661,7 @@ export async function listRecentOrdersForPeriodForSite(
   const result = await sql`
     select id, number, payment_status, status, created_at, total, currency, source
     from orders
-    where (site_id = ${siteId} OR site_id IS NULL)
+    where site_id = ${siteId}
       and (status is null or lower(status) not like 'archiv%')
       and coalesce(raw->>'archived', 'false') <> 'true'
       and coalesce(raw->>'isArchived', 'false') <> 'true'
@@ -667,7 +687,7 @@ export async function listPaginatedOrdersForSite(
     ? await sql`
         select count(*) as total
         from orders
-        where (site_id = ${siteId} OR site_id IS NULL)
+        where site_id = ${siteId}
           and (status is null or lower(status) not like 'archiv%')
           and coalesce(raw->>'archived', 'false') <> 'true'
           and coalesce(raw->>'isArchived', 'false') <> 'true'
@@ -679,7 +699,7 @@ export async function listPaginatedOrdersForSite(
     : await sql`
         select count(*) as total
         from orders
-        where (site_id = ${siteId} OR site_id IS NULL)
+        where site_id = ${siteId}
           and (status is null or lower(status) not like 'archiv%')
           and coalesce(raw->>'archived', 'false') <> 'true'
           and coalesce(raw->>'isArchived', 'false') <> 'true'
@@ -694,7 +714,7 @@ export async function listPaginatedOrdersForSite(
     ? await sql`
         select id, number, payment_status, status, created_at, paid_at, total, currency, customer_name, customer_email, source
         from orders
-        where (site_id = ${siteId} OR site_id IS NULL)
+        where site_id = ${siteId}
           and (status is null or lower(status) not like 'archiv%')
           and coalesce(raw->>'archived', 'false') <> 'true'
           and coalesce(raw->>'isArchived', 'false') <> 'true'
@@ -708,7 +728,7 @@ export async function listPaginatedOrdersForSite(
     : await sql`
         select id, number, payment_status, status, created_at, paid_at, total, currency, customer_name, customer_email, source
         from orders
-        where (site_id = ${siteId} OR site_id IS NULL)
+        where site_id = ${siteId}
           and (status is null or lower(status) not like 'archiv%')
           and coalesce(raw->>'archived', 'false') <> 'true'
           and coalesce(raw->>'isArchived', 'false') <> 'true'
@@ -726,7 +746,7 @@ export async function countOrdersForSite(siteId: string) {
   const result = await sql`
     select count(*) as total
     from orders
-    where (site_id = ${siteId} OR site_id IS NULL)
+    where site_id = ${siteId}
       and (status is null or lower(status) not like 'archiv%')
       and coalesce(raw->>'archived', 'false') <> 'true'
       and coalesce(raw->>'isArchived', 'false') <> 'true'
@@ -745,7 +765,7 @@ export async function countOrdersForPeriodForSite(
   const result = await sql`
     select count(*) as total
     from orders
-    where (site_id = ${siteId} OR site_id IS NULL)
+    where site_id = ${siteId}
       and (status is null or lower(status) not like 'archiv%')
       and coalesce(raw->>'archived', 'false') <> 'true'
       and coalesce(raw->>'isArchived', 'false') <> 'true'
@@ -874,7 +894,7 @@ export async function listAllDetailedOrdersForSite(siteId: string) {
       raw,
       source
     from orders
-    where (site_id = ${siteId} OR site_id IS NULL)
+    where site_id = ${siteId}
     order by created_at desc nulls last;
   `;
   return result.rows;
@@ -945,7 +965,7 @@ export async function listDetailedOrdersForPeriodForSite(
       raw,
       source
     from orders
-    where (site_id = ${siteId} OR site_id IS NULL)
+    where site_id = ${siteId}
       and created_at between ${startIso} and ${endIso}
     order by created_at desc nulls last;
   `;
@@ -1069,7 +1089,7 @@ export async function getOrderByIdForSite(orderId: string, siteId: string) {
       raw
     from orders
     where id = ${orderId}
-      and (site_id = ${siteId} OR site_id IS NULL)
+      and site_id = ${siteId}
     limit 1;
   `;
   return result.rows[0] ?? null;
@@ -1108,6 +1128,7 @@ export async function getOrderByIdForBusiness(
 export async function getCompanyBySite(siteId: string | null, instanceId?: string | null) {
   if (!siteId && !instanceId) return null;
 
+  // Use explicit null checks because SQL NULL = NULL is false
   const result = await sql`
     select site_id,
       instance_id,
@@ -1137,7 +1158,8 @@ export async function getCompanyBySite(siteId: string | null, instanceId?: strin
       receipts_start_date,
       updated_at
     from companies
-    where (site_id = ${siteId} OR instance_id = ${instanceId})
+    where (${siteId}::text IS NOT NULL AND site_id = ${siteId})
+       OR (${instanceId}::text IS NOT NULL AND instance_id = ${instanceId})
     limit 1;
   `;
   return result.rows[0] ?? null;
@@ -1609,21 +1631,25 @@ export async function updateReceiptSettings(
   instanceId?: string | null
 ) {
   if (!siteId && !instanceId) return;
+  // Use explicit null checks because SQL NULL = NULL is false
   await sql`
     update companies
     set receipt_number_start = ${settings.receiptNumberStart ?? null},
         cod_receipts_enabled = ${settings.codReceiptsEnabled ?? false},
         updated_at = now()
-    where site_id = ${siteId} OR instance_id = ${instanceId};
+    where (${siteId}::text IS NOT NULL AND site_id = ${siteId})
+       OR (${instanceId}::text IS NOT NULL AND instance_id = ${instanceId});
   `;
 }
 
 export async function getReceiptSettings(siteId: string | null, instanceId?: string | null) {
   if (!siteId && !instanceId) return null;
+  // Use explicit null checks because SQL NULL = NULL is false
   const result = await sql`
     select receipt_number_start, cod_receipts_enabled
     from companies
-    where site_id = ${siteId} OR instance_id = ${instanceId}
+    where (${siteId}::text IS NOT NULL AND site_id = ${siteId})
+       OR (${instanceId}::text IS NOT NULL AND instance_id = ${instanceId})
     limit 1;
   `;
   return result.rows[0] ?? null;

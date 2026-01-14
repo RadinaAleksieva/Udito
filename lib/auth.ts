@@ -333,10 +333,12 @@ export async function getUserStores(userId: string) {
 // Helper to link a store to user
 export async function linkStoreToUser(userId: string, siteId: string, instanceId?: string) {
   // First try to update existing record
+  // Use explicit null checks because SQL NULL = NULL is false
   const updated = await sql`
     UPDATE store_connections
     SET user_id = ${userId}
-    WHERE site_id = ${siteId} OR instance_id = ${instanceId}
+    WHERE (${siteId}::text IS NOT NULL AND site_id = ${siteId})
+       OR (${instanceId}::text IS NOT NULL AND instance_id = ${instanceId})
     RETURNING id
   `;
 

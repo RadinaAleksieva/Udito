@@ -17,6 +17,7 @@ export default function RegisterPage() {
   // Step 2: Company info
   const [companyName, setCompanyName] = useState("");
   const [eik, setEik] = useState("");
+  const [napStoreNumber, setNapStoreNumber] = useState("");
 
   const [status, setStatus] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -52,6 +53,11 @@ export default function RegisterPage() {
       return;
     }
 
+    if (!napStoreNumber.trim()) {
+      setStatus("Моля въведете номер на обект в НАП");
+      return;
+    }
+
     setIsLoading(true);
     try {
       const response = await fetch("/api/auth/register", {
@@ -61,7 +67,8 @@ export default function RegisterPage() {
           email,
           password,
           companyName: companyName.trim(),
-          eik: eik.trim()
+          eik: eik.trim(),
+          napStoreNumber: napStoreNumber.trim()
         }),
       });
 
@@ -123,7 +130,7 @@ export default function RegisterPage() {
                 className="login-btn login-btn--google"
                 onClick={() => {
                   setIsLoading(true);
-                  signIn("google", { callbackUrl: "/overview" });
+                  signIn("google", { callbackUrl: "/onboarding" });
                 }}
                 disabled={isLoading}
               >
@@ -218,6 +225,17 @@ export default function RegisterPage() {
                 maxLength={13}
                 pattern="[0-9]{9,13}"
               />
+              <input
+                type="text"
+                value={napStoreNumber}
+                onChange={(e) => setNapStoreNumber(e.target.value)}
+                placeholder="Номер на обект в НАП"
+                required
+                disabled={isLoading}
+              />
+              <p className="register-hint">
+                Номерът на обекта се получава от НАП при регистрация за алтернативен режим.
+              </p>
               {status && (
                 <p className={`login-status ${status.includes("Успешна") ? "login-status--success" : "login-status--error"}`}>
                   {status}

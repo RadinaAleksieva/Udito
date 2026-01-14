@@ -4,8 +4,91 @@ import { decodeWixInstanceToken } from "@/lib/wix-instance";
 import { getAppInstanceDetails, getTokenInfo, getAccessToken } from "@/lib/wix";
 import { getServerSession } from "next-auth";
 import { authOptions, linkStoreToUser } from "@/lib/auth";
+import { sql } from "@vercel/postgres";
 
 const WIX_API_BASE = process.env.WIX_API_BASE || "https://www.wixapis.com";
+
+// Handle accountant access code
+async function handleAccessCode(accessCode: string) {
+  await initDb();
+
+  // Get session - accountant must be logged in
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json(
+      { ok: false, error: "Моля влезте в профила си, за да използвате код за достъп" },
+      { status: 401 }
+    );
+  }
+
+  // Find the access code
+  const codeResult = await sql`
+    SELECT id, site_id, instance_id, business_id, access_code_expires_at, user_id
+    FROM store_connections
+    WHERE access_code = ${accessCode.toUpperCase()}
+  `;
+
+  if (codeResult.rows.length === 0) {
+    return NextResponse.json(
+      { ok: false, error: "Невалиден код за достъп" },
+      { status: 400 }
+    );
+  }
+
+  const codeRecord = codeResult.rows[0];
+
+  // Check if code is already claimed
+  if (codeRecord.user_id) {
+    return NextResponse.json(
+      { ok: false, error: "Този код вече е използван" },
+      { status: 400 }
+    );
+  }
+
+  // Check if code is expired
+  if (codeRecord.access_code_expires_at) {
+    const expiresAt = new Date(codeRecord.access_code_expires_at);
+    if (expiresAt < new Date()) {
+      return NextResponse.json(
+        { ok: false, error: "Кодът за достъп е изтекъл" },
+        { status: 400 }
+      );
+    }
+  }
+
+  // Claim the access code - assign the user
+  await sql`
+    UPDATE store_connections
+    SET user_id = ${session.user.id}, connected_at = NOW()
+    WHERE id = ${codeRecord.id}
+  `;
+
+  const response = NextResponse.json({
+    ok: true,
+    siteId: codeRecord.site_id,
+    instanceId: codeRecord.instance_id,
+    role: "accountant",
+    message: "Успешно свързване като счетоводител",
+  });
+
+  // Set cookies for the accountant
+  if (codeRecord.instance_id) {
+    response.cookies.set("udito_instance_id", codeRecord.instance_id, {
+      path: "/",
+      sameSite: "none",
+      secure: true,
+    });
+  }
+  if (codeRecord.site_id) {
+    response.cookies.set("udito_site_id", codeRecord.site_id, {
+      path: "/",
+      sameSite: "none",
+      secure: true,
+    });
+  }
+
+  return response;
+}
 
 async function registerWebhooks(instanceId: string, siteId: string | null) {
   try {
@@ -56,6 +139,12 @@ export async function POST(request: Request) {
     const token = body?.token;
     const instanceIdParam = body?.instanceId || body?.instance_id;
     const siteIdParam = body?.siteId || body?.site_id;
+    const accessCode = body?.accessCode || body?.access_code;
+
+    // Handle access code for accountants
+    if (accessCode && typeof accessCode === "string") {
+      return handleAccessCode(accessCode);
+    }
 
     if ((!token || typeof token !== "string") && !instanceIdParam) {
       return NextResponse.json(

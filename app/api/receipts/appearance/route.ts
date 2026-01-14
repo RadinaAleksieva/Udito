@@ -21,6 +21,7 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
 
   try {
+    // Use explicit null checks because SQL NULL = NULL is false
     await sql`
       UPDATE companies
       SET
@@ -30,7 +31,8 @@ export async function POST(request: Request) {
         receipt_template = ${body.receiptTemplate ?? 'modern'},
         accent_color = ${body.accentColor ?? 'green'},
         updated_at = now()
-      WHERE site_id = ${siteId} OR instance_id = ${instanceId}
+      WHERE (${siteId}::text IS NOT NULL AND site_id = ${siteId})
+         OR (${instanceId}::text IS NOT NULL AND instance_id = ${instanceId})
     `;
 
     return NextResponse.json({ ok: true });

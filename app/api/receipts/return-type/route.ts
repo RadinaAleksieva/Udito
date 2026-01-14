@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { initDb, updateReturnPaymentType, getReceiptById } from "@/lib/db";
-import { getActiveWixToken } from "@/lib/wix-context";
+import { getActiveStore } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -30,9 +30,9 @@ export async function POST(request: Request) {
     }
 
     await initDb();
-    const token = await getActiveWixToken();
+    const store = await getActiveStore();
 
-    if (!token?.site_id) {
+    if (!store?.siteId && !store?.instanceId) {
       return NextResponse.json(
         { ok: false, error: "Не сте влезли в системата" },
         { status: 401 }

@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { renderToBuffer } from "@react-pdf/renderer";
 import QRCode from "qrcode";
 import { initDb, getCompanyBySite, getOrderByIdForSite } from "@/lib/db";
-import { getActiveWixToken } from "@/lib/wix-context";
-import { auth, getUserStores } from "@/lib/auth";
+import { getActiveStore } from "@/lib/auth";
 import { getReceiptByOrderIdAndType } from "@/lib/receipts";
 import { extractTransactionRef } from "@/lib/wix";
 import { ReceiptPdf, ReceiptPdfData } from "@/lib/receipt-pdf";
@@ -181,56 +180,20 @@ export async function GET(request: NextRequest) {
     await initDb();
 
     // Security: Check user authentication and store access
-    const session = await auth();
-    let siteId: string | null = null;
-
-    if (session?.user?.id) {
-      const userStores = await getUserStores(session.user.id);
-      if (userStores.length === 0) {
-        return NextResponse.json({ error: "No connected stores" }, { status: 400 });
-      }
-      // Check if a specific store is requested via query param
-      if (storeParam) {
-        const selectedStore = userStores.find(
-          (s: any) => s.site_id === storeParam || s.instance_id === storeParam
-        );
-        if (selectedStore) {
-          siteId = selectedStore.site_id || selectedStore.instance_id;
-        }
-      }
-      // Fallback to first connected store
-      if (!siteId) {
-        siteId = userStores[0].site_id || userStores[0].instance_id;
-      }
-    } else {
-      // Legacy flow: User not logged in via NextAuth, check Wix cookies
-      const token = await getActiveWixToken();
-      siteId = token?.site_id ?? token?.instance_id ?? null;
-
-      if (!siteId) {
-        return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-      }
+    const store = await getActiveStore(storeParam);
+    if (!store?.siteId && !store?.instanceId) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
+    const siteId = store.instanceId || store.siteId;
+    const instanceId = store.instanceId;
 
-    if (!siteId) {
-      return NextResponse.json({ error: "No site selected" }, { status: 400 });
-    }
-
-    const record = await getOrderByIdForSite(orderId, siteId);
+    const record = await getOrderByIdForSite(orderId, siteId!);
     if (!record) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
     const receiptRecord = await getReceiptByOrderIdAndType(orderId, receiptType);
-
-    // Get instanceId for company lookup
-    let instanceIdForCompany: string | null = null;
-    if (session?.user?.id) {
-      const userStores = await getUserStores(session.user.id);
-      const currentStore = userStores.find((s: any) => s.site_id === siteId || s.instance_id === siteId);
-      instanceIdForCompany = currentStore?.instance_id || null;
-    }
-    const company = await getCompanyBySite(siteId, instanceIdForCompany);
+    const company = await getCompanyBySite(siteId, instanceId);
 
     // Debug: log template being used
     console.log("PDF Generation - Company template:", company?.receipt_template, "Accent:", company?.accent_color);

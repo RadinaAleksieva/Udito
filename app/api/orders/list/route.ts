@@ -1,19 +1,21 @@
 import { NextResponse } from "next/server";
 import { initDb, listPaginatedOrdersForSite } from "@/lib/db";
-import { getActiveWixContext } from "@/lib/wix-context";
+import { getActiveStore } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
     await initDb();
-    const { siteId } = await getActiveWixContext();
+    const url = new URL(request.url);
+    const storeParam = url.searchParams.get("store");
+    const store = await getActiveStore(storeParam);
 
-    if (!siteId) {
+    if (!store?.siteId && !store?.instanceId) {
       return NextResponse.json({ ok: false, error: "Missing site context" }, { status: 400 });
     }
+    const siteId = store.instanceId || store.siteId;
 
-    const url = new URL(request.url);
     const limit = Math.min(Number(url.searchParams.get("limit") || 20), 100);
     const offset = Number(url.searchParams.get("offset") || 0);
     const month = url.searchParams.get("month") || null;
@@ -32,7 +34,7 @@ export async function GET(request: Request) {
     }
 
     const { orders, total } = await listPaginatedOrdersForSite(
-      siteId,
+      siteId!,
       limit,
       offset,
       rangeStart,
