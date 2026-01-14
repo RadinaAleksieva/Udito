@@ -225,7 +225,7 @@ export async function GET(request: Request) {
       { status: 400 }
     );
   }
-  const siteId = store.instanceId || store.siteId;
+  const siteId = store.siteId || store.instanceId;
 
   const company = await getCompanyBySite(siteId, store.instanceId);
 

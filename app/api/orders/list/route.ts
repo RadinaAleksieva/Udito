@@ -14,7 +14,7 @@ export async function GET(request: Request) {
     if (!store?.siteId && !store?.instanceId) {
       return NextResponse.json({ ok: false, error: "Missing site context" }, { status: 400 });
     }
-    const siteId = store.instanceId || store.siteId;
+    const siteId = store.siteId || store.instanceId;
 
     const limit = Math.min(Number(url.searchParams.get("limit") || 20), 100);
     const offset = Number(url.searchParams.get("offset") || 0);

@@ -184,7 +184,7 @@ export async function GET(request: NextRequest) {
     if (!store?.siteId && !store?.instanceId) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
-    const siteId = store.instanceId || store.siteId;
+    const siteId = store.siteId || store.instanceId;
     const instanceId = store.instanceId;
 
     const record = await getOrderByIdForSite(orderId, siteId!);

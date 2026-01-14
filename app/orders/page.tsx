@@ -484,7 +484,8 @@ export default async function OrdersPage({
   if (!store) {
     redirect("/login");
   }
-  const siteId = store.instanceId || store.siteId;
+  // Use siteId first (orders are stored with site_id), fallback to instanceId
+  const siteId = store.siteId || store.instanceId;
   const now = new Date();
   const monthParam = searchParams?.month || "all";
   const monthMatch = monthParam.match(/^(\d{4})-(\d{2})$/);

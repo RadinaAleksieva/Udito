@@ -109,7 +109,7 @@ export async function GET(request: Request) {
       { status: 400 }
     );
   }
-  const siteId = store.instanceId || store.siteId;
+  const siteId = store.siteId || store.instanceId;
 
   // Create date range for the month
   const startDate = new Date(year, month - 1, 1);

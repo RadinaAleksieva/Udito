@@ -406,7 +406,7 @@ export default async function ReceiptPage({
   if (!store) {
     redirect("/login");
   }
-  const siteId = store.instanceId || store.siteId;
+  const siteId = store.siteId || store.instanceId;
   const instanceId = store.instanceId;
 
   // TypeScript guard - this should never happen due to above redirects

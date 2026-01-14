@@ -27,7 +27,7 @@ export default async function AuditPage({
   if (!store) {
     redirect("/login");
   }
-  const siteId = store.instanceId || store.siteId;
+  const siteId = store.siteId || store.instanceId;
   const now = new Date();
   const monthParam = searchParams?.month || "";
   const monthMatch = monthParam.match(/^(\d{4})-(\d{2})$/);
