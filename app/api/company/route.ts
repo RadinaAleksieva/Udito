@@ -4,70 +4,19 @@ import {
   initDb,
   upsertCompany,
 } from "@/lib/db";
-import { getActiveWixToken, getActiveWixContext } from "@/lib/wix-context";
-import { auth, getUserStores, linkStoreToUser } from "@/lib/auth";
-
-async function getSiteIdForRequest() {
-  // First check if user is logged in via NextAuth
-  const session = await auth();
-
-  // Check for Wix cookies
-  const wixContext = await getActiveWixContext();
-  const cookieSiteId = wixContext.siteId;
-  const cookieInstanceId = wixContext.instanceId;
-
-  if (session?.user?.id) {
-    let userStores = await getUserStores(session.user.id);
-
-    if (userStores.length > 0) {
-      return {
-        siteId: userStores[0].site_id || null,
-        instanceId: userStores[0].instance_id || null,
-      };
-    }
-
-    // User has no stores but has Wix cookies - auto link
-    if (cookieSiteId || cookieInstanceId) {
-      try {
-        await linkStoreToUser(session.user.id, cookieSiteId || "", cookieInstanceId || undefined);
-        userStores = await getUserStores(session.user.id);
-        if (userStores.length > 0) {
-          return {
-            siteId: userStores[0].site_id || null,
-            instanceId: userStores[0].instance_id || null,
-          };
-        }
-      } catch {
-        // Fall through to use cookies
-      }
-      return {
-        siteId: cookieSiteId,
-        instanceId: cookieInstanceId,
-      };
-    }
-
-    return { siteId: null, instanceId: null };
-  }
-
-  // Fallback to cookie-based auth
-  const token = await getActiveWixToken();
-  return {
-    siteId: token?.site_id ?? null,
-    instanceId: token?.instance_id ?? null,
-  };
-}
+import { getActiveStore } from "@/lib/auth";
 
 export async function GET() {
   await initDb();
-  const { siteId, instanceId } = await getSiteIdForRequest();
+  const store = await getActiveStore();
 
-  if (!siteId && !instanceId) {
+  if (!store?.siteId && !store?.instanceId) {
     return NextResponse.json(
       { ok: false, error: "Няма свързан магазин." },
       { status: 400 }
     );
   }
-  const company = await getCompanyBySite(siteId, instanceId);
+  const company = await getCompanyBySite(store.siteId, store.instanceId);
   return NextResponse.json({ ok: true, company });
 }
 
@@ -87,14 +36,16 @@ export async function POST(request: Request) {
     );
   }
 
-  const { siteId, instanceId } = await getSiteIdForRequest();
+  const store = await getActiveStore();
 
-  if (!siteId && !instanceId) {
+  if (!store?.siteId && !store?.instanceId) {
     return NextResponse.json(
       { ok: false, error: "Няма свързан магазин." },
       { status: 400 }
     );
   }
+
+  const { siteId, instanceId } = store;
 
   const profile = {
     businessId: null,

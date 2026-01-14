@@ -9,14 +9,14 @@ import {
   listRecentOrdersForPeriodForSite,
 } from "@/lib/db";
 import { getAccessToken } from "@/lib/wix";
-import { getActiveWixToken, getActiveWixContext } from "@/lib/wix-context";
+import { getActiveWixContext } from "@/lib/wix-context";
 import BackfillButton from "./backfill-button";
 import EnrichButton from "./enrich-button";
 // Note: deriveOrder* functions removed - using extracted columns directly for efficiency
 import { countReceiptsForPeriodForSite } from "@/lib/receipts";
 import ConnectionCheck from "./connection-check";
 import AutoSync from "./auto-sync";
-import { auth, getUserStores, linkStoreToUser } from "@/lib/auth";
+import { auth, getUserStores, linkStoreToUser, getActiveStore } from "@/lib/auth";
 import Link from "next/link";
 import StoreSelector from "../components/store-selector";
 
@@ -89,83 +89,36 @@ export default async function OverviewPage({
 }) {
   await initDb();
 
-  // Get user session and their connected stores
   const session = await auth();
   let userStores = session?.user?.id ? await getUserStores(session.user.id) : [];
-  let hasUserStores = userStores.length > 0;
-
-  let siteId: string | null = null;
-  let instanceId: string | null = null;
   let needsStoreConnection = false;
 
-  // Check for Wix cookies (from iframe access)
-  const wixContext = await getActiveWixContext();
-  const cookieSiteId = wixContext.siteId;
-  const cookieInstanceId = wixContext.instanceId;
-
-  // Check for Wix params in URL (for iframe context where cookies are blocked)
+  // Check for Wix params in URL (for iframe context)
   const urlInstanceId = searchParams?.instanceId || searchParams?.instance_id || null;
   const urlSiteId = searchParams?.siteId || searchParams?.site_id || null;
-
-  // Check if user selected a specific store via query param
   const selectedStoreId = searchParams?.store || urlSiteId || urlInstanceId || null;
 
-  if (session?.user?.id) {
-    // User is logged in
-    if (hasUserStores) {
-      // Check if user selected a specific store
-      const selectedStore = selectedStoreId
-        ? userStores.find((s: any) => s.site_id === selectedStoreId || s.instance_id === selectedStoreId)
-        : null;
-
-      if (selectedStore) {
-        siteId = selectedStore.site_id || null;
-        instanceId = selectedStore.instance_id || null;
-      } else {
-        // Use the first connected store
-        siteId = userStores[0].site_id || null;
-        instanceId = userStores[0].instance_id || null;
-      }
-    } else if (cookieSiteId || cookieInstanceId) {
-      // User has Wix cookies but no store connections - AUTO LINK
+  // Auto-link Wix store if user logged in but no stores connected
+  if (session?.user?.id && userStores.length === 0) {
+    const wixContext = await getActiveWixContext();
+    if (wixContext.siteId || wixContext.instanceId) {
       try {
-        await linkStoreToUser(session.user.id, cookieSiteId || "", cookieInstanceId || undefined);
-        // Refresh stores after linking
+        await linkStoreToUser(session.user.id, wixContext.siteId || "", wixContext.instanceId || undefined);
         userStores = await getUserStores(session.user.id);
-        hasUserStores = userStores.length > 0;
-        if (hasUserStores) {
-          siteId = userStores[0].site_id || null;
-          instanceId = userStores[0].instance_id || null;
-        } else {
-          // Fallback to cookies if refresh didn't work
-          siteId = cookieSiteId;
-          instanceId = cookieInstanceId;
-        }
       } catch (e) {
         console.error("Auto-link store failed:", e);
-        // Still use the cookies so user can see their data
-        siteId = cookieSiteId;
-        instanceId = cookieInstanceId;
       }
-    } else {
-      // User has no connected stores and no Wix cookies
-      needsStoreConnection = true;
     }
-  } else {
-    // Legacy flow: User not logged in via NextAuth, check Wix cookies or URL params
-    const token = await getActiveWixToken();
-    siteId = token?.site_id ?? urlSiteId ?? null;
-    instanceId = token?.instance_id ?? urlInstanceId ?? null;
+  }
 
-    // If we have URL params but no cookies, try to resolve siteId from instanceId
-    if (!siteId && instanceId) {
-      try {
-        const appInstance = await import("@/lib/wix").then(m => m.getAppInstanceDetails({ instanceId }));
-        siteId = appInstance?.siteId ?? null;
-      } catch {
-        // Continue without siteId
-      }
-    }
+  // Use centralized store getter with optional selected store ID
+  const store = await getActiveStore(selectedStoreId);
+  const siteId = store?.siteId || null;
+  const instanceId = store?.instanceId || null;
+
+  // Check if user needs to connect a store
+  if (session?.user?.id && !store) {
+    needsStoreConnection = true;
   }
   const now = new Date();
   const monthParam = searchParams?.month || "";
@@ -331,7 +284,7 @@ export default async function OverviewPage({
               Това табло показва синхронизирани поръчки, електронни бележки и статуса
               на месечния XML файл.
             </p>
-            {hasUserStores && userStores.length > 0 && (
+            {userStores.length > 0 && (
               <StoreSelector
                 stores={userStores.map((s: any) => ({
                   id: s.id?.toString() || s.site_id || s.instance_id,
