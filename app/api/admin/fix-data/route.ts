@@ -95,11 +95,11 @@ export async function GET(request: Request) {
     }
 
     if (action === "fix-roles") {
-      // Set role = 'owner' for all store_connections that have null role
+      // Set role = 'owner' for all store_connections that have a user_id
       const result = await sql`
         UPDATE store_connections
         SET role = 'owner'
-        WHERE role IS NULL AND user_id IS NOT NULL
+        WHERE user_id IS NOT NULL
         RETURNING id, site_id, user_id, role
       `;
       return NextResponse.json({
