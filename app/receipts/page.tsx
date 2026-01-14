@@ -260,14 +260,14 @@ export default async function ReceiptsPage({
                       ) : "—"}
                     </span>
                     <span>
-                      <a className="status-link" href={`/receipts/${receipt.order_id}?type=${receipt.receipt_type || "sale"}&month=${monthValue}`}>
+                      <a className="status-link" href={`/receipts/${receipt.order_id}?type=${receipt.receipt_type || "sale"}&month=${monthValue}${siteId ? `&store=${siteId}` : ''}`}>
                         Преглед
                       </a>
                     </span>
                     <span>
                       <a
                         className="status-link"
-                        href={`/api/receipts/pdf?orderId=${receipt.order_id}&type=${receipt.receipt_type || "sale"}`}
+                        href={`/api/receipts/pdf?orderId=${receipt.order_id}&type=${receipt.receipt_type || "sale"}${siteId ? `&store=${siteId}` : ''}`}
                       >
                         Изтегли
                       </a>

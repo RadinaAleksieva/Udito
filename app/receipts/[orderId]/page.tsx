@@ -2,6 +2,7 @@ import Image from "next/image";
 import QRCode from "qrcode";
 import { initDb, getCompanyBySite, getOrderByIdForSite, upsertOrder } from "@/lib/db";
 import { getActiveWixToken } from "@/lib/wix-context";
+import { auth, getUserStores } from "@/lib/auth";
 import {
   extractTransactionRef,
   extractPaymentId,
@@ -23,7 +24,7 @@ import ReceiptActions from "./receipt-actions";
 import CancelReceiptButton from "./cancel-receipt-button";
 import ReturnPaymentEditor from "./return-payment-editor";
 import "./receipt.css";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -394,17 +395,55 @@ export default async function ReceiptPage({
   searchParams,
 }: {
   params: { orderId: string };
-  searchParams?: { print?: string; type?: string; download?: string };
+  searchParams?: { print?: string; type?: string; download?: string; store?: string };
 }) {
   await initDb();
   const orderId = params.orderId;
   const receiptType = searchParams?.type || "sale";
   const isRefund = receiptType === "refund";
-  const token = await getActiveWixToken();
-  const siteId = token?.site_id ?? null;
+
+  // Security: Check user authentication and store access
+  const session = await auth();
+  let siteId: string | null = null;
+  let token: any = null;
+
+  if (session?.user?.id) {
+    const userStores = await getUserStores(session.user.id);
+    if (userStores.length === 0) {
+      redirect("/overview");
+    }
+    // Check if a specific store is requested via query param
+    const storeParam = searchParams?.store;
+    if (storeParam) {
+      const selectedStore = userStores.find(
+        (s: any) => s.site_id === storeParam || s.instance_id === storeParam
+      );
+      if (selectedStore) {
+        siteId = selectedStore.site_id || selectedStore.instance_id;
+        // Also get the token info for this store
+        token = selectedStore;
+      }
+    }
+    // Fallback to first connected store
+    if (!siteId) {
+      siteId = userStores[0].site_id || userStores[0].instance_id;
+      token = userStores[0];
+    }
+  } else {
+    // Legacy flow: User not logged in via NextAuth, check Wix cookies
+    token = await getActiveWixToken();
+    siteId = token?.site_id ?? token?.instance_id ?? null;
+
+    if (!siteId) {
+      redirect("/login");
+    }
+  }
+
+  // TypeScript guard - this should never happen due to above redirects
   if (!siteId) {
     notFound();
   }
+
   const record = await getOrderByIdForSite(orderId, siteId);
   if (!record) {
     notFound();
