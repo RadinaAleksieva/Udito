@@ -22,9 +22,9 @@ export default function TermsPage() {
 
             <h2>2. Описание на услугата</h2>
             <p>
-              UDITO е софтуерна услуга за издаване на електронни бележки
-              и генериране на одиторски файлове за онлайн магазини, интегрирани
-              с Wix платформата.
+              UDITO е софтуерна услуга за издаване на документи за регистрирана продажба
+              (електронни бележки) и генериране на одиторски файлове за онлайн магазини,
+              интегрирани с Wix платформата.
             </p>
             <p>Услугата предоставя:</p>
             <ul>
@@ -75,7 +75,7 @@ export default function TermsPage() {
             <h2>6. Интелектуална собственост</h2>
             <p>
               UDITO, включително софтуера, дизайна и търговските марки, е
-              собственост на Designs by Po Ltd. Вие получавате ограничен лиценз
+              собственост на ДИЗАЙНС БАЙ ПО ЕООД. Вие получавате ограничен лиценз
               за използване на услугата съгласно тези условия.
             </p>
 
@@ -120,8 +120,10 @@ export default function TermsPage() {
               За въпроси относно тези условия:
             </p>
             <p>
-              <strong>Designs by Po Ltd.</strong><br />
-              Email: legal@designsbypo.com
+              <strong>ДИЗАЙНС БАЙ ПО ЕООД</strong><br />
+              Уебсайт: <a href="https://www.designedbypo.com" target="_blank" rel="noopener noreferrer">www.designedbypo.com</a><br />
+              Email: <a href="mailto:office@designedbypo.com">office@designedbypo.com</a><br />
+              Телефон: <a href="tel:+359877776119">0877 776 119</a>
             </p>
           </div>
         </section>
@@ -132,7 +134,7 @@ export default function TermsPage() {
           </a>
         </div>
       </div>
-      <footer className="footer">UDITO от Designs by Po.</footer>
+      <footer className="footer">UDITO от ДИЗАЙНС БАЙ ПО ЕООД</footer>
     </main>
   );
 }

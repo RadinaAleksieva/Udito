@@ -313,7 +313,7 @@ export default async function OverviewPage({
             </div>
           </section>
         </div>
-        <footer className="footer">UDITO от Designs by Po.</footer>
+        <footer className="footer">UDITO от ДИЗАЙНС БАЙ ПО ЕООД</footer>
       </main>
     );
   }
@@ -541,7 +541,7 @@ export default async function OverviewPage({
           )}
         </section>
       </div>
-      <footer className="footer">UDITO от Designs by Po.</footer>
+      <footer className="footer">UDITO от ДИЗАЙНС БАЙ ПО ЕООД</footer>
     </main>
   );
 }

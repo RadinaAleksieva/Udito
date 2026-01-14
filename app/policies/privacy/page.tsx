@@ -17,9 +17,9 @@ export default function PrivacyPolicyPage() {
             <h2>1. Въведение</h2>
             <p>
               Добре дошли в UDITO. Тази Политика за поверителност описва как
-              UDITO (&quot;ние&quot;, &quot;нас&quot; или &quot;нашият&quot;), продукт на Designs by Po Ltd.,
+              UDITO (&quot;ние&quot;, &quot;нас&quot; или &quot;нашият&quot;), продукт на ДИЗАЙНС БАЙ ПО ЕООД,
               събира, използва и защитава вашата информация, когато използвате
-              нашата услуга за издаване на електронни бележки.
+              нашата услуга за издаване на документи за регистрирана продажба (електронни бележки).
             </p>
             <p>
               Като използвате UDITO, вие се съгласявате със събирането и
@@ -113,8 +113,10 @@ export default function PrivacyPolicyPage() {
               За въпроси относно тази Политика за поверителност, моля свържете се с нас:
             </p>
             <p>
-              <strong>Designs by Po Ltd.</strong><br />
-              Email: privacy@designsbypo.com
+              <strong>ДИЗАЙНС БАЙ ПО ЕООД</strong><br />
+              Уебсайт: <a href="https://www.designedbypo.com" target="_blank" rel="noopener noreferrer">www.designedbypo.com</a><br />
+              Email: <a href="mailto:office@designedbypo.com">office@designedbypo.com</a><br />
+              Телефон: <a href="tel:+359877776119">0877 776 119</a>
             </p>
           </div>
         </section>
@@ -125,7 +127,7 @@ export default function PrivacyPolicyPage() {
           </a>
         </div>
       </div>
-      <footer className="footer">UDITO от Designs by Po.</footer>
+      <footer className="footer">UDITO от ДИЗАЙНС БАЙ ПО ЕООД</footer>
     </main>
   );
 }

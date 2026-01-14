@@ -222,7 +222,15 @@ export async function GET(request: NextRequest) {
     }
 
     const receiptRecord = await getReceiptByOrderIdAndType(orderId, receiptType);
-    const company = await getCompanyBySite(siteId);
+
+    // Get instanceId for company lookup
+    let instanceIdForCompany: string | null = null;
+    if (session?.user?.id) {
+      const userStores = await getUserStores(session.user.id);
+      const currentStore = userStores.find((s: any) => s.site_id === siteId || s.instance_id === siteId);
+      instanceIdForCompany = currentStore?.instance_id || null;
+    }
+    const company = await getCompanyBySite(siteId, instanceIdForCompany);
 
     // Debug: log template being used
     console.log("PDF Generation - Company template:", company?.receipt_template, "Accent:", company?.accent_color);

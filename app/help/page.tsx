@@ -26,6 +26,7 @@ export default async function HelpPage() {
               <li><a href="#receipts">Електронни бележки</a></li>
               <li><a href="#audit">Одиторски файл</a></li>
               <li><a href="#settings">Настройки</a></li>
+              <li><a href="#contact">Контакт и поддръжка</a></li>
             </ul>
           </div>
         </section>
@@ -204,12 +205,44 @@ export default async function HelpPage() {
             <ul>
               <li><a href="/policies/privacy">Политика за поверителност</a></li>
               <li><a href="/policies/terms">Общи условия за ползване</a></li>
-              <li><a href="/policies/data">Политика за обработка на лични данни</a></li>
             </ul>
           </div>
         </section>
+
+        <section className="help-section" id="contact">
+          <h2>Контакт и поддръжка</h2>
+          <div className="help-content">
+            <p>
+              За въпроси, техническа поддръжка или обратна връзка, свържете се с нас:
+            </p>
+            <div className="contact-card">
+              <p>
+                <strong>ДИЗАЙНС БАЙ ПО ЕООД</strong>
+              </p>
+              <ul>
+                <li>
+                  <strong>Уебсайт:</strong>{" "}
+                  <a href="https://www.designedbypo.com" target="_blank" rel="noopener noreferrer">
+                    www.designedbypo.com
+                  </a>
+                </li>
+                <li>
+                  <strong>Email:</strong>{" "}
+                  <a href="mailto:office@designedbypo.com">office@designedbypo.com</a>
+                </li>
+                <li>
+                  <strong>Телефон:</strong>{" "}
+                  <a href="tel:+359877776119">0877 776 119</a>
+                </li>
+              </ul>
+            </div>
+            <div className="help-note">
+              <strong>Работно време:</strong> Понеделник - Петък, 10:00 - 18:00 ч.
+            </div>
+          </div>
+        </section>
       </div>
-      <footer className="footer">UDITO от Designs by Po.</footer>
+      <footer className="footer">UDITO от ДИЗАЙНС БАЙ ПО ЕООД</footer>
     </main>
   );
 }

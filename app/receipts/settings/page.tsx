@@ -38,7 +38,7 @@ export default async function ReceiptSettingsPage() {
         </section>
         <ReceiptSettingsForm />
       </div>
-      <footer className="footer">UDITO от Designs by Po.</footer>
+      <footer className="footer">UDITO от ДИЗАЙНС БАЙ ПО ЕООД</footer>
     </main>
   );
 }

@@ -97,13 +97,13 @@ export default async function SettingsPage() {
           </section>
         )}
 
+        {/* Company Form - Store Data */}
+        <CompanyForm />
+
         {/* Store Connect Form - only for authenticated users */}
         {session?.user && <StoreConnectForm />}
-
-        {/* Company Form */}
-        <CompanyForm />
       </div>
-      <footer className="footer">UDITO от Designs by Po.</footer>
+      <footer className="footer">UDITO от ДИЗАЙНС БАЙ ПО ЕООД</footer>
     </main>
   );
 }
