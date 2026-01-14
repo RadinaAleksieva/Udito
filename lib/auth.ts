@@ -247,6 +247,13 @@ export async function auth() {
   return getServerSession(authOptions);
 }
 
+export type ActiveStore = {
+  siteId: string | null;
+  instanceId: string | null;
+  storeName: string | null;
+  userId: string | null;
+};
+
 /**
  * CRITICAL: This is the SINGLE source of truth for the current active store.
  * All code should use this function instead of directly accessing Wix cookies.
@@ -255,29 +262,42 @@ export async function auth() {
  * 1. NextAuth session -> user's connected stores (most reliable)
  * 2. Wix cookies (legacy fallback, should be phased out)
  *
- * Returns null if no store is active.
+ * @param requestedStoreId - Optional: select a specific store by ID (must be one of user's stores)
+ * @returns The active store or null if no store is active.
  */
-export async function getActiveStore(): Promise<{
-  siteId: string | null;
-  instanceId: string | null;
-  storeName: string | null;
-  userId: string | null;
-} | null> {
+export async function getActiveStore(requestedStoreId?: string | null): Promise<ActiveStore | null> {
   // Priority 1: NextAuth session
   const session = await auth();
   if (session?.user?.id) {
     const stores = await getUserStores(session.user.id);
-    if (stores.length > 0) {
-      const store = stores[0]; // First connected store is the active one
-      return {
-        siteId: store.site_id || null,
-        instanceId: store.instance_id || null,
-        storeName: store.store_name || null,
-        userId: session.user.id,
-      };
+    if (stores.length === 0) {
+      // User is logged in but has no stores connected
+      return null;
     }
-    // User is logged in but has no stores connected
-    return null;
+
+    // If a specific store is requested, validate it belongs to this user
+    if (requestedStoreId) {
+      const requestedStore = stores.find(
+        (s: any) => s.site_id === requestedStoreId || s.instance_id === requestedStoreId
+      );
+      if (requestedStore) {
+        return {
+          siteId: requestedStore.site_id || null,
+          instanceId: requestedStore.instance_id || null,
+          storeName: requestedStore.store_name || null,
+          userId: session.user.id,
+        };
+      }
+    }
+
+    // Default to first connected store
+    const store = stores[0];
+    return {
+      siteId: store.site_id || null,
+      instanceId: store.instance_id || null,
+      storeName: store.store_name || null,
+      userId: session.user.id,
+    };
   }
 
   // Priority 2: Legacy Wix cookies (fallback)

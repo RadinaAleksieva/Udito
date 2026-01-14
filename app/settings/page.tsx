@@ -3,8 +3,8 @@ import CompanyForm from "./company-form";
 import StoreConnectForm from "./store-connect-form";
 import StoresList from "./stores-list";
 import { initDb, sql } from "@/lib/db";
-import { getActiveWixContext, getActiveWixToken } from "@/lib/wix-context";
-import { auth, getUserStores, linkStoreToUser } from "@/lib/auth";
+import { getActiveWixContext } from "@/lib/wix-context";
+import { auth, getUserStores, linkStoreToUser, getActiveStore } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -13,40 +13,21 @@ export default async function SettingsPage() {
   const session = await auth();
   let userStores = session?.user?.id ? await getUserStores(session.user.id) : [];
 
-  let siteId: string | null = null;
-  let instanceId: string | null = null;
-
-  // Check for Wix cookies (from iframe access)
-  const wixContext = await getActiveWixContext();
-  const cookieSiteId = wixContext.siteId;
-  const cookieInstanceId = wixContext.instanceId;
-
-  if (session?.user?.id && userStores.length > 0) {
-    // User logged in with connected stores
-    siteId = userStores[0].site_id || null;
-    instanceId = userStores[0].instance_id || null;
-  } else if (session?.user?.id && (cookieSiteId || cookieInstanceId)) {
-    // User logged in with Wix cookies but no store connections - AUTO LINK
-    try {
-      await linkStoreToUser(session.user.id, cookieSiteId || "", cookieInstanceId || undefined);
-      userStores = await getUserStores(session.user.id);
-      if (userStores.length > 0) {
-        siteId = userStores[0].site_id || null;
-        instanceId = userStores[0].instance_id || null;
-      } else {
-        siteId = cookieSiteId;
-        instanceId = cookieInstanceId;
+  // Auto-link Wix store if user logged in but no stores connected
+  if (session?.user?.id && userStores.length === 0) {
+    const wixContext = await getActiveWixContext();
+    if (wixContext.siteId || wixContext.instanceId) {
+      try {
+        await linkStoreToUser(session.user.id, wixContext.siteId || "", wixContext.instanceId || undefined);
+        userStores = await getUserStores(session.user.id);
+      } catch {
+        // Ignore link errors
       }
-    } catch {
-      siteId = cookieSiteId;
-      instanceId = cookieInstanceId;
     }
-  } else {
-    // Legacy flow - use cookies
-    const token = await getActiveWixToken();
-    siteId = token?.site_id ?? null;
-    instanceId = cookieInstanceId ?? null;
   }
+
+  // Use centralized store getter
+  const store = await getActiveStore();
 
   // Get company info for connected stores (store_name priority: store_connections > companies)
   const storesWithInfo = await Promise.all(

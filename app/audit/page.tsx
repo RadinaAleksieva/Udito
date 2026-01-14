@@ -2,8 +2,7 @@ import TopNav from "../components/top-nav";
 import MonthFilter from "../components/month-filter";
 import { initDb } from "@/lib/db";
 import { listOrdersWithReceiptsForAudit, listRefundReceiptsForAudit } from "@/lib/receipts";
-import { getActiveWixToken } from "@/lib/wix-context";
-import { auth, getUserStores } from "@/lib/auth";
+import { getActiveStore } from "@/lib/auth";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -24,38 +23,11 @@ export default async function AuditPage({
 }) {
   await initDb();
 
-  // Security: Check user authentication and store access
-  const session = await auth();
-  let siteId: string | null = null;
-
-  if (session?.user?.id) {
-    const userStores = await getUserStores(session.user.id);
-    if (userStores.length === 0) {
-      redirect("/overview");
-    }
-    // Check if a specific store is requested via query param
-    const storeParam = searchParams?.store;
-    if (storeParam) {
-      const selectedStore = userStores.find(
-        (s: any) => s.site_id === storeParam || s.instance_id === storeParam
-      );
-      if (selectedStore) {
-        siteId = selectedStore.site_id || selectedStore.instance_id;
-      }
-    }
-    // Fallback to first connected store
-    if (!siteId) {
-      siteId = userStores[0].site_id || userStores[0].instance_id;
-    }
-  } else {
-    // Legacy flow: User not logged in via NextAuth, check Wix cookies
-    const token = await getActiveWixToken();
-    siteId = token?.site_id ?? token?.instance_id ?? null;
-
-    if (!siteId) {
-      redirect("/login");
-    }
+  const store = await getActiveStore(searchParams?.store);
+  if (!store) {
+    redirect("/login");
   }
+  const siteId = store.instanceId || store.siteId;
   const now = new Date();
   const monthParam = searchParams?.month || "";
   const monthMatch = monthParam.match(/^(\d{4})-(\d{2})$/);
