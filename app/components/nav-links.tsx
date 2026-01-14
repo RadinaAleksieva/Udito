@@ -10,6 +10,7 @@ const links = [
   { href: "/audit", label: "Одиторски файл" },
   { href: "/reports", label: "Отчети" },
   { href: "/settings", label: "Настройки" },
+  { href: "/access", label: "Достъп" },
   { href: "/help", label: "Помощ" },
 ];
 
