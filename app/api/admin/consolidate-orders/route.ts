@@ -63,7 +63,7 @@ export async function GET(request: Request) {
   }
 }
 
-// POST: Consolidate orders from one site_id to another
+// POST: Consolidate orders or move single order
 export async function POST(request: Request) {
   try {
     await initDb();
@@ -74,13 +74,28 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { fromSiteId, toSiteId } = body;
+    const { fromSiteId, toSiteId, orderNumber } = body;
 
     if (!toSiteId) {
       return NextResponse.json({ ok: false, error: "Missing toSiteId" }, { status: 400 });
     }
 
-    // Count orders that will be affected
+    // If orderNumber provided, move single order
+    if (orderNumber) {
+      const updateResult = await sql`
+        UPDATE orders SET site_id = ${toSiteId} WHERE number = ${orderNumber}
+        RETURNING id, number, site_id
+      `;
+      return NextResponse.json({
+        ok: true,
+        orderNumber,
+        toSiteId,
+        updated: updateResult.rowCount,
+        order: updateResult.rows[0],
+      });
+    }
+
+    // Bulk consolidation: Count orders that will be affected
     let countResult;
     if (fromSiteId === null || fromSiteId === "null") {
       countResult = await sql`
@@ -91,7 +106,7 @@ export async function POST(request: Request) {
         SELECT COUNT(*) as count FROM orders WHERE site_id = ${fromSiteId}
       `;
     } else {
-      return NextResponse.json({ ok: false, error: "Missing fromSiteId (use 'null' for NULL values)" }, { status: 400 });
+      return NextResponse.json({ ok: false, error: "Missing fromSiteId or orderNumber" }, { status: 400 });
     }
 
     const affectedCount = countResult.rows[0]?.count || 0;
