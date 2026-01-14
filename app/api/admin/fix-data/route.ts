@@ -45,11 +45,22 @@ export async function GET(request: Request) {
         SELECT business_id FROM business_users WHERE user_id = ${userId} LIMIT 1
       `;
 
-      if (businessResult.rows.length === 0) {
-        return NextResponse.json({ ok: false, error: "User has no business" }, { status: 404 });
-      }
+      let businessId: string;
 
-      const businessId = businessResult.rows[0].business_id;
+      if (businessResult.rows.length === 0) {
+        // Create a business for this user
+        businessId = crypto.randomUUID();
+        await sql`
+          INSERT INTO businesses (id, name, trial_ends_at, subscription_status, created_at, updated_at)
+          VALUES (${businessId}, 'Моята фирма', NOW() + INTERVAL '30 days', 'trial', NOW(), NOW())
+        `;
+        await sql`
+          INSERT INTO business_users (business_id, user_id, role, created_at)
+          VALUES (${businessId}, ${userId}, 'owner', NOW())
+        `;
+      } else {
+        businessId = businessResult.rows[0].business_id;
+      }
 
       // Check if connection already exists
       const existingResult = await sql`
