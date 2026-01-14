@@ -61,8 +61,8 @@ export default function OnboardingPage() {
       return;
     }
 
-    if (!eik.trim() || eik.trim().length < 9) {
-      setStatusMessage("Моля въведете валиден ЕИК (9 или 13 цифри)");
+    if (!eik.trim() || eik.trim().length !== 9) {
+      setStatusMessage("Моля въведете валиден ЕИК (9 цифри)");
       return;
     }
 
@@ -146,11 +146,11 @@ export default function OnboardingPage() {
               type="text"
               value={eik}
               onChange={(e) => setEik(e.target.value.replace(/\D/g, ""))}
-              placeholder="ЕИК / Булстат (9 или 13 цифри)"
+              placeholder="ЕИК (9 цифри)"
               required
               disabled={isSaving}
-              maxLength={13}
-              pattern="[0-9]{9,13}"
+              maxLength={9}
+              pattern="[0-9]{9}"
             />
             <input
               type="text"

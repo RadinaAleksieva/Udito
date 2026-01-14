@@ -231,7 +231,7 @@ export default function Home() {
             <a href="#how">Как работи</a>
             <a href="#pricing">Цени</a>
           </div>
-          <Link href="/overview" className="apple-nav__cta">
+          <Link href="/login" className="apple-nav__cta">
             <span>Вход</span>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M5 12h14M12 5l7 7-7 7" />

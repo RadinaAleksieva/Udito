@@ -22,9 +22,9 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!eik || eik.length < 9) {
+    if (!eik || eik.length !== 9) {
       return NextResponse.json(
-        { error: "ЕИК трябва да е поне 9 цифри" },
+        { error: "ЕИК трябва да е точно 9 цифри" },
         { status: 400 }
       );
     }

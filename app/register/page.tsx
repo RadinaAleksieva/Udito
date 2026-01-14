@@ -48,8 +48,8 @@ export default function RegisterPage() {
       return;
     }
 
-    if (!eik.trim() || eik.trim().length < 9) {
-      setStatus("Моля въведете валиден ЕИК (9 или 13 цифри)");
+    if (!eik.trim() || eik.trim().length !== 9) {
+      setStatus("Моля въведете валиден ЕИК (9 цифри)");
       return;
     }
 
@@ -219,11 +219,11 @@ export default function RegisterPage() {
                 type="text"
                 value={eik}
                 onChange={(e) => setEik(e.target.value.replace(/\D/g, ""))}
-                placeholder="ЕИК / Булстат (9 или 13 цифри)"
+                placeholder="ЕИК (9 цифри)"
                 required
                 disabled={isLoading}
-                maxLength={13}
-                pattern="[0-9]{9,13}"
+                maxLength={9}
+                pattern="[0-9]{9}"
               />
               <input
                 type="text"
