@@ -7,22 +7,16 @@ import Link from "next/link";
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [step, setStep] = useState(1);
 
-  // Step 1: Account info
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-
-  // Step 2: Company info
-  const [companyName, setCompanyName] = useState("");
-  const [eik, setEik] = useState("");
-  const [napStoreNumber, setNapStoreNumber] = useState("");
+  const [storeName, setStoreName] = useState("");
 
   const [status, setStatus] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  function handleStep1(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setStatus("");
 
@@ -36,25 +30,8 @@ export default function RegisterPage() {
       return;
     }
 
-    setStep(2);
-  }
-
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setStatus("");
-
-    if (!companyName.trim()) {
-      setStatus("Моля въведете име на фирмата");
-      return;
-    }
-
-    if (!eik.trim() || eik.trim().length !== 9) {
-      setStatus("Моля въведете валиден ЕИК (9 цифри)");
-      return;
-    }
-
-    if (!napStoreNumber.trim()) {
-      setStatus("Моля въведете номер на обект в НАП");
+    if (!storeName.trim()) {
+      setStatus("Моля въведете име на магазина");
       return;
     }
 
@@ -66,9 +43,7 @@ export default function RegisterPage() {
         body: JSON.stringify({
           email,
           password,
-          companyName: companyName.trim(),
-          eik: eik.trim(),
-          napStoreNumber: napStoreNumber.trim()
+          storeName: storeName.trim(),
         }),
       });
 
@@ -111,155 +86,96 @@ export default function RegisterPage() {
 
           <h1>Създайте акаунт</h1>
           <p className="login-subtitle">
-            {step === 1
-              ? "Стъпка 1 от 2: Данни за вход"
-              : "Стъпка 2 от 2: Данни за фирмата"}
+            Регистрирайте се, за да управлявате електронните бележки
           </p>
 
-          {/* Progress indicator */}
-          <div className="register-progress">
-            <div className={`register-progress-step ${step >= 1 ? "active" : ""}`}>1</div>
-            <div className="register-progress-line"></div>
-            <div className={`register-progress-step ${step >= 2 ? "active" : ""}`}>2</div>
+          <button
+            type="button"
+            className="login-btn login-btn--google"
+            onClick={() => {
+              setIsLoading(true);
+              signIn("google", { callbackUrl: "/overview" });
+            }}
+            disabled={isLoading}
+          >
+            <svg viewBox="0 0 24 24" width="20" height="20">
+              <path
+                fill="#4285F4"
+                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+              />
+              <path
+                fill="#34A853"
+                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+              />
+              <path
+                fill="#FBBC05"
+                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+              />
+              <path
+                fill="#EA4335"
+                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+              />
+            </svg>
+            <span>{isLoading ? "Свързване..." : "Регистрация с Google"}</span>
+          </button>
+
+          <div className="login-divider">
+            <span>или с имейл</span>
           </div>
 
-          {step === 1 && (
-            <>
-              <button
-                type="button"
-                className="login-btn login-btn--google"
-                onClick={() => {
-                  setIsLoading(true);
-                  signIn("google", { callbackUrl: "/onboarding" });
-                }}
-                disabled={isLoading}
-              >
-                <svg viewBox="0 0 24 24" width="20" height="20">
-                  <path
-                    fill="#4285F4"
-                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                  />
-                  <path
-                    fill="#EA4335"
-                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                  />
-                </svg>
-                <span>{isLoading ? "Свързване..." : "Регистрация с Google"}</span>
-              </button>
-
-              <div className="login-divider">
-                <span>или с имейл</span>
-              </div>
-
-              <form className="login-email-form" onSubmit={handleStep1}>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Имейл адрес"
-                required
-                disabled={isLoading}
-                autoComplete="email"
-              />
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Парола (мин. 8 символа)"
-                required
-                disabled={isLoading}
-                autoComplete="new-password"
-                minLength={8}
-              />
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Потвърдете паролата"
-                required
-                disabled={isLoading}
-                autoComplete="new-password"
-              />
-              {status && (
-                <p className="login-status login-status--error">{status}</p>
-              )}
-              <button
-                type="submit"
-                className="login-btn login-btn--primary"
-                disabled={isLoading}
-              >
-                Напред
-              </button>
-              <p className="login-register-link">
-                Вече имате акаунт? <Link href="/login">Влезте</Link>
+          <form className="login-email-form" onSubmit={handleSubmit}>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Имейл адрес"
+              required
+              disabled={isLoading}
+              autoComplete="email"
+            />
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Парола (мин. 8 символа)"
+              required
+              disabled={isLoading}
+              autoComplete="new-password"
+              minLength={8}
+            />
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Потвърдете паролата"
+              required
+              disabled={isLoading}
+              autoComplete="new-password"
+            />
+            <input
+              type="text"
+              value={storeName}
+              onChange={(e) => setStoreName(e.target.value)}
+              placeholder="Име на магазина"
+              required
+              disabled={isLoading}
+            />
+            {status && (
+              <p className={`login-status ${status.includes("Успешна") ? "login-status--success" : "login-status--error"}`}>
+                {status}
               </p>
-              </form>
-            </>
-          )}
-
-          {step === 2 && (
-            <form className="login-email-form" onSubmit={handleSubmit}>
-              <input
-                type="text"
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
-                placeholder="Име на фирмата"
-                required
-                disabled={isLoading}
-              />
-              <input
-                type="text"
-                value={eik}
-                onChange={(e) => setEik(e.target.value.replace(/\D/g, ""))}
-                placeholder="ЕИК (9 цифри)"
-                required
-                disabled={isLoading}
-                maxLength={9}
-                pattern="[0-9]{9}"
-              />
-              <input
-                type="text"
-                value={napStoreNumber}
-                onChange={(e) => setNapStoreNumber(e.target.value)}
-                placeholder="Номер на обект в НАП"
-                required
-                disabled={isLoading}
-              />
-              <p className="register-hint">
-                Номерът на обекта се получава от НАП при регистрация за алтернативен режим.
-              </p>
-              {status && (
-                <p className={`login-status ${status.includes("Успешна") ? "login-status--success" : "login-status--error"}`}>
-                  {status}
-                </p>
-              )}
-              <div className="register-buttons">
-                <button
-                  type="button"
-                  className="login-btn login-btn--secondary"
-                  onClick={() => setStep(1)}
-                  disabled={isLoading}
-                >
-                  Назад
-                </button>
-                <button
-                  type="submit"
-                  className="login-btn login-btn--primary"
-                  disabled={isLoading}
-                >
-                  {isLoading ? "Регистриране..." : "Регистрация"}
-                </button>
-              </div>
-            </form>
-          )}
+            )}
+            <button
+              type="submit"
+              className="login-btn login-btn--primary"
+              disabled={isLoading}
+            >
+              {isLoading ? "Регистриране..." : "Регистрация"}
+            </button>
+            <p className="login-register-link">
+              Вече имате акаунт? <Link href="/login">Влезте</Link>
+            </p>
+          </form>
 
           <p className="login-footer">
             С регистрацията приемате нашите{" "}
