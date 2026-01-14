@@ -73,6 +73,9 @@ export default function SubscriptionBanner() {
             <span className="subscription-banner__text">
               <strong>Пробният период изтече.</strong> Абонирайте се, за да продължите да използвате UDITO.
             </span>
+            <Link href="/billing" className="subscription-banner__button">
+              Абонирай се
+            </Link>
           </>
         ) : (
           <>
@@ -84,11 +87,11 @@ export default function SubscriptionBanner() {
             <span className="subscription-banner__text">
               Абонаментът ви изтича след {subscription.daysRemaining} дни
             </span>
+            <Link href="/billing" className="subscription-banner__button">
+              Виж план
+            </Link>
           </>
         )}
-        <Link href="/billing" className="subscription-banner__button">
-          {subscription.isActive ? "Избери план" : "Абонирай се"}
-        </Link>
       </div>
     </div>
   );
