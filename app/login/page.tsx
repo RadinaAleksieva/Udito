@@ -176,13 +176,32 @@ function LoginForm() {
     setStatus("");
     setIsLoading("email");
     try {
+      // First check if user exists
+      const checkResponse = await fetch("/api/auth/check-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const checkData = await checkResponse.json();
+
+      if (!checkData.exists) {
+        // User doesn't exist - redirect to registration
+        const registerUrl = new URL("/register", window.location.origin);
+        registerUrl.searchParams.set("email", email);
+        if (wixParams.instanceId) registerUrl.searchParams.set("instanceId", wixParams.instanceId);
+        if (wixParams.instance) registerUrl.searchParams.set("instance", wixParams.instance);
+        if (wixParams.siteId) registerUrl.searchParams.set("siteId", wixParams.siteId);
+        window.location.href = registerUrl.toString();
+        return;
+      }
+
       const result = await signIn("credentials", {
         email,
         password,
         redirect: false,
       });
       if (result?.error) {
-        setStatus("Грешен имейл или парола");
+        setStatus("Грешна парола");
       } else {
         // Capture Wix instance if available
         if (wixParams.instanceId || wixParams.instance) {

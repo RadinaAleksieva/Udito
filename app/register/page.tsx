@@ -1,17 +1,26 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import Link from "next/link";
 
-export default function RegisterPage() {
+function RegisterForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [storeName, setStoreName] = useState("");
+
+  // Pre-fill email from URL params
+  useEffect(() => {
+    const emailParam = searchParams.get("email");
+    if (emailParam) {
+      setEmail(emailParam);
+    }
+  }, [searchParams]);
 
   const [status, setStatus] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -64,7 +73,8 @@ export default function RegisterPage() {
       if (result?.error) {
         router.push("/login");
       } else {
-        router.push("/overview");
+        // Redirect to onboarding to complete profile
+        router.push("/onboarding");
       }
     } catch (err) {
       setStatus(
@@ -94,7 +104,7 @@ export default function RegisterPage() {
             className="login-btn login-btn--google"
             onClick={() => {
               setIsLoading(true);
-              signIn("google", { callbackUrl: "/overview" });
+              signIn("google", { callbackUrl: "/onboarding" });
             }}
             disabled={isLoading}
           >
@@ -215,5 +225,30 @@ export default function RegisterPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+function RegisterLoading() {
+  return (
+    <main className="login-page">
+      <div className="login-container">
+        <div className="login-card">
+          <div className="login-logo">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/brand/udito-logo.png" alt="UDITO" />
+          </div>
+          <h1>Създайте акаунт</h1>
+          <p className="login-subtitle">Зареждане...</p>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={<RegisterLoading />}>
+      <RegisterForm />
+    </Suspense>
   );
 }

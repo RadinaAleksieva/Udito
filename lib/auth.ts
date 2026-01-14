@@ -227,6 +227,35 @@ export const authOptions: NextAuthOptions = {
     error: "/login",
   },
   callbacks: {
+    async signIn({ user, account }) {
+      // For OAuth users (Google), ensure they have a business
+      if (account?.provider === "google" && user?.id) {
+        try {
+          // Check if user already has a business
+          const existingBusiness = await sql`
+            SELECT business_id FROM business_users WHERE user_id = ${user.id} LIMIT 1
+          `;
+
+          if (existingBusiness.rows.length === 0) {
+            // Create a business for new OAuth users
+            const businessId = crypto.randomUUID();
+            await sql`
+              INSERT INTO businesses (id, name, onboarding_completed, onboarding_step, trial_ends_at, subscription_status, created_at, updated_at)
+              VALUES (${businessId}, ${user.name || 'Моята фирма'}, false, 0, NOW() + INTERVAL '14 days', 'trial', NOW(), NOW())
+            `;
+            await sql`
+              INSERT INTO business_users (business_id, user_id, role, created_at)
+              VALUES (${businessId}, ${user.id}, 'owner', NOW())
+            `;
+            console.log("Created business for new OAuth user:", user.id);
+          }
+        } catch (error) {
+          console.error("Error creating business for OAuth user:", error);
+          // Don't block sign in if business creation fails
+        }
+      }
+      return true;
+    },
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
