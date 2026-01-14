@@ -109,6 +109,39 @@ export async function GET(request: Request) {
       });
     }
 
+    if (action === "fix-null-orders") {
+      const targetSiteId = searchParams.get("siteId");
+      if (!targetSiteId) {
+        // Show orders with null site_id
+        const nullOrders = await sql`
+          SELECT id, number, created_at, total, currency, status
+          FROM orders
+          WHERE site_id IS NULL
+          ORDER BY created_at DESC
+          LIMIT 20
+        `;
+        return NextResponse.json({
+          ok: true,
+          message: "Orders with null site_id",
+          orders: nullOrders.rows,
+          hint: "Add &siteId=xxx to fix them",
+        });
+      }
+
+      // Fix orders with null site_id
+      const result = await sql`
+        UPDATE orders
+        SET site_id = ${targetSiteId}
+        WHERE site_id IS NULL
+        RETURNING id, number, site_id
+      `;
+      return NextResponse.json({
+        ok: true,
+        message: "Fixed orders with null site_id",
+        updated: result.rows,
+      });
+    }
+
     // Default: show current state
     const businesses = await sql`
       SELECT id, name, subscription_status, trial_ends_at FROM businesses
@@ -122,7 +155,7 @@ export async function GET(request: Request) {
       ok: true,
       businesses: businesses.rows,
       connections: connections.rows,
-      actions: ["?action=fix-trial", "?action=link-store&email=xxx&siteId=yyy"],
+      actions: ["?action=fix-trial", "?action=link-store&email=xxx&siteId=yyy", "?action=fix-roles", "?action=fix-null-orders", "?action=fix-null-orders&siteId=xxx"],
     });
   } catch (error) {
     console.error("Fix data error:", error);
