@@ -8,7 +8,19 @@ function readCookie(name: string) {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
-export default function ConnectionCheck() {
+// Get current store from URL params (for multi-store support)
+function getCurrentStoreFromUrl(): string | null {
+  if (typeof window === "undefined") return null;
+  const params = new URLSearchParams(window.location.search);
+  return params.get("store") || params.get("instanceId") || params.get("siteId") || null;
+}
+
+interface ConnectionCheckProps {
+  currentSiteId?: string | null;
+  currentInstanceId?: string | null;
+}
+
+export default function ConnectionCheck({ currentSiteId, currentInstanceId }: ConnectionCheckProps = {}) {
   const [status, setStatus] = useState<string>("");
   const [loading, setLoading] = useState(false);
 
@@ -16,18 +28,38 @@ export default function ConnectionCheck() {
     setLoading(true);
     setStatus("");
     try {
-      const instanceId = readCookie("udito_instance_id");
+      // Priority: 1) prop, 2) URL param, 3) cookie, 4) first store from API
+      let instanceId = currentInstanceId || currentSiteId || getCurrentStoreFromUrl() || readCookie("udito_instance_id");
+      let siteId = currentSiteId || null;
+
+      // If no store specified, try to get from user session via API
       if (!instanceId) {
-        setStatus("Липсва код за достъп. Влезте през Wix или въведете код.");
+        setStatus("Проверка на свързани магазини...");
+        const storesResponse = await fetch("/api/user/stores", {
+          credentials: "include",
+        });
+        if (storesResponse.ok) {
+          const storesData = await storesResponse.json();
+          if (storesData?.stores?.length > 0) {
+            instanceId = storesData.stores[0].instance_id || storesData.stores[0].site_id;
+            siteId = storesData.stores[0].site_id;
+          }
+        }
+      }
+
+      if (!instanceId) {
+        setStatus("Липсва код за достъп. Влезте през Wix или свържете магазин от Настройки.");
         return;
       }
 
-      // Step 1: Check connection
+      console.log("🔄 ConnectionCheck using store:", { instanceId, siteId, currentSiteId, currentInstanceId });
+
+      // Step 1: Check connection and get resolved siteId
       setStatus("Проверка на връзката...");
       const response = await fetch("/api/instance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ instanceId }),
+        body: JSON.stringify({ instanceId, siteId }),
       });
       const data = await response.json();
       if (!data?.ok) {
@@ -36,7 +68,12 @@ export default function ConnectionCheck() {
         );
       }
 
-      // Step 2: Run backfill
+      // Use the resolved siteId from the API
+      const resolvedSiteId = data.siteId || siteId;
+      const resolvedInstanceId = data.instanceId || instanceId;
+      console.log("✅ Resolved store:", { resolvedSiteId, resolvedInstanceId });
+
+      // Step 2: Run backfill with explicit store ID
       setStatus("Връзката е активна. Синхронизация на поръчки...");
       let totalSynced = 0;
       let currentOffset = 0;
@@ -49,6 +86,10 @@ export default function ConnectionCheck() {
           maxPages: "5",
           start: "2000-01-01T00:00:00Z",
         });
+        // IMPORTANT: Pass store ID explicitly to avoid using wrong store from cookies
+        if (resolvedSiteId) params.set("siteId", resolvedSiteId);
+        if (resolvedInstanceId) params.set("instanceId", resolvedInstanceId);
+
         if (isFirstRun) {
           params.set("reset", "1");
           isFirstRun = false;

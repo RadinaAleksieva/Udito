@@ -12,12 +12,7 @@ import { getAccessToken } from "@/lib/wix";
 import { getActiveWixToken, getActiveWixContext } from "@/lib/wix-context";
 import BackfillButton from "./backfill-button";
 import EnrichButton from "./enrich-button";
-import {
-  deriveOrderCreatedAt,
-  deriveOrderMoney,
-  deriveOrderNumber,
-  isArchivedOrder,
-} from "@/lib/order-display";
+// Note: deriveOrder* functions removed - using extracted columns directly for efficiency
 import { countReceiptsForPeriodForSite } from "@/lib/receipts";
 import ConnectionCheck from "./connection-check";
 import AutoSync from "./auto-sync";
@@ -90,7 +85,7 @@ async function fetchSiteLabel(siteId: string | null, instanceId: string | null) 
 export default async function OverviewPage({
   searchParams,
 }: {
-  searchParams?: { debug?: string; month?: string; store?: string };
+  searchParams?: { debug?: string; month?: string; store?: string; instanceId?: string; instance_id?: string; siteId?: string; site_id?: string; instance?: string };
 }) {
   await initDb();
 
@@ -108,8 +103,12 @@ export default async function OverviewPage({
   const cookieSiteId = wixContext.siteId;
   const cookieInstanceId = wixContext.instanceId;
 
+  // Check for Wix params in URL (for iframe context where cookies are blocked)
+  const urlInstanceId = searchParams?.instanceId || searchParams?.instance_id || null;
+  const urlSiteId = searchParams?.siteId || searchParams?.site_id || null;
+
   // Check if user selected a specific store via query param
-  const selectedStoreId = searchParams?.store || null;
+  const selectedStoreId = searchParams?.store || urlSiteId || urlInstanceId || null;
 
   if (session?.user?.id) {
     // User is logged in
@@ -153,10 +152,20 @@ export default async function OverviewPage({
       needsStoreConnection = true;
     }
   } else {
-    // Legacy flow: User not logged in via NextAuth, check Wix cookies
+    // Legacy flow: User not logged in via NextAuth, check Wix cookies or URL params
     const token = await getActiveWixToken();
-    siteId = token?.site_id ?? null;
-    instanceId = token?.instance_id ?? null;
+    siteId = token?.site_id ?? urlSiteId ?? null;
+    instanceId = token?.instance_id ?? urlInstanceId ?? null;
+
+    // If we have URL params but no cookies, try to resolve siteId from instanceId
+    if (!siteId && instanceId) {
+      try {
+        const appInstance = await import("@/lib/wix").then(m => m.getAppInstanceDetails({ instanceId }));
+        siteId = appInstance?.siteId ?? null;
+      } catch {
+        // Continue without siteId
+      }
+    }
   }
   const now = new Date();
   const monthParam = searchParams?.month || "";
@@ -227,10 +236,8 @@ export default async function OverviewPage({
   // Prioritize company.store_domain if set (user's preference), then Wix API, then fallback
   const domainLabel = company?.store_domain || siteLabel || null;
   const activeStoreLabel = domainLabel || siteId || "Неизбран";
-  const displayOrders = orders.filter((order) => {
-    const raw = (order as any).raw ?? null;
-    return !isArchivedOrder(raw);
-  });
+  // Archive filtering is now done in SQL query - no client-side filter needed
+  const displayOrders = orders;
   const lastClosedDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const lastClosedLabel = `${lastClosedDate.getFullYear()}-${String(
     lastClosedDate.getMonth() + 1
@@ -340,7 +347,7 @@ export default async function OverviewPage({
               <div className="status-card">
                 <span>Връзка с Wix</span>
                 <strong>{hasConnection ? "Свързано" : "Няма връзка"}</strong>
-                <ConnectionCheck />
+                <ConnectionCheck currentSiteId={siteId} currentInstanceId={instanceId} />
               </div>
               <div className="status-card">
                 <span>Активен магазин</span>
@@ -480,14 +487,11 @@ export default async function OverviewPage({
                 <span>Създадена</span>
               </div>
               {displayOrders.map((order) => {
-                const raw = (order as any).raw ?? null;
-                const { totalAmount, currency } = deriveOrderMoney(
-                  raw,
-                  order.total,
-                  order.currency ?? null
-                );
-                const number = deriveOrderNumber(raw, order.number);
-                const createdAt = deriveOrderCreatedAt(raw, order.created_at);
+                // Use extracted columns directly - no need to parse raw JSON
+                const totalAmount = order.total ? Number(order.total) : null;
+                const currency = order.currency ?? null;
+                const number = order.number;
+                const createdAt = order.created_at;
                 const sourceLabel =
                   order.source === "backfill" || order.source === "webhook"
                     ? "Wix"

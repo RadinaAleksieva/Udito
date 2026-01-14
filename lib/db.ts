@@ -634,8 +634,9 @@ export async function listRecentOrdersForPeriodForSite(
   siteId: string,
   limit = 10
 ) {
+  // Optimized: don't fetch raw column for list views - use extracted columns instead
   const result = await sql`
-    select id, number, payment_status, created_at, total, currency, source, raw
+    select id, number, payment_status, status, created_at, total, currency, source
     from orders
     where (site_id = ${siteId} OR site_id IS NULL)
       and (status is null or lower(status) not like 'archiv%')
@@ -685,10 +686,10 @@ export async function listPaginatedOrdersForSite(
       `;
   const total = Number(countResult.rows[0]?.total || 0);
 
-  // Get paginated results
+  // Get paginated results - optimized: don't fetch raw column for list views
   const ordersResult = startIso && endIso
     ? await sql`
-        select id, number, payment_status, status, created_at, paid_at, total, currency, customer_name, customer_email, raw, source
+        select id, number, payment_status, status, created_at, paid_at, total, currency, customer_name, customer_email, source
         from orders
         where (site_id = ${siteId} OR site_id IS NULL)
           and (status is null or lower(status) not like 'archiv%')
@@ -702,7 +703,7 @@ export async function listPaginatedOrdersForSite(
         limit ${limit} offset ${offset};
       `
     : await sql`
-        select id, number, payment_status, status, created_at, paid_at, total, currency, customer_name, customer_email, raw, source
+        select id, number, payment_status, status, created_at, paid_at, total, currency, customer_name, customer_email, source
         from orders
         where (site_id = ${siteId} OR site_id IS NULL)
           and (status is null or lower(status) not like 'archiv%')

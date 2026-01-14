@@ -26,9 +26,12 @@ function LoginForm() {
 
   useEffect(() => {
     // Detect if we're in an iframe (embedded in Wix)
+    let inIframe = false;
     try {
-      setIsInIframe(window.self !== window.top);
+      inIframe = window.self !== window.top;
+      setIsInIframe(inIframe);
     } catch {
+      inIframe = true;
       setIsInIframe(true);
     }
 
@@ -37,13 +40,80 @@ function LoginForm() {
     const instance = params.get("instance") || undefined;
     const wixInstanceId = params.get("instanceId") || params.get("instance_id") || undefined;
     const siteId = params.get("siteId") || params.get("site_id") || undefined;
+
+    // Debug logging
+    console.log("🔍 UDITO Login Debug:", {
+      fullUrl: window.location.href,
+      search: window.location.search,
+      instance: instance ? `${instance.substring(0, 20)}...` : "NOT FOUND",
+      instanceId: wixInstanceId || "NOT FOUND",
+      siteId: siteId || "NOT FOUND",
+      isInIframe: inIframe,
+    });
+
     setWixParams({ instance, instanceId: wixInstanceId, siteId });
 
     // Pre-fill instance ID if available
     if (wixInstanceId) {
       setInstanceId(wixInstanceId);
     }
+
+    // AUTO-LOGIN: If we have Wix instance token, try to authenticate automatically
+    if (instance || wixInstanceId) {
+      console.log("🚀 Attempting auto-login with Wix params...");
+      autoLoginWithWix(instance, wixInstanceId, siteId);
+    } else {
+      console.log("⚠️ No Wix params found - showing manual login");
+    }
   }, []);
+
+  async function autoLoginWithWix(instance?: string, wixInstanceId?: string, siteId?: string) {
+    setStatus("Автоматично свързване с Wix...");
+    setIsLoading("auto");
+    try {
+      const response = await fetch("/api/instance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          instanceId: wixInstanceId,
+          token: instance,
+          siteId: siteId,
+        }),
+      });
+      const data = await response.json();
+      console.log("📡 Instance API response:", data);
+
+      // Even if API returns ok:false, we still have the instance - redirect anyway
+      // The instance will be passed via URL for iframe contexts where cookies don't work
+      const effectiveInstanceId = data?.instanceId || wixInstanceId;
+      const effectiveSiteId = data?.siteId || siteId;
+
+      if (effectiveInstanceId) {
+        setStatus("Пренасочване...");
+        // Pass instance via URL for iframe context (cookies might be blocked)
+        const redirectUrl = new URL(callbackUrl, window.location.origin);
+        redirectUrl.searchParams.set("instanceId", effectiveInstanceId);
+        if (effectiveSiteId) {
+          redirectUrl.searchParams.set("siteId", effectiveSiteId);
+        }
+        if (instance) {
+          redirectUrl.searchParams.set("instance", instance);
+        }
+        console.log("🔄 Redirecting to:", redirectUrl.toString());
+        window.location.href = redirectUrl.toString();
+      } else {
+        // No instance ID at all - show manual login
+        console.log("❌ No instance ID available");
+        setStatus("");
+        setIsLoading(null);
+      }
+    } catch (err) {
+      console.error("❌ Auto-login error:", err);
+      // Auto-login failed, show manual login options
+      setStatus("");
+      setIsLoading(null);
+    }
+  }
 
   async function handleEmailLogin(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -144,7 +214,14 @@ function LoginForm() {
             </div>
           )}
 
-          {!showEmailForm && !showAccessCode && (
+          {isLoading === "auto" && (
+            <div className="login-auto-connect">
+              <div className="login-spinner"></div>
+              <p>{status || "Свързване с Wix..."}</p>
+            </div>
+          )}
+
+          {isLoading !== "auto" && !showEmailForm && !showAccessCode && (
             <>
               {isInIframe && (
                 <div className="login-iframe-notice">

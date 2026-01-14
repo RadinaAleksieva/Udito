@@ -76,6 +76,11 @@ export async function middleware(request: NextRequest) {
   const uditoInstanceId = request.cookies.get("udito_instance_id");
   const uditoSiteId = request.cookies.get("udito_site_id");
 
+  // Check for Wix params in URL (for iframe contexts where cookies are blocked)
+  const urlInstanceId = request.nextUrl.searchParams.get("instanceId") || request.nextUrl.searchParams.get("instance_id");
+  const urlSiteId = request.nextUrl.searchParams.get("siteId") || request.nextUrl.searchParams.get("site_id");
+  const urlInstance = request.nextUrl.searchParams.get("instance");
+
   // Allow if user has valid NextAuth token with id
   if (token && token.id) {
     return NextResponse.next();
@@ -83,6 +88,11 @@ export async function middleware(request: NextRequest) {
 
   // Allow if user has Wix instance cookies
   if (uditoInstanceId || uditoSiteId) {
+    return NextResponse.next();
+  }
+
+  // Allow if user has Wix params in URL (iframe context)
+  if (urlInstanceId || urlSiteId || urlInstance) {
     return NextResponse.next();
   }
 

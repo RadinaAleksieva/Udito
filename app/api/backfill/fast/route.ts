@@ -31,7 +31,24 @@ function resolveStartDateIso(startParam?: string | null) {
 export async function POST(request: Request) {
   try {
     await initDb();
-    const { siteId, instanceId } = await getActiveWixContext();
+
+    const url = new URL(request.url);
+
+    // PRIORITY: Use URL params if provided (for explicit store selection), otherwise fall back to context
+    const urlSiteId = url.searchParams.get("siteId") || url.searchParams.get("site_id");
+    const urlInstanceId = url.searchParams.get("instanceId") || url.searchParams.get("instance_id");
+
+    let siteId: string | null = urlSiteId;
+    let instanceId: string | null = urlInstanceId;
+
+    // Only fall back to context if no URL params provided
+    if (!siteId && !instanceId) {
+      const context = await getActiveWixContext();
+      siteId = context.siteId;
+      instanceId = context.instanceId;
+    }
+
+    console.log("🔄 Backfill using store:", { siteId, instanceId, fromUrl: Boolean(urlSiteId || urlInstanceId) });
 
     if (!siteId && !instanceId) {
       return NextResponse.json(
@@ -40,7 +57,6 @@ export async function POST(request: Request) {
       );
     }
 
-    const url = new URL(request.url);
     const startDateIso = resolveStartDateIso(url.searchParams.get("start"));
     const limit = Math.min(Number(url.searchParams.get("limit") || 50), 100);
     const maxPages = Math.min(Number(url.searchParams.get("maxPages") || 5), 20);
