@@ -1,40 +1,19 @@
 import { NextResponse } from "next/server";
 import { initDb, getReceiptSettings, updateReceiptSettings } from "@/lib/db";
-import { getActiveWixToken } from "@/lib/wix-context";
-import { auth, getUserStores } from "@/lib/auth";
+import { getActiveStore } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
-
-async function getIdentifiers() {
-  let siteId: string | null = null;
-  let instanceId: string | null = null;
-
-  const session = await auth();
-  if (session?.user?.id) {
-    const userStores = await getUserStores(session.user.id);
-    if (userStores.length > 0) {
-      siteId = userStores[0].site_id || null;
-      instanceId = userStores[0].instance_id || null;
-    }
-  } else {
-    const token = await getActiveWixToken();
-    siteId = token?.site_id ?? null;
-    instanceId = token?.instance_id ?? null;
-  }
-
-  return { siteId, instanceId };
-}
 
 export async function GET() {
   try {
     await initDb();
-    const { siteId, instanceId } = await getIdentifiers();
+    const store = await getActiveStore();
 
-    if (!siteId && !instanceId) {
+    if (!store?.siteId && !store?.instanceId) {
       return NextResponse.json({ ok: false, error: "Missing site context" }, { status: 400 });
     }
 
-    const settings = await getReceiptSettings(siteId, instanceId);
+    const settings = await getReceiptSettings(store.siteId, store.instanceId);
     return NextResponse.json({
       ok: true,
       settings: {
@@ -54,9 +33,9 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     await initDb();
-    const { siteId, instanceId } = await getIdentifiers();
+    const store = await getActiveStore();
 
-    if (!siteId && !instanceId) {
+    if (!store?.siteId && !store?.instanceId) {
       return NextResponse.json({ ok: false, error: "Missing site context" }, { status: 400 });
     }
 
@@ -74,7 +53,7 @@ export async function POST(request: Request) {
       );
     }
 
-    await updateReceiptSettings(siteId, { receiptNumberStart, codReceiptsEnabled }, instanceId);
+    await updateReceiptSettings(store.siteId, { receiptNumberStart, codReceiptsEnabled }, store.instanceId);
 
     return NextResponse.json({ ok: true });
   } catch (error) {

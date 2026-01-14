@@ -1,29 +1,16 @@
 import TopNav from "../../components/top-nav";
 import ReceiptSettingsForm from "./receipt-settings-form";
 import { initDb } from "@/lib/db";
-import { getActiveWixToken } from "@/lib/wix-context";
-import { auth, getUserStores } from "@/lib/auth";
+import { getActiveStore } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function ReceiptSettingsPage() {
   await initDb();
 
-  // Get store from NextAuth session first, fallback to Wix cookies
-  let storeName: string | null = null;
-  let storeId: string | null = null;
-
-  const session = await auth();
-  if (session?.user?.id) {
-    const userStores = await getUserStores(session.user.id);
-    if (userStores.length > 0) {
-      storeName = userStores[0].store_name || null;
-      storeId = userStores[0].instance_id || userStores[0].site_id || null;
-    }
-  } else {
-    const token = await getActiveWixToken();
-    storeId = token?.site_id ?? token?.instance_id ?? null;
-  }
+  const store = await getActiveStore();
+  const storeName = store?.storeName || null;
+  const storeId = store?.instanceId || store?.siteId || null;
 
   return (
     <main>

@@ -1,16 +1,16 @@
 import { put, del } from "@vercel/blob";
 import { NextRequest, NextResponse } from "next/server";
-import { getActiveWixToken } from "@/lib/wix-context";
+import { getActiveStore } from "@/lib/auth";
 import sizeOf from "image-size";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
   try {
-    const token = await getActiveWixToken();
-    const siteId = token?.site_id;
+    const store = await getActiveStore();
+    const storeId = store?.instanceId || store?.siteId;
 
-    if (!siteId) {
+    if (!storeId) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
@@ -42,8 +42,8 @@ export async function POST(request: NextRequest) {
     const width = dimensions.width || 100;
     const height = dimensions.height || 100;
 
-    // Upload to Vercel Blob with site-specific path
-    const blob = await put(`logos/${siteId}/${file.name}`, buffer, {
+    // Upload to Vercel Blob with store-specific path
+    const blob = await put(`logos/${storeId}/${file.name}`, buffer, {
       access: "public",
       addRandomSuffix: true, // Prevent caching issues
     });
@@ -64,10 +64,10 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const token = await getActiveWixToken();
-    const siteId = token?.site_id;
+    const store = await getActiveStore();
+    const storeId = store?.instanceId || store?.siteId;
 
-    if (!siteId) {
+    if (!storeId) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 

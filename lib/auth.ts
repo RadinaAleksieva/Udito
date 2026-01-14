@@ -247,6 +247,55 @@ export async function auth() {
   return getServerSession(authOptions);
 }
 
+/**
+ * CRITICAL: This is the SINGLE source of truth for the current active store.
+ * All code should use this function instead of directly accessing Wix cookies.
+ *
+ * Priority:
+ * 1. NextAuth session -> user's connected stores (most reliable)
+ * 2. Wix cookies (legacy fallback, should be phased out)
+ *
+ * Returns null if no store is active.
+ */
+export async function getActiveStore(): Promise<{
+  siteId: string | null;
+  instanceId: string | null;
+  storeName: string | null;
+  userId: string | null;
+} | null> {
+  // Priority 1: NextAuth session
+  const session = await auth();
+  if (session?.user?.id) {
+    const stores = await getUserStores(session.user.id);
+    if (stores.length > 0) {
+      const store = stores[0]; // First connected store is the active one
+      return {
+        siteId: store.site_id || null,
+        instanceId: store.instance_id || null,
+        storeName: store.store_name || null,
+        userId: session.user.id,
+      };
+    }
+    // User is logged in but has no stores connected
+    return null;
+  }
+
+  // Priority 2: Legacy Wix cookies (fallback)
+  // Import dynamically to avoid circular dependencies
+  const { getActiveWixToken } = await import("@/lib/wix-context");
+  const token = await getActiveWixToken();
+  if (token) {
+    return {
+      siteId: token.site_id || null,
+      instanceId: token.instance_id || null,
+      storeName: null,
+      userId: null,
+    };
+  }
+
+  return null;
+}
+
 // Helper to get current user's connected stores
 export async function getUserStores(userId: string) {
   const result = await sql`
