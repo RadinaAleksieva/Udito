@@ -128,8 +128,23 @@ export default async function OverviewPage({
   // In Wix context, we should only show the current store, not a selector
   const isWixContext = Boolean(urlInstance || urlInstanceId || urlSiteId);
 
-  // Auto-link Wix store if user logged in but no stores connected
-  if (session?.user?.id && userStores.length === 0) {
+  // Auto-link Wix store from URL params (handles switching between Wix stores)
+  if (session?.user?.id && (urlSiteId || urlInstanceId)) {
+    const storeIdToCheck = urlSiteId || urlInstanceId;
+    const isStoreLinked = userStores.some(
+      (s: any) => s.site_id === storeIdToCheck || s.instance_id === storeIdToCheck
+    );
+    if (!isStoreLinked) {
+      try {
+        await linkStoreToUser(session.user.id, urlSiteId || "", urlInstanceId || undefined);
+        userStores = await getUserStores(session.user.id);
+        console.log("Auto-linked new store from URL params:", storeIdToCheck);
+      } catch (e) {
+        console.error("Auto-link store failed:", e);
+      }
+    }
+  } else if (session?.user?.id && userStores.length === 0) {
+    // Fallback: try to get from cookies/context
     const wixContext = await getActiveWixContext();
     if (wixContext.siteId || wixContext.instanceId) {
       try {

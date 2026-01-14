@@ -259,24 +259,21 @@ export type ActiveStore = {
  * All code should use this function instead of directly accessing Wix cookies.
  *
  * Priority:
- * 1. NextAuth session -> user's connected stores (most reliable)
- * 2. Wix cookies (legacy fallback, should be phased out)
+ * 1. requestedStoreId from URL params (ALWAYS takes precedence when provided)
+ * 2. NextAuth session -> user's connected stores
+ * 3. Wix cookies (legacy fallback)
  *
- * @param requestedStoreId - Optional: select a specific store by ID (must be one of user's stores)
+ * @param requestedStoreId - Optional: select a specific store by ID (from URL params)
  * @returns The active store or null if no store is active.
  */
 export async function getActiveStore(requestedStoreId?: string | null): Promise<ActiveStore | null> {
-  // Priority 1: NextAuth session
   const session = await auth();
-  if (session?.user?.id) {
-    const stores = await getUserStores(session.user.id);
-    if (stores.length === 0) {
-      // User is logged in but has no stores connected
-      return null;
-    }
 
-    // If a specific store is requested, validate it belongs to this user
-    if (requestedStoreId) {
+  // Priority 1: If a specific store is requested via URL params
+  if (requestedStoreId) {
+    // If user is logged in, validate the store belongs to them
+    if (session?.user?.id) {
+      const stores = await getUserStores(session.user.id);
       const requestedStore = stores.find(
         (s: any) => s.site_id === requestedStoreId || s.instance_id === requestedStoreId
       );
@@ -290,18 +287,31 @@ export async function getActiveStore(requestedStoreId?: string | null): Promise<
       }
     }
 
-    // Default to first connected store
-    const store = stores[0];
+    // Even if not logged in or store not linked, return the requested store
+    // This allows Wix iframe to work before user logs in
     return {
-      siteId: store.site_id || null,
-      instanceId: store.instance_id || null,
-      storeName: store.store_name || null,
-      userId: session.user.id,
+      siteId: requestedStoreId,
+      instanceId: requestedStoreId,
+      storeName: null,
+      userId: session?.user?.id || null,
     };
   }
 
-  // Priority 2: Legacy Wix cookies (fallback)
-  // Import dynamically to avoid circular dependencies
+  // Priority 2: NextAuth session - use first connected store
+  if (session?.user?.id) {
+    const stores = await getUserStores(session.user.id);
+    if (stores.length > 0) {
+      const store = stores[0];
+      return {
+        siteId: store.site_id || null,
+        instanceId: store.instance_id || null,
+        storeName: store.store_name || null,
+        userId: session.user.id,
+      };
+    }
+  }
+
+  // Priority 3: Legacy Wix cookies (fallback)
   const { getActiveWixToken } = await import("@/lib/wix-context");
   const token = await getActiveWixToken();
   if (token) {
