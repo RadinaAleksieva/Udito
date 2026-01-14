@@ -5,14 +5,34 @@ import { auth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-// GET: Show current site_id distribution
-export async function GET() {
+// GET: Show current site_id distribution or list orders for a specific site_id
+export async function GET(request: Request) {
   try {
     await initDb();
 
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 });
+    }
+
+    const url = new URL(request.url);
+    const listSiteId = url.searchParams.get("list");
+
+    // If list parameter provided, show orders for that site_id
+    if (listSiteId) {
+      const orders = await sql`
+        SELECT id, number, status, payment_status, created_at, customer_name
+        FROM orders
+        WHERE site_id = ${listSiteId}
+        ORDER BY created_at DESC
+        LIMIT 50
+      `;
+      return NextResponse.json({
+        ok: true,
+        siteId: listSiteId,
+        count: orders.rowCount,
+        orders: orders.rows,
+      });
     }
 
     // Get site_id distribution
@@ -35,7 +55,7 @@ export async function GET() {
       ok: true,
       siteIdDistribution: distribution.rows,
       userStores: stores.rows,
-      hint: "Use POST with { fromSiteId, toSiteId } to consolidate orders",
+      hint: "Use POST with { fromSiteId, toSiteId } to consolidate orders. Use GET ?list=<siteId> to see orders.",
     });
   } catch (error) {
     console.error("Consolidate orders GET error:", error);
