@@ -25,6 +25,25 @@ import { getAppInstanceDetails } from "@/lib/wix";
 const APP_ID = process.env.WIX_APP_ID || "";
 const APP_PUBLIC_KEY = process.env.WIX_APP_PUBLIC_KEY || "";
 
+// Decode Wix instance JWT to extract siteId
+function decodeWixInstance(instance: string): { siteId: string | null; instanceId: string | null } {
+  try {
+    const parts = instance.split(".");
+    if (parts.length < 2) return { siteId: null, instanceId: null };
+
+    const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const json = Buffer.from(base64, "base64").toString("utf-8");
+    const payload = JSON.parse(json);
+
+    return {
+      siteId: payload?.siteId ?? payload?.sid ?? null,
+      instanceId: payload?.instanceId ?? payload?.iid ?? null,
+    };
+  } catch {
+    return { siteId: null, instanceId: null };
+  }
+}
+
 const wixClient =
   APP_ID && APP_PUBLIC_KEY
     ? createClient({
@@ -542,6 +561,12 @@ export async function POST(request: NextRequest) {
       console.log("📦 parsedPayload.instanceId:", parsedPayload?.instanceId);
       console.log("📦 parsedPayload.instance:", parsedPayload?.instance);
 
+      // Extract siteId from the instance JWT token (critical for store identification!)
+      const instanceToken = parsedPayload?.instance;
+      const decodedInstance = instanceToken ? decodeWixInstance(instanceToken) : null;
+      const jwsSiteId = decodedInstance?.siteId ?? parsedPayload?.siteId ?? null;
+      console.log("📦 Decoded instance siteId:", jwsSiteId);
+
       // Extract event data from the payload (handle triple-nested structure)
       if (parsedPayload.data) {
         // First level: parsedPayload.data is a stringified JSON
@@ -570,17 +595,18 @@ export async function POST(request: NextRequest) {
           // Handle v2 event manually
           if (eventData?.entity) {
             console.log("⚠️ Manually handling v2 Order Created event...");
-            // IMPORTANT: instanceId is in parsedPayload (JWS level), not in eventData
+            // IMPORTANT: instanceId and siteId are in parsedPayload (JWS level), not in eventData
             const v2Event = {
               data: eventData.entity,
               metadata: {
                 eventType: "order.created",
                 entityId: eventData?.entity?.id ?? eventData?.entity?._id,
                 instanceId: parsedPayload.instanceId ?? eventData?.instanceId,
+                siteId: jwsSiteId,
                 eventTime: eventData?.eventTime ?? new Date().toISOString(),
               }
             };
-            console.log("📦 v2 event instanceId:", v2Event.metadata.instanceId);
+            console.log("📦 v2 event instanceId:", v2Event.metadata.instanceId, "siteId:", v2Event.metadata.siteId);
             await handleOrderEvent(v2Event);
             console.log("✅ v2 event handled successfully");
             return NextResponse.json({ ok: true });
@@ -626,6 +652,7 @@ export async function POST(request: NextRequest) {
                 eventType: `order.${slug}`,
                 entityId: orderData.id ?? eventData.entityId,
                 instanceId: parsedPayload.instanceId ?? eventData.instanceId,
+                siteId: jwsSiteId,
                 eventTime: eventData.eventTime ?? new Date().toISOString(),
               }
             };
