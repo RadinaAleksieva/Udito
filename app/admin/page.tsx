@@ -53,6 +53,15 @@ interface Stats {
   trialUsers: number;
 }
 
+interface OrdersBySite {
+  site_id: string;
+  store_name: string;
+  store_domain: string;
+  business_name: string;
+  order_count: number;
+  receipt_count: number;
+}
+
 // Plan limits
 const PLAN_LIMITS: Record<string, number> = {
   starter: 50,
@@ -69,6 +78,7 @@ export default function AdminPage() {
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [accessCodes, setAccessCodes] = useState<AccessCode[]>([]);
+  const [ordersBySite, setOrdersBySite] = useState<OrdersBySite[]>([]);
   const [error, setError] = useState("");
   const [actionMessage, setActionMessage] = useState("");
 
@@ -111,6 +121,7 @@ export default function AdminPage() {
       setUsers(dashData.users || []);
       setBusinesses(bizData.businesses || []);
       setAccessCodes(accessData.accessCodes || []);
+      setOrdersBySite(dashData.ordersBySite || []);
     } catch (err) {
       console.error("Error loading admin data:", err);
       setError("Грешка при зареждане на данните");
@@ -273,6 +284,40 @@ export default function AdminPage() {
               <div className="admin-stat">
                 <span className="admin-stat__value">{stats.trialUsers}</span>
                 <span className="admin-stat__label">В пробен период</span>
+              </div>
+            </div>
+
+            {/* Orders by Site */}
+            <div className="admin-section">
+              <h2>Поръчки по сайт</h2>
+              <div className="admin-table-wrapper">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Магазин</th>
+                      <th>Бизнес</th>
+                      <th>Домейн</th>
+                      <th>Поръчки</th>
+                      <th>Бележки</th>
+                      <th>Site ID</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ordersBySite.map((site, idx) => (
+                      <tr key={idx}>
+                        <td>{site.store_name || "—"}</td>
+                        <td>{site.business_name || "—"}</td>
+                        <td>{site.store_domain || "—"}</td>
+                        <td><strong>{site.order_count}</strong></td>
+                        <td>{site.receipt_count}</td>
+                        <td><code>{site.site_id?.slice(0, 12)}...</code></td>
+                      </tr>
+                    ))}
+                    {ordersBySite.length === 0 && (
+                      <tr><td colSpan={6} className="admin-empty">Няма поръчки</td></tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
@@ -546,6 +591,18 @@ export default function AdminPage() {
         .admin-tabs button.active {
           color: #fff;
           background: rgba(99, 102, 241, 0.2);
+        }
+        .admin-section {
+          background: rgba(255, 255, 255, 0.02);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 10px;
+          padding: 1.25rem;
+          margin-top: 1.5rem;
+        }
+        .admin-section h2 {
+          color: #fff;
+          font-size: 1rem;
+          margin-bottom: 1rem;
         }
         .admin-stats {
           display: grid;

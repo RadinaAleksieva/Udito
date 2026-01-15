@@ -63,10 +63,28 @@ export async function GET() {
       LIMIT 50
     `;
 
+    // Get orders breakdown by site
+    const ordersBySite = await sql`
+      SELECT
+        o.site_id,
+        c.store_name,
+        c.store_domain,
+        b.name as business_name,
+        COUNT(*) as order_count,
+        COUNT(CASE WHEN r.id IS NOT NULL THEN 1 END) as receipt_count
+      FROM orders o
+      LEFT JOIN companies c ON o.site_id = c.site_id
+      LEFT JOIN businesses b ON c.business_id = b.id
+      LEFT JOIN receipts r ON o.id = r.order_id
+      GROUP BY o.site_id, c.store_name, c.store_domain, b.name
+      ORDER BY order_count DESC
+    `;
+
     return NextResponse.json({
       stats,
       businesses: businessesResult.rows,
       users: usersResult.rows,
+      ordersBySite: ordersBySite.rows,
     });
   } catch (error) {
     console.error("Admin dashboard error:", error);
