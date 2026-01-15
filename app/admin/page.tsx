@@ -111,17 +111,34 @@ export default function AdminPage() {
         return;
       }
 
-      const [dashData, bizData, accessData] = await Promise.all([
-        dashRes.json(),
-        bizRes.json(),
-        accessRes.json(),
-      ]);
+      const dashData = await dashRes.json();
+
+      // Handle businesses - might fail independently
+      let bizData = { businesses: [] };
+      if (bizRes.ok) {
+        bizData = await bizRes.json();
+      } else {
+        console.error("Businesses API error:", bizRes.status);
+      }
+
+      // Handle access codes - might fail independently
+      let accessData = { accessCodes: [] };
+      if (accessRes.ok) {
+        accessData = await accessRes.json();
+      } else {
+        console.error("Access API error:", accessRes.status);
+      }
 
       setStats(dashData.stats);
       setUsers(dashData.users || []);
       setBusinesses(bizData.businesses || []);
       setAccessCodes(accessData.accessCodes || []);
       setOrdersBySite(dashData.ordersBySite || []);
+
+      // Show warning if some data failed to load
+      if (!bizRes.ok || !accessRes.ok) {
+        setActionMessage("Някои данни не се заредиха правилно");
+      }
     } catch (err) {
       console.error("Error loading admin data:", err);
       setError("Грешка при зареждане на данните");

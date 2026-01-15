@@ -526,6 +526,23 @@ export async function initDb() {
   await sql`alter table businesses add column if not exists onboarding_completed boolean default false;`;
   await sql`alter table businesses add column if not exists onboarding_step integer default 0;`;
   await sql`alter table businesses add column if not exists selected_plan_id text;`;
+
+  // Access codes for accountant/multi-user access
+  await sql`
+    create table if not exists access_codes (
+      id bigserial primary key,
+      code text not null unique,
+      site_id text not null,
+      role text default 'accountant',
+      expires_at timestamptz,
+      created_at timestamptz default now(),
+      used_at timestamptz,
+      used_by_user_id text references users(id)
+    );
+  `;
+  await sql`
+    create index if not exists access_codes_code_idx on access_codes (code);
+  `;
 }
 
 export async function upsertOrder(order: StoredOrder) {
