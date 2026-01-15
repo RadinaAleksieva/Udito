@@ -50,8 +50,8 @@ export async function middleware(request: NextRequest) {
     // Token parsing failed
   }
 
-  // Check for Wix instance cookies/params (legacy auth)
-  const hasWixAuth =
+  // Check for Wix instance cookies/params (for store identification)
+  const hasWixParams =
     request.cookies.get("udito_instance_id") ||
     request.cookies.get("udito_site_id") ||
     request.nextUrl.searchParams.get("instanceId") ||
@@ -59,7 +59,11 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.searchParams.get("siteId") ||
     request.nextUrl.searchParams.get("instance");
 
-  const isAuthenticated = !!(token?.id || hasWixAuth);
+  // Full authentication requires NextAuth session
+  const isFullyAuthenticated = !!token?.id;
+
+  // Legacy auth: allow access with Wix params for backward compatibility
+  const hasLegacyAuth = !!hasWixParams;
 
   // Check if route is protected
   const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
@@ -67,8 +71,8 @@ export async function middleware(request: NextRequest) {
     route === "/" ? pathname === "/" : pathname.startsWith(route)
   );
 
-  // Protected routes require authentication
-  if (isProtectedRoute && !isAuthenticated) {
+  // Protected routes require authentication (NextAuth or legacy Wix)
+  if (isProtectedRoute && !isFullyAuthenticated && !hasLegacyAuth) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("callbackUrl", pathname);
 
@@ -82,13 +86,14 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Authenticated user on home page -> redirect to overview
-  if (pathname === "/" && isAuthenticated) {
+  // Only fully authenticated users get redirected from home page
+  // (Users with just Wix params should see landing page and be prompted to login)
+  if (pathname === "/" && isFullyAuthenticated) {
     return NextResponse.redirect(new URL("/overview", request.url));
   }
 
-  // Authenticated user on login page -> redirect to overview or callback
-  if (pathname === "/login" && isAuthenticated) {
+  // Only fully authenticated users get redirected from login page
+  if (pathname === "/login" && isFullyAuthenticated) {
     const callbackUrl = request.nextUrl.searchParams.get("callbackUrl");
     if (callbackUrl && protectedRoutes.some(route => callbackUrl.startsWith(route))) {
       return NextResponse.redirect(new URL(callbackUrl, request.url));
