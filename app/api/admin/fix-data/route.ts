@@ -12,7 +12,7 @@ export async function GET(request: Request) {
       // Fix businesses with NULL trial_ends_at - set to 30 days from now
       const result = await sql`
         UPDATE businesses
-        SET trial_ends_at = NOW() + INTERVAL '30 days',
+        SET trial_ends_at = NOW() + INTERVAL '10 days',
             updated_at = NOW()
         WHERE trial_ends_at IS NULL
         RETURNING id, name, trial_ends_at
@@ -52,7 +52,7 @@ export async function GET(request: Request) {
         businessId = crypto.randomUUID();
         await sql`
           INSERT INTO businesses (id, name, trial_ends_at, subscription_status, created_at, updated_at)
-          VALUES (${businessId}, 'Моята фирма', NOW() + INTERVAL '30 days', 'trial', NOW(), NOW())
+          VALUES (${businessId}, 'Моята фирма', NOW() + INTERVAL '10 days', 'trial', NOW(), NOW())
         `;
         await sql`
           INSERT INTO business_users (business_id, user_id, role, created_at)

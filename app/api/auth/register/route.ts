@@ -55,7 +55,7 @@ export async function POST(request: Request) {
     const businessId = crypto.randomUUID();
     await sql`
       INSERT INTO businesses (id, name, onboarding_completed, onboarding_step, trial_ends_at, subscription_status, created_at, updated_at)
-      VALUES (${businessId}, ${storeName.trim()}, false, 0, NOW() + INTERVAL '14 days', 'trial', NOW(), NOW())
+      VALUES (${businessId}, ${storeName.trim()}, false, 0, NOW() + INTERVAL '10 days', 'trial', NOW(), NOW())
     `;
 
     // Link user to business as owner

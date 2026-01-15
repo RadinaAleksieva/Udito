@@ -241,7 +241,7 @@ export const authOptions: NextAuthOptions = {
             const businessId = crypto.randomUUID();
             await sql`
               INSERT INTO businesses (id, name, onboarding_completed, onboarding_step, trial_ends_at, subscription_status, created_at, updated_at)
-              VALUES (${businessId}, ${user.name || 'Моята фирма'}, false, 0, NOW() + INTERVAL '14 days', 'trial', NOW(), NOW())
+              VALUES (${businessId}, ${user.name || 'Моята фирма'}, false, 0, NOW() + INTERVAL '10 days', 'trial', NOW(), NOW())
             `;
             await sql`
               INSERT INTO business_users (business_id, user_id, role, created_at)
