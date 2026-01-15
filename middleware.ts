@@ -13,6 +13,7 @@ const protectedRoutes = [
   "/debug",
   "/onboarding",
   "/billing",
+  "/admin",
 ];
 
 // Public routes (no auth required)
