@@ -4,7 +4,7 @@ import { sql } from "@vercel/postgres";
 import { authOptions } from "@/lib/auth";
 
 // Admin emails that have access
-const ADMIN_EMAILS = ["office@designedbypo.com", "radina@designedbypo.com"];
+const ADMIN_EMAILS = ["office@designedbypo.com"];
 
 export const dynamic = "force-dynamic";
 

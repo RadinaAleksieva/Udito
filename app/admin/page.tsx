@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 // Admin emails that have access
-const ADMIN_EMAILS = ["office@designedbypo.com", "radina@designedbypo.com"];
+const ADMIN_EMAILS = ["office@designedbypo.com"];
 
 interface Business {
   id: string;
