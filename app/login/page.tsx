@@ -109,31 +109,24 @@ function LoginForm() {
       });
       const data = await response.json();
 
+      // Update wixParams with resolved values
+      if (data.siteId || data.instanceId) {
+        setWixParams(prev => ({
+          ...prev,
+          siteId: data.siteId || prev.siteId,
+          instanceId: data.instanceId || prev.instanceId,
+        }));
+      }
+
       if (data.hasUser && data.userEmail) {
-        // Store has a user - show login with their email
+        // Store has a user - show login with their email prefilled
         setEmail(data.userEmail);
         setStatus(`Намерен акаунт: ${data.userEmail}`);
         setShowEmailForm(true);
-        setIsLoading(null);
-
-        // Update wixParams with resolved values
-        if (data.siteId || data.instanceId) {
-          setWixParams(prev => ({
-            ...prev,
-            siteId: data.siteId || prev.siteId,
-            instanceId: data.instanceId || prev.instanceId,
-          }));
-        }
-      } else {
-        // No user for this store - redirect to registration
-        const registerUrl = new URL("/register", window.location.origin);
-        if (data.siteId) registerUrl.searchParams.set("siteId", data.siteId);
-        if (data.instanceId) registerUrl.searchParams.set("instanceId", data.instanceId);
-        if (instance) registerUrl.searchParams.set("instance", instance);
-
-        setStatus("Пренасочване към регистрация...");
-        window.location.href = registerUrl.toString();
       }
+      // If no user for this store - just show normal login form
+      // Don't redirect to registration - user might have an existing account
+      setIsLoading(null);
     } catch (err) {
       console.error("Check Wix store error:", err);
       setStatus("");
