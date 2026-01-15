@@ -1,24 +1,76 @@
 import { NextResponse } from "next/server";
 import { sql } from "@vercel/postgres";
-import { auth } from "@/lib/auth";
+import { auth, getActiveStore } from "@/lib/auth";
+import { cookies } from "next/headers";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: Request) {
   const session = await auth();
+  const cookieStore = cookies();
 
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // Get Wix context from cookies or URL params
+  const url = new URL(request.url);
+  const instanceId = url.searchParams.get("instanceId") || cookieStore.get("udito_instance_id")?.value;
+  const siteId = url.searchParams.get("siteId") || cookieStore.get("udito_site_id")?.value;
+
+  let businessId: string | null = null;
+
+  // First try to get business from NextAuth session
+  if (session?.user?.id) {
+    const result = await sql`
+      SELECT business_id FROM business_users
+      WHERE user_id = ${session.user.id}
+      LIMIT 1
+    `;
+    if (result.rows.length > 0) {
+      businessId = result.rows[0].business_id;
+    }
+  }
+
+  // If no business from session, try to get from Wix store connection
+  if (!businessId && (siteId || instanceId)) {
+    const storeResult = await sql`
+      SELECT business_id FROM store_connections
+      WHERE (${siteId}::text IS NOT NULL AND site_id = ${siteId})
+         OR (${instanceId}::text IS NOT NULL AND instance_id = ${instanceId})
+      LIMIT 1
+    `;
+    if (storeResult.rows.length > 0) {
+      businessId = storeResult.rows[0].business_id;
+    }
+  }
+
+  // If still no business, try from companies table
+  if (!businessId && (siteId || instanceId)) {
+    const companyResult = await sql`
+      SELECT business_id FROM companies
+      WHERE (${siteId}::text IS NOT NULL AND site_id = ${siteId})
+         OR (${instanceId}::text IS NOT NULL AND instance_id = ${instanceId})
+      LIMIT 1
+    `;
+    if (companyResult.rows.length > 0) {
+      businessId = companyResult.rows[0].business_id;
+    }
+  }
+
+  if (!businessId) {
+    return NextResponse.json({
+      hasSubscription: false,
+      status: "none",
+      isActive: true, // Allow access if no business found (legacy/Wix-only users)
+      daysRemaining: 999,
+      message: "Няма намерен бизнес акаунт",
+    });
   }
 
   try {
-    // Get user's business subscription
+    // Get business subscription
     const result = await sql`
-      SELECT b.id, b.name, b.trial_ends_at, b.subscription_status,
-             b.plan_id, b.subscription_expires_at
-      FROM businesses b
-      JOIN business_users bu ON b.id = bu.business_id
-      WHERE bu.user_id = ${session.user.id}
+      SELECT id, name, trial_ends_at, subscription_status,
+             plan_id, subscription_expires_at
+      FROM businesses
+      WHERE id = ${businessId}
       LIMIT 1
     `;
 
@@ -26,7 +78,8 @@ export async function GET() {
       return NextResponse.json({
         hasSubscription: false,
         status: "none",
-        message: "Няма намерен бизнес акаунт",
+        isActive: true,
+        daysRemaining: 999,
       });
     }
 
@@ -55,6 +108,7 @@ export async function GET() {
       }
     } else if (status === "active") {
       isActive = true;
+      daysRemaining = 999;
     }
 
     return NextResponse.json({
