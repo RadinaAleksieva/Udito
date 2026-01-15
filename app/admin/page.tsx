@@ -5,8 +5,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
-// Admin emails that have access
-const ADMIN_EMAILS = ["office@designedbypo.com"];
+// Admin access is checked server-side via environment variable
 
 interface Business {
   id: string;
@@ -50,11 +49,6 @@ export default function AdminPage() {
     }
 
     if (status === "authenticated") {
-      if (!session?.user?.email || !ADMIN_EMAILS.includes(session.user.email)) {
-        setError("Нямате достъп до тази страница");
-        setIsLoading(false);
-        return;
-      }
       loadData();
     }
   }, [status, session, router]);
@@ -62,6 +56,11 @@ export default function AdminPage() {
   async function loadData() {
     try {
       const response = await fetch("/api/admin/dashboard");
+      if (response.status === 403) {
+        setError("Нямате достъп до тази страница");
+        setIsLoading(false);
+        return;
+      }
       if (!response.ok) {
         throw new Error("Failed to load data");
       }

@@ -3,16 +3,20 @@ import { getServerSession } from "next-auth";
 import { sql } from "@vercel/postgres";
 import { authOptions } from "@/lib/auth";
 
-// Admin emails that have access
-const ADMIN_EMAILS = ["office@designedbypo.com"];
-
 export const dynamic = "force-dynamic";
+
+// Check if user is admin - emails stored in env variable for security
+function isAdmin(email: string | null | undefined): boolean {
+  if (!email) return false;
+  const adminEmails = process.env.ADMIN_EMAILS?.split(",").map(e => e.trim().toLowerCase()) || [];
+  return adminEmails.includes(email.toLowerCase());
+}
 
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session?.user?.email || !ADMIN_EMAILS.includes(session.user.email)) {
+    if (!isAdmin(session?.user?.email)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
