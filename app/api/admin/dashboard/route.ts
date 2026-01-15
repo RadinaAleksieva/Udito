@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { sql } from "@vercel/postgres";
 import { authOptions } from "@/lib/auth";
+import { initDb } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,8 @@ function isAdmin(email: string | null | undefined): boolean {
 
 export async function GET() {
   try {
+    await initDb();
+
     const session = await getServerSession(authOptions);
 
     if (!isAdmin(session?.user?.email)) {
