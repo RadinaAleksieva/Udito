@@ -13,12 +13,7 @@ export async function POST(request: Request) {
 
     const userId = session.user.id;
     const body = await request.json();
-    const { receiptsStartDate, codReceiptsEnabled, initialReceiptNumber } = body;
-
-    // Validate
-    if (!receiptsStartDate) {
-      return NextResponse.json({ error: "Моля изберете начална дата" }, { status: 400 });
-    }
+    const { codReceiptsEnabled, initialReceiptNumber } = body;
 
     // Get user's business
     const businessResult = await sql`
@@ -56,8 +51,7 @@ export async function POST(request: Request) {
     // Update company settings
     await sql`
       UPDATE companies
-      SET receipts_start_date = ${receiptsStartDate},
-          cod_receipts_enabled = ${codReceiptsEnabled ?? true},
+      SET cod_receipts_enabled = ${codReceiptsEnabled ?? true},
           receipt_number_start = ${initialReceiptNumber ? parseInt(initialReceiptNumber, 10) : null},
           updated_at = NOW()
       WHERE site_id = ${siteId}
