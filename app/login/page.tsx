@@ -17,7 +17,7 @@ function LoginForm() {
   const [showAccessCode, setShowAccessCode] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [instanceId, setInstanceId] = useState("");
+  const [accessCode, setAccessCode] = useState("");
   const [status, setStatus] = useState("");
   const [isLoading, setIsLoading] = useState<string | null>(null);
   const [isInIframe, setIsInIframe] = useState(false);
@@ -33,10 +33,7 @@ function LoginForm() {
       const channel = new BroadcastChannel(LOGIN_CHANNEL);
       channel.postMessage({ type: "LOGIN_SUCCESS", timestamp: Date.now() });
       channel.close();
-      console.log("📢 Broadcasted login success to other tabs");
-    } catch (err) {
-      console.log("BroadcastChannel not supported, trying localStorage fallback");
-      // Fallback for browsers without BroadcastChannel
+    } catch {
       localStorage.setItem("udito-login-event", Date.now().toString());
     }
   }, []);
@@ -56,7 +53,6 @@ function LoginForm() {
     if (inIframe) {
       const handleLoginBroadcast = (event: MessageEvent) => {
         if (event.data?.type === "LOGIN_SUCCESS") {
-          console.log("🔄 Received login broadcast, refreshing iframe...");
           window.location.reload();
         }
       };
@@ -65,10 +61,8 @@ function LoginForm() {
         const channel = new BroadcastChannel(LOGIN_CHANNEL);
         channel.addEventListener("message", handleLoginBroadcast);
 
-        // Also listen for localStorage changes (fallback)
         const handleStorage = (e: StorageEvent) => {
           if (e.key === "udito-login-event") {
-            console.log("🔄 Received login event via localStorage, refreshing...");
             window.location.reload();
           }
         };
@@ -79,10 +73,8 @@ function LoginForm() {
           window.removeEventListener("storage", handleStorage);
         };
       } catch {
-        // BroadcastChannel not supported, use localStorage only
         const handleStorage = (e: StorageEvent) => {
           if (e.key === "udito-login-event") {
-            console.log("🔄 Received login event via localStorage, refreshing...");
             window.location.reload();
           }
         };
@@ -97,75 +89,53 @@ function LoginForm() {
     const wixInstanceId = params.get("instanceId") || params.get("instance_id") || undefined;
     const siteId = params.get("siteId") || params.get("site_id") || undefined;
 
-    // Debug logging
-    console.log("🔍 UDITO Login Debug:", {
-      fullUrl: window.location.href,
-      search: window.location.search,
-      instance: instance ? `${instance.substring(0, 20)}...` : "NOT FOUND",
-      instanceId: wixInstanceId || "NOT FOUND",
-      siteId: siteId || "NOT FOUND",
-      isInIframe: inIframe,
-    });
-
     setWixParams({ instance, instanceId: wixInstanceId, siteId });
 
-    // Pre-fill instance ID if available
-    if (wixInstanceId) {
-      setInstanceId(wixInstanceId);
-    }
-
-    // AUTO-LOGIN: If we have Wix instance token, try to authenticate automatically
-    if (instance || wixInstanceId) {
-      console.log("🚀 Attempting auto-login with Wix params...");
-      autoLoginWithWix(instance, wixInstanceId, siteId);
-    } else {
-      console.log("⚠️ No Wix params found - showing manual login");
+    // If we have Wix params, check if this store has a user
+    if (instance || wixInstanceId || siteId) {
+      checkWixStore(instance, wixInstanceId, siteId);
     }
   }, []);
 
-  async function autoLoginWithWix(instance?: string, wixInstanceId?: string, siteId?: string) {
-    setStatus("Автоматично свързване с Wix...");
+  async function checkWixStore(instance?: string, instanceId?: string, siteId?: string) {
+    setStatus("Проверка на магазина...");
     setIsLoading("auto");
+
     try {
-      const response = await fetch("/api/instance", {
+      const response = await fetch("/api/auth/check-wix-store", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          instanceId: wixInstanceId,
-          token: instance,
-          siteId: siteId,
-        }),
+        body: JSON.stringify({ instance, instanceId, siteId }),
       });
       const data = await response.json();
-      console.log("📡 Instance API response:", data);
 
-      // Even if API returns ok:false, we still have the instance - redirect anyway
-      // The instance will be passed via URL for iframe contexts where cookies don't work
-      const effectiveInstanceId = data?.instanceId || wixInstanceId;
-      const effectiveSiteId = data?.siteId || siteId;
-
-      if (effectiveInstanceId) {
-        setStatus("Пренасочване...");
-        // Pass instance via URL for iframe context (cookies might be blocked)
-        const redirectUrl = new URL(callbackUrl, window.location.origin);
-        redirectUrl.searchParams.set("instanceId", effectiveInstanceId);
-        if (effectiveSiteId) {
-          redirectUrl.searchParams.set("siteId", effectiveSiteId);
-        }
-        if (instance) {
-          redirectUrl.searchParams.set("instance", instance);
-        }
-        console.log("🔄 Redirecting to:", redirectUrl.toString());
-        window.location.href = redirectUrl.toString();
-      } else {
-        // No instance ID at all - show manual login
-        console.log("❌ No instance ID available");
-        setStatus("");
+      if (data.hasUser && data.userEmail) {
+        // Store has a user - show login with their email
+        setEmail(data.userEmail);
+        setStatus(`Намерен акаунт: ${data.userEmail}`);
+        setShowEmailForm(true);
         setIsLoading(null);
+
+        // Update wixParams with resolved values
+        if (data.siteId || data.instanceId) {
+          setWixParams(prev => ({
+            ...prev,
+            siteId: data.siteId || prev.siteId,
+            instanceId: data.instanceId || prev.instanceId,
+          }));
+        }
+      } else {
+        // No user for this store - redirect to registration
+        const registerUrl = new URL("/register", window.location.origin);
+        if (data.siteId) registerUrl.searchParams.set("siteId", data.siteId);
+        if (data.instanceId) registerUrl.searchParams.set("instanceId", data.instanceId);
+        if (instance) registerUrl.searchParams.set("instance", instance);
+
+        setStatus("Пренасочване към регистрация...");
+        window.location.href = registerUrl.toString();
       }
     } catch (err) {
-      console.error("❌ Auto-login error:", err);
-      // Auto-login failed, show manual login options
+      console.error("Check Wix store error:", err);
       setStatus("");
       setIsLoading(null);
     }
@@ -175,6 +145,7 @@ function LoginForm() {
     event.preventDefault();
     setStatus("");
     setIsLoading("email");
+
     try {
       // First check if user exists
       const checkResponse = await fetch("/api/auth/check-email", {
@@ -200,11 +171,13 @@ function LoginForm() {
         password,
         redirect: false,
       });
+
       if (result?.error) {
         setStatus("Грешна парола");
+        setIsLoading(null);
       } else {
         // Capture Wix instance if available
-        if (wixParams.instanceId || wixParams.instance) {
+        if (wixParams.instanceId || wixParams.instance || wixParams.siteId) {
           try {
             await fetch("/api/instance", {
               method: "POST",
@@ -219,18 +192,18 @@ function LoginForm() {
             // Continue even if instance capture fails
           }
         }
+
         // Build redirect URL with Wix params
         const redirectUrl = new URL(callbackUrl, window.location.origin);
         if (wixParams.instanceId) redirectUrl.searchParams.set("instanceId", wixParams.instanceId);
         if (wixParams.instance) redirectUrl.searchParams.set("instance", wixParams.instance);
         if (wixParams.siteId) redirectUrl.searchParams.set("siteId", wixParams.siteId);
-        // Broadcast login success to iframe before redirect
+
         broadcastLoginSuccess();
         window.location.href = redirectUrl.toString();
       }
     } catch {
       setStatus("Възникна грешка. Опитайте отново.");
-    } finally {
       setIsLoading(null);
     }
   }
@@ -239,31 +212,24 @@ function LoginForm() {
     event.preventDefault();
     setStatus("");
     setIsLoading("code");
+
     try {
-      const response = await fetch("/api/instance", {
+      const response = await fetch("/api/stores/join", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          instanceId: instanceId.trim(),
-        }),
+        body: JSON.stringify({ code: accessCode.trim().toUpperCase() }),
       });
       const data = await response.json();
-      if (!data?.ok) {
-        throw new Error(
-          data?.error || "Не е намерен сайт за този код. Отворете приложението от Wix."
-        );
+
+      if (!response.ok) {
+        throw new Error(data.error || "Невалиден код за достъп");
       }
-      setStatus("Успешно свързване. Пренасочване...");
-      // Broadcast login success to iframe before redirect
+
+      setStatus("Успешно свързване!");
       broadcastLoginSuccess();
-      window.location.href = callbackUrl;
+      window.location.href = "/overview";
     } catch (err) {
-      setStatus(
-        err instanceof Error
-          ? err.message
-          : "Неуспешно свързване. Проверете данните."
-      );
-    } finally {
+      setStatus(err instanceof Error ? err.message : "Неуспешно свързване");
       setIsLoading(null);
     }
   }
@@ -296,7 +262,7 @@ function LoginForm() {
           {isLoading === "auto" && (
             <div className="login-auto-connect">
               <div className="login-spinner"></div>
-              <p>{status || "Свързване с Wix..."}</p>
+              <p>{status || "Свързване..."}</p>
             </div>
           )}
 
@@ -321,7 +287,7 @@ function LoginForm() {
                     Отвори в нов прозорец
                   </a>
                   <div className="login-divider">
-                    <span>или използвайте код за достъп</span>
+                    <span>или</span>
                   </div>
                 </div>
               )}
@@ -332,34 +298,19 @@ function LoginForm() {
                     className="login-btn login-btn--google"
                     onClick={() => {
                       setIsLoading("google");
-                      // Build callback URL with Wix params
                       const redirectUrl = new URL(callbackUrl, window.location.origin);
                       if (wixParams.instanceId) redirectUrl.searchParams.set("instanceId", wixParams.instanceId);
                       if (wixParams.instance) redirectUrl.searchParams.set("instance", wixParams.instance);
                       if (wixParams.siteId) redirectUrl.searchParams.set("siteId", wixParams.siteId);
-                      // Flag to broadcast login success after OAuth redirect
-                      redirectUrl.searchParams.set("loginBroadcast", "1");
                       signIn("google", { callbackUrl: redirectUrl.toString() });
                     }}
                     disabled={isLoading !== null}
                   >
                     <svg viewBox="0 0 24 24" width="20" height="20">
-                      <path
-                        fill="#4285F4"
-                        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                      />
-                      <path
-                        fill="#34A853"
-                        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                      />
-                      <path
-                        fill="#FBBC05"
-                        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                      />
-                      <path
-                        fill="#EA4335"
-                        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                      />
+                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
                     </svg>
                     <span>{isLoading === "google" ? "Свързване..." : "Продължи с Google"}</span>
                   </button>
@@ -451,11 +402,13 @@ function LoginForm() {
               </p>
               <input
                 type="text"
-                value={instanceId}
-                onChange={(e) => setInstanceId(e.target.value)}
-                placeholder="Код за достъп"
+                value={accessCode}
+                onChange={(e) => setAccessCode(e.target.value.toUpperCase())}
+                placeholder="Код за достъп (напр. ABC123)"
                 required
                 disabled={isLoading !== null}
+                maxLength={6}
+                style={{ textTransform: "uppercase", letterSpacing: "2px", textAlign: "center" }}
               />
               {status && <p className="login-status">{status}</p>}
               <button
