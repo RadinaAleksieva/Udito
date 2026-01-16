@@ -487,7 +487,10 @@ export default async function OrdersPage({
   // Use siteId first (orders are stored with site_id), fallback to instanceId
   const siteId = store.siteId || store.instanceId;
   const now = new Date();
-  const monthParam = searchParams?.month || "all";
+
+  // Default to current month instead of "all"
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const monthParam = searchParams?.month || currentMonth;
   const monthMatch = monthParam.match(/^(\d{4})-(\d{2})$/);
   const monthOptions = [
     { value: "all", label: "Всички месеци" },
