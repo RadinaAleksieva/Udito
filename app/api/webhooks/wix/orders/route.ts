@@ -670,8 +670,13 @@ export async function POST(request: NextRequest) {
 
           // For order.created events, try multiple possible locations
           if (slug === "created") {
+            console.log("📦 Processing order.created event...");
+            console.log("📦 eventData.entity type:", typeof eventData.entity);
+            console.log("📦 eventData.entity value:", eventData.entity ? "EXISTS" : "NULL/UNDEFINED");
+            console.log("📦 eventData.entityId:", eventData.entityId);
+
             // Primary: data is in .entity
-            if (eventData.entity) {
+            if (eventData.entity && Object.keys(eventData.entity).length > 0) {
               orderData = eventData.entity;
               console.log("📦 Extracted order from entity (created)");
             }
@@ -680,21 +685,50 @@ export async function POST(request: NextRequest) {
               orderData = eventData.createdEvent.entity;
               console.log("📦 Extracted order from createdEvent.entity");
             }
-            // Fallback 2: data might be in .data
-            else if (eventData.data) {
+            // Fallback 2: data might be directly in eventData if it looks like an order
+            else if (eventData.id && (eventData.lineItems || eventData.buyerInfo || eventData.priceSummary)) {
+              orderData = eventData;
+              console.log("📦 Extracted order from eventData directly (order is at root level)");
+            }
+            // Fallback 3: data might be in .data
+            else if (eventData.data && (eventData.data.id || eventData.data.lineItems)) {
               orderData = eventData.data;
               console.log("📦 Extracted order from data (created)");
             }
-            // Fallback 3: data might be in .order
+            // Fallback 4: data might be in .order
             else if (eventData.order) {
               orderData = eventData.order;
               console.log("📦 Extracted order from order (created)");
             }
+            // Last resort: check if entity exists but is an empty object vs truly null
+            else if (eventData.entity === null || eventData.entity === undefined) {
+              console.log("📦 entity is explicitly null/undefined, checking other paths...");
+              // Log all available data for debugging
+              console.log("📦 Available eventData keys with values:", Object.entries(eventData || {})
+                .filter(([_, v]) => v !== null && v !== undefined)
+                .map(([k, v]) => `${k}: ${typeof v}`)
+                .join(", "));
+            }
           }
           // For order.updated events, data is in .updatedEvent.currentEntity
-          else if (slug === "updated" && eventData.updatedEvent?.currentEntity) {
-            orderData = eventData.updatedEvent.currentEntity;
-            console.log("📦 Extracted order from updatedEvent.currentEntity");
+          else if (slug === "updated") {
+            if (eventData.updatedEvent?.currentEntity) {
+              orderData = eventData.updatedEvent.currentEntity;
+              console.log("📦 Extracted order from updatedEvent.currentEntity");
+              console.log("📦 Order fields:", JSON.stringify({
+                id: orderData.id,
+                _id: orderData._id,
+                number: orderData.number,
+                orderNumber: orderData.orderNumber,
+                hasLineItems: !!orderData.lineItems,
+                keys: Object.keys(orderData || {}).slice(0, 15),
+              }));
+            }
+            // Fallback for updated events
+            else if (eventData.entity) {
+              orderData = eventData.entity;
+              console.log("📦 Extracted order from entity (updated fallback)");
+            }
           }
           // For payment_status_updated events, data is in .actionEvent.body.order or .order
           else if (slug === "payment_status_updated") {
@@ -725,10 +759,17 @@ export async function POST(request: NextRequest) {
             };
             await handleOrderEvent(v1Event);
             console.log("✅ v1 event handled successfully");
+            // Extract order number from various possible locations
+            const orderNumber = orderData.number ??
+              orderData.orderNumber?.number ??
+              orderData.orderNumber?.displayNumber ??
+              orderData.orderNumber ??
+              orderData.displayId ??
+              null;
             await logWebhook({
               eventType: `v1.order.${slug}`,
-              orderId: orderData.id,
-              orderNumber: orderData.number,
+              orderId: orderData.id ?? orderData._id,
+              orderNumber: orderNumber,
               siteId: jwsSiteId,
               instanceId: parsedPayload.instanceId,
               status: 'processed',
