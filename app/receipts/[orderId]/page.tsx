@@ -524,7 +524,9 @@ export default async function ReceiptPage({
     }
   }
   if (shouldUpdate) {
-    const mapped = pickOrderFields(orderRaw, "backfill");
+    // Preserve the existing source from the database - don't overwrite webhook with backfill
+    const existingSource = (record.source === "webhook" ? "webhook" : "backfill") as "webhook" | "backfill";
+    const mapped = pickOrderFields(orderRaw, existingSource);
     await upsertOrder({
       ...mapped,
       siteId: orderSiteId,
