@@ -4,7 +4,6 @@ import { orders } from "@wix/ecom";
 import { sql } from "@vercel/postgres";
 import { getCompanyBySite, getLatestWixToken, getOrderById, initDb, saveWixTokens, upsertOrder, trackOrderUsage, trackReceiptUsage } from "@/lib/db";
 import { issueReceipt, issueRefundReceipt, getSaleReceiptByOrderId } from "@/lib/receipts";
-import { broadcastEvent } from "@/app/api/events/route";
 import {
   extractTransactionRef,
   extractPaymentId,
@@ -311,17 +310,6 @@ async function handleOrderEvent(event: any) {
   });
 
   console.log("✅ Order saved successfully:", mapped.number);
-
-  // Broadcast real-time update to connected clients
-  broadcastEvent({
-    type: "order_updated",
-    data: {
-      orderId: mapped.id,
-      orderNumber: mapped.number,
-      paymentStatus: mapped.paymentStatus,
-      status: mapped.status,
-    },
-  });
 
   // Track order usage for plan limits
   await trackOrderUsage(mapped.siteId, instanceId);
