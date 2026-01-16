@@ -25,6 +25,27 @@ import { getAppInstanceDetails } from "@/lib/wix";
 const APP_ID = process.env.WIX_APP_ID || "";
 const APP_PUBLIC_KEY = process.env.WIX_APP_PUBLIC_KEY || "";
 
+// Log webhook events to database for debugging
+async function logWebhook(params: {
+  eventType: string;
+  orderId?: string | null;
+  orderNumber?: string | null;
+  siteId?: string | null;
+  instanceId?: string | null;
+  status: 'received' | 'processed' | 'error';
+  errorMessage?: string | null;
+  payloadPreview?: string | null;
+}) {
+  try {
+    await sql`
+      INSERT INTO webhook_logs (event_type, order_id, order_number, site_id, instance_id, status, error_message, payload_preview)
+      VALUES (${params.eventType}, ${params.orderId ?? null}, ${params.orderNumber ?? null}, ${params.siteId ?? null}, ${params.instanceId ?? null}, ${params.status}, ${params.errorMessage ?? null}, ${params.payloadPreview ?? null})
+    `;
+  } catch (e) {
+    console.warn("Failed to log webhook:", e);
+  }
+}
+
 // Decode Wix instance JWT to extract siteId
 function decodeWixInstance(instance: string): { siteId: string | null; instanceId: string | null } {
   try {
@@ -551,6 +572,13 @@ export async function POST(request: NextRequest) {
 
   await initDb();
 
+  // Log received webhook immediately
+  await logWebhook({
+    eventType: 'unknown',
+    status: 'received',
+    payloadPreview: rawBody.substring(0, 500),
+  });
+
   // Decode JWS token manually to extract event data
   // Wix webhooks are sent as JWS (JSON Web Signature) tokens
   let eventData: any = null;
@@ -614,6 +642,14 @@ export async function POST(request: NextRequest) {
             console.log("📦 v2 event instanceId:", v2Event.metadata.instanceId, "siteId:", v2Event.metadata.siteId);
             await handleOrderEvent(v2Event);
             console.log("✅ v2 event handled successfully");
+            await logWebhook({
+              eventType: 'v2.order.created',
+              orderId: eventData?.entity?.id,
+              orderNumber: eventData?.entity?.number,
+              siteId: jwsSiteId,
+              instanceId: parsedPayload.instanceId,
+              status: 'processed',
+            });
             return NextResponse.json({ ok: true });
           }
         }
@@ -663,10 +699,24 @@ export async function POST(request: NextRequest) {
             };
             await handleOrderEvent(v1Event);
             console.log("✅ v1 event handled successfully");
+            await logWebhook({
+              eventType: `v1.order.${slug}`,
+              orderId: orderData.id,
+              orderNumber: orderData.number,
+              siteId: jwsSiteId,
+              instanceId: parsedPayload.instanceId,
+              status: 'processed',
+            });
             return NextResponse.json({ ok: true });
           } else {
             console.log("⚠️ Could not extract order data from v1 event");
             console.log("Event data structure:", JSON.stringify(eventData, null, 2).substring(0, 1000));
+            await logWebhook({
+              eventType: `v1.order.${slug}`,
+              status: 'error',
+              errorMessage: 'Could not extract order data from v1 event',
+              payloadPreview: JSON.stringify(eventData, null, 2).substring(0, 500),
+            });
           }
         }
       }

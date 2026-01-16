@@ -543,6 +543,25 @@ export async function initDb() {
   await sql`
     create index if not exists access_codes_code_idx on access_codes (code);
   `;
+
+  // Webhook logs for debugging
+  await sql`
+    create table if not exists webhook_logs (
+      id bigserial primary key,
+      event_type text,
+      order_id text,
+      order_number text,
+      site_id text,
+      instance_id text,
+      status text default 'received',
+      error_message text,
+      payload_preview text,
+      created_at timestamptz default now()
+    );
+  `;
+  await sql`
+    create index if not exists webhook_logs_created_at_idx on webhook_logs (created_at desc);
+  `;
 }
 
 export async function upsertOrder(order: StoredOrder) {
