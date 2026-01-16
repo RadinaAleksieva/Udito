@@ -657,13 +657,39 @@ export async function POST(request: NextRequest) {
         // Check if this is a v1 Order event (wix.ecom.v1.order)
         if (entityFqdn === "wix.ecom.v1.order") {
           console.log("🆕 Detected v1 Order event");
+          console.log("📋 Full eventData structure:", JSON.stringify({
+            hasEntity: !!eventData.entity,
+            hasData: !!eventData.data,
+            hasCreatedEvent: !!eventData.createdEvent,
+            hasOrder: !!eventData.order,
+            entityKeys: eventData.entity ? Object.keys(eventData.entity) : [],
+            topLevelKeys: Object.keys(eventData || {}),
+          }));
 
           let orderData = null;
 
-          // For order.created events, data is in .entity
-          if (slug === "created" && eventData.entity) {
-            orderData = eventData.entity;
-            console.log("📦 Extracted order from entity (created)");
+          // For order.created events, try multiple possible locations
+          if (slug === "created") {
+            // Primary: data is in .entity
+            if (eventData.entity) {
+              orderData = eventData.entity;
+              console.log("📦 Extracted order from entity (created)");
+            }
+            // Fallback 1: data might be in .createdEvent.entity
+            else if (eventData.createdEvent?.entity) {
+              orderData = eventData.createdEvent.entity;
+              console.log("📦 Extracted order from createdEvent.entity");
+            }
+            // Fallback 2: data might be in .data
+            else if (eventData.data) {
+              orderData = eventData.data;
+              console.log("📦 Extracted order from data (created)");
+            }
+            // Fallback 3: data might be in .order
+            else if (eventData.order) {
+              orderData = eventData.order;
+              console.log("📦 Extracted order from order (created)");
+            }
           }
           // For order.updated events, data is in .updatedEvent.currentEntity
           else if (slug === "updated" && eventData.updatedEvent?.currentEntity) {
@@ -710,12 +736,18 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ ok: true });
           } else {
             console.log("⚠️ Could not extract order data from v1 event");
-            console.log("Event data structure:", JSON.stringify(eventData, null, 2).substring(0, 1000));
+            console.log("Event data structure:", JSON.stringify(eventData, null, 2).substring(0, 2000));
+            console.log("Slug:", slug);
+            console.log("EntityFqdn:", entityFqdn);
+            // Log more detail about what's in eventData
+            console.log("eventData.entity:", eventData.entity ? "EXISTS" : "NULL");
+            console.log("eventData.data:", eventData.data ? "EXISTS" : "NULL");
+            console.log("eventData.createdEvent:", eventData.createdEvent ? "EXISTS" : "NULL");
             await logWebhook({
               eventType: `v1.order.${slug}`,
               status: 'error',
-              errorMessage: 'Could not extract order data from v1 event',
-              payloadPreview: JSON.stringify(eventData, null, 2).substring(0, 500),
+              errorMessage: `Could not extract order data from v1 event. Slug: ${slug}, hasEntity: ${!!eventData.entity}, hasData: ${!!eventData.data}`,
+              payloadPreview: JSON.stringify(eventData, null, 2).substring(0, 1000),
             });
           }
         }
