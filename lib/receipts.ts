@@ -216,8 +216,6 @@ export async function listReceiptsWithOrders(limit = 200) {
     from receipts
     left join orders on orders.id = receipts.order_id
     where (orders.status is null
-       or lower(orders.status) not like 'cancel%')
-      and (orders.status is null
        or lower(orders.status) not like 'archiv%')
     order by coalesce(orders.paid_at, receipts.issued_at) desc nulls last
     limit ${limit};
@@ -270,8 +268,6 @@ export async function listReceiptsWithOrdersForBusiness(
     left join orders on orders.id = receipts.order_id
     where orders.business_id = ${businessId}
       and (orders.status is null
-        or lower(orders.status) not like 'cancel%')
-      and (orders.status is null
         or lower(orders.status) not like 'archiv%')
     order by coalesce(orders.paid_at, receipts.issued_at) desc nulls last
     limit ${limit};
@@ -296,8 +292,6 @@ export async function listReceiptsWithOrdersForPeriod(
     from receipts
     left join orders on orders.id = receipts.order_id
     where orders.paid_at between ${startIso} and ${endIso}
-      and (orders.status is null
-        or lower(orders.status) not like 'cancel%')
       and (orders.status is null
         or lower(orders.status) not like 'archiv%')
     order by coalesce(orders.paid_at, receipts.issued_at) desc nulls last;
@@ -352,8 +346,6 @@ export async function listReceiptsWithOrdersForPeriodForBusiness(
     left join orders on orders.id = receipts.order_id
     where orders.business_id = ${businessId}
       and orders.paid_at between ${startIso} and ${endIso}
-      and (orders.status is null
-        or lower(orders.status) not like 'cancel%')
       and (orders.status is null
         or lower(orders.status) not like 'archiv%')
     order by coalesce(orders.paid_at, receipts.issued_at) desc nulls last;
