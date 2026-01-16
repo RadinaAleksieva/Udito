@@ -1012,7 +1012,7 @@ export async function listAllDetailedOrders() {
   return result.rows;
 }
 
-export async function listAllDetailedOrdersForSite(siteId: string) {
+export async function listAllDetailedOrdersForSite(siteId: string, limit = 500) {
   const result = await sql`
     select id,
       number,
@@ -1028,7 +1028,8 @@ export async function listAllDetailedOrdersForSite(siteId: string) {
       source
     from orders
     where site_id = ${siteId}
-    order by created_at desc nulls last;
+    order by created_at desc nulls last
+    limit ${limit};
   `;
   return result.rows;
 }
