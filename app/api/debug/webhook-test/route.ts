@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
       total: 17,
       customerEmail: "test@example.com",
       customerName: "Test Customer",
-      source: "webhook-test",
+      source: "webhook" as const,
       businessId: null,
       raw: {
         id: testOrderId,
