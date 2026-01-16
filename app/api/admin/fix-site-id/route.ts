@@ -41,13 +41,15 @@ export async function GET() {
   }
 }
 
-// POST: Update orders with null site_id to the specified siteId
+// POST: Update orders with null/wrong site_id to the specified siteId
 export async function POST(request: NextRequest) {
   try {
     await initDb();
 
     const body = await request.json();
     const siteId = body?.siteId;
+    const orderNumber = body?.orderNumber;
+    const fixWrongSiteIds = body?.fixWrongSiteIds; // Fix orders that have instance_id stored as site_id
 
     if (!siteId) {
       return NextResponse.json({ ok: false, error: "siteId is required in request body" }, { status: 400 });
@@ -55,25 +57,46 @@ export async function POST(request: NextRequest) {
 
     // Verify the siteId exists in companies
     const companyCheck = await sql`
-      SELECT site_id, store_name FROM companies WHERE site_id = ${siteId}
+      SELECT site_id, store_name, instance_id FROM companies WHERE site_id = ${siteId}
     `;
 
     if (companyCheck.rows.length === 0) {
       return NextResponse.json({ ok: false, error: `No company found with site_id: ${siteId}` }, { status: 400 });
     }
 
-    // Update all orders that have null site_id
-    const updateResult = await sql`
-      UPDATE orders
-      SET site_id = ${siteId}
-      WHERE site_id IS NULL
-      RETURNING id, number
-    `;
+    const company = companyCheck.rows[0];
+    let updateResult;
+
+    if (orderNumber) {
+      // Update specific order by number
+      updateResult = await sql`
+        UPDATE orders
+        SET site_id = ${siteId}
+        WHERE number = ${orderNumber}
+        RETURNING id, number
+      `;
+    } else if (fixWrongSiteIds && company.instance_id) {
+      // Fix orders that have instance_id stored as site_id
+      updateResult = await sql`
+        UPDATE orders
+        SET site_id = ${siteId}
+        WHERE site_id = ${company.instance_id}
+        RETURNING id, number
+      `;
+    } else {
+      // Update all orders that have null site_id
+      updateResult = await sql`
+        UPDATE orders
+        SET site_id = ${siteId}
+        WHERE site_id IS NULL
+        RETURNING id, number
+      `;
+    }
 
     return NextResponse.json({
       ok: true,
       siteId,
-      storeName: companyCheck.rows[0].store_name,
+      storeName: company.store_name,
       updatedCount: updateResult.rows.length,
       updatedOrders: updateResult.rows.map(r => ({ id: r.id, number: r.number })),
     });
