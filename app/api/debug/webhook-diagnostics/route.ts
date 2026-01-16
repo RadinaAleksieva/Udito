@@ -86,18 +86,16 @@ export async function GET() {
         id,
         site_id,
         instance_id,
-        created_at,
-        updated_at
+        connected_at
       FROM store_connections
-      ORDER BY created_at DESC
+      ORDER BY connected_at DESC
       LIMIT 5
     `;
 
     const connections = connectionsResult.rows.map(c => ({
       siteId: c.site_id?.substring(0, 8) + "...",
       instanceId: c.instance_id?.substring(0, 8) + "...",
-      createdAt: c.created_at,
-      updatedAt: c.updated_at,
+      connectedAt: c.connected_at,
     }));
 
     // 6. Expected webhook URL

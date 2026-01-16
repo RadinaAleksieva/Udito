@@ -29,9 +29,9 @@ export async function GET() {
 
     // 2. Database Check - Companies
     const companiesResult = await sql`
-      SELECT site_id, instance_id, store_name, store_id, cod_receipts_enabled, created_at
+      SELECT site_id, instance_id, store_name, store_id, cod_receipts_enabled, updated_at
       FROM companies
-      ORDER BY created_at DESC
+      ORDER BY updated_at DESC
       LIMIT 5
     `;
     checks.companies = companiesResult.rows.map(c => ({
