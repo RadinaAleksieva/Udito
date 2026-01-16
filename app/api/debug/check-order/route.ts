@@ -31,10 +31,17 @@ export async function GET(request: NextRequest) {
 
     // Get last 10 webhook logs
     const webhookLogs = await sql`
-      SELECT id, event_type, order_id, order_number, site_id, instance_id, status, error_message, created_at
+      SELECT id, event_type, order_id, order_number, site_id, instance_id, status, error_message, payload_preview, created_at
       FROM webhook_logs
       ORDER BY created_at DESC
       LIMIT 10
+    `;
+
+    // Get companies for comparison
+    const companies = await sql`
+      SELECT site_id, instance_id, store_name, store_id
+      FROM companies
+      LIMIT 5
     `;
 
     // Get order count by source
@@ -48,6 +55,7 @@ export async function GET(request: NextRequest) {
       specificOrder,
       recentOrders: recentOrders.rows,
       webhookLogs: webhookLogs.rows,
+      companies: companies.rows,
       sourceStats: sourceStats.rows,
     });
   } catch (error) {
