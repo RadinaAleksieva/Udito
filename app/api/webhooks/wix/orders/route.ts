@@ -264,6 +264,21 @@ async function handleOrderEvent(event: any) {
     }
   }
 
+  // Fallback: look up siteId from companies table by instanceId
+  if (!mapped.siteId && instanceId) {
+    try {
+      const companyLookup = await sql`
+        SELECT site_id FROM companies WHERE instance_id = ${instanceId} LIMIT 1
+      `;
+      if (companyLookup.rows.length > 0 && companyLookup.rows[0].site_id) {
+        mapped.siteId = companyLookup.rows[0].site_id;
+        console.log("✅ Found siteId from companies table:", mapped.siteId);
+      }
+    } catch (error) {
+      console.warn("Company lookup by instanceId failed", error);
+    }
+  }
+
   // Log if we still don't have siteId - this is a critical issue
   if (!mapped.siteId) {
     console.error("❌ CRITICAL: No siteId found for order", mapped.number, "- order will not appear in UI!");
@@ -417,7 +432,13 @@ async function handleOrderEvent(event: any) {
   });
 
   // Extract transaction ref from database order (has enriched data)
-  const receiptTxRef = extractTransactionRef(savedRaw);
+  let receiptTxRef = extractTransactionRef(savedRaw);
+
+  // For COD orders, generate transaction ref from order ID if not available
+  if (!receiptTxRef && isCOD && mapped.id) {
+    receiptTxRef = `COD-${mapped.id}`;
+    console.log(`💰 Generated COD transaction ref: ${receiptTxRef}`);
+  }
 
   // STRICT CHECK: Only issue receipts for orders paid on or after the receipts start date
   // If no receipts_start_date is configured, use far-future date to prevent any receipts
