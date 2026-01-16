@@ -97,8 +97,12 @@ async function registerWebhooks(instanceId: string, siteId: string | null) {
       ? accessToken
       : `Bearer ${accessToken}`;
 
-    // Register webhook for order events
-    const webhookUrl = `${process.env.NEXT_PUBLIC_APP_URL || "https://udito.vercel.app"}/api/webhooks/wix/orders`;
+    // Register webhook for order events - include instanceId and siteId in URL for identification
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://udito.vercel.app";
+    const params = new URLSearchParams();
+    params.set("instanceId", instanceId);
+    if (siteId) params.set("siteId", siteId);
+    const webhookUrl = `${baseUrl}/api/webhooks/wix/orders?${params.toString()}`;
 
     const response = await fetch(`${WIX_API_BASE}/webhooks/v1/webhooks`, {
       method: "POST",

@@ -589,6 +589,12 @@ if (wixClient) {
 export async function POST(request: NextRequest) {
   const rawBody = await request.text().catch(() => "");
 
+  // Extract instanceId and siteId from URL query parameters (passed during webhook registration)
+  const url = new URL(request.url);
+  const urlInstanceId = url.searchParams.get("instanceId");
+  const urlSiteId = url.searchParams.get("siteId");
+  console.log("📍 URL params - instanceId:", urlInstanceId, "siteId:", urlSiteId);
+
   // Log all incoming webhooks
   console.log("=== WEBHOOK RECEIVED ===");
   console.log("Timestamp:", new Date().toISOString());
@@ -644,10 +650,10 @@ export async function POST(request: NextRequest) {
       const decodedInstance = instanceToken ? decodeWixInstance(instanceToken) : null;
       console.log("📦 decodedInstance:", JSON.stringify(decodedInstance));
 
-      // Try multiple sources for siteId
-      const jwsSiteId = decodedInstance?.siteId ?? parsedPayload?.siteId ?? parsedPayload?.site_id ?? null;
-      const jwsInstanceId = decodedInstance?.instanceId ?? parsedPayload?.instanceId ?? parsedPayload?.instance_id ?? null;
-      console.log("📦 Extracted siteId:", jwsSiteId, "instanceId:", jwsInstanceId);
+      // Try multiple sources for siteId - URL params are the most reliable (set during webhook registration)
+      const jwsSiteId = urlSiteId ?? decodedInstance?.siteId ?? parsedPayload?.siteId ?? parsedPayload?.site_id ?? null;
+      const jwsInstanceId = urlInstanceId ?? decodedInstance?.instanceId ?? parsedPayload?.instanceId ?? parsedPayload?.instance_id ?? null;
+      console.log("📦 Extracted siteId:", jwsSiteId, "instanceId:", jwsInstanceId, "(URL params:", urlSiteId, urlInstanceId, ")");
 
       // Extract event data from the payload (handle triple-nested structure)
       if (parsedPayload.data) {
