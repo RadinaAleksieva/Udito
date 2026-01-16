@@ -19,11 +19,7 @@ export default function MonthFilter({
         onChange={(event) => {
           const selected = event.target.value;
           const url = new URL(window.location.href);
-          if (selected === "all") {
-            url.searchParams.delete("month");
-          } else {
-            url.searchParams.set("month", selected);
-          }
+          url.searchParams.set("month", selected);
           window.location.href = url.toString();
         }}
       >
