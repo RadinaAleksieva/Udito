@@ -145,7 +145,7 @@ export default async function ReceiptsPage({
   const receipts =
     monthMatch && rangeStart && rangeEnd
       ? await listReceiptsWithOrdersForPeriodForSite(rangeStart, rangeEnd, siteId!)
-      : await listReceiptsWithOrdersForSite(siteId!, 1000);
+      : await listReceiptsWithOrdersForSite(siteId!, 200);
 
   const dbReceipts = receipts as ReceiptRow[];
 

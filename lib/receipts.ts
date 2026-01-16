@@ -239,8 +239,7 @@ export async function listReceiptsWithOrdersForSite(
       orders.number as order_number,
       orders.customer_name,
       orders.total,
-      orders.currency,
-      orders.raw as order_raw
+      orders.currency
     from receipts
     left join orders on orders.id = receipts.order_id
     where orders.site_id = ${siteId}
