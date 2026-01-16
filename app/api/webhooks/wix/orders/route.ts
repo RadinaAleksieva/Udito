@@ -4,6 +4,7 @@ import { orders } from "@wix/ecom";
 import { sql } from "@vercel/postgres";
 import { getCompanyBySite, getLatestWixToken, getOrderById, initDb, saveWixTokens, upsertOrder, trackOrderUsage, trackReceiptUsage } from "@/lib/db";
 import { issueReceipt, issueRefundReceipt, getSaleReceiptByOrderId } from "@/lib/receipts";
+import { broadcastEvent } from "@/app/api/events/route";
 import {
   extractTransactionRef,
   extractPaymentId,
@@ -263,6 +264,18 @@ async function handleOrderEvent(event: any) {
       console.warn("Wix get app instance failed", error);
     }
   }
+
+  // Log if we still don't have siteId - this is a critical issue
+  if (!mapped.siteId) {
+    console.error("❌ CRITICAL: No siteId found for order", mapped.number, "- order will not appear in UI!");
+    console.error("Debug info:", {
+      eventMetadataSiteId: event?.metadata?.siteId,
+      rawSiteId: raw?.siteId,
+      rawOrderSiteId: rawOrder?.siteId,
+      instanceId,
+    });
+  }
+
   console.log("🔄 Step 2: Saving tokens...");
   if (mapped.siteId || instanceId) {
     await saveWixTokens({
@@ -299,6 +312,17 @@ async function handleOrderEvent(event: any) {
 
   console.log("✅ Order saved successfully:", mapped.number);
 
+  // Broadcast real-time update to connected clients
+  broadcastEvent({
+    type: "order_updated",
+    data: {
+      orderId: mapped.id,
+      orderNumber: mapped.number,
+      paymentStatus: mapped.paymentStatus,
+      status: mapped.status,
+    },
+  });
+
   // Track order usage for plan limits
   await trackOrderUsage(mapped.siteId, instanceId);
 
@@ -320,6 +344,11 @@ async function handleOrderEvent(event: any) {
         tokenInstanceId: latestToken.instance_id
       });
       company = await getCompanyBySite(latestToken.site_id, latestToken.instance_id);
+      // Also set the siteId on the order if we found it via fallback
+      if (company && !mapped.siteId && latestToken.site_id) {
+        mapped.siteId = latestToken.site_id;
+        console.log("📍 Set siteId from latest token:", mapped.siteId);
+      }
     }
   }
 
@@ -334,9 +363,25 @@ async function handleOrderEvent(event: any) {
       LIMIT 1
     `;
     company = fallbackResult.rows[0] ?? null;
+    // Also set the siteId on the order if we found it via fallback
+    if (company && !mapped.siteId && company.site_id) {
+      mapped.siteId = company.site_id;
+      console.log("📍 Set siteId from fallback company:", mapped.siteId);
+    }
   }
 
   console.log("🏢 Company lookup:", { siteId: mapped.siteId, instanceId, found: !!company, storeId: company?.store_id });
+
+  // If siteId was found via fallback, update the order in database
+  if (mapped.siteId && savedOrder && !savedOrder.site_id) {
+    console.log("📍 Updating order with siteId:", mapped.siteId);
+    await upsertOrder({
+      ...mapped,
+      paidAt: effectivePaidAt,
+      businessId: null,
+      raw: orderRaw,
+    });
+  }
 
   // Check if this is a COD (cash on delivery) payment
   // Use savedRaw from database - it has enriched data
@@ -386,13 +431,13 @@ async function handleOrderEvent(event: any) {
   // Extract transaction ref from database order (has enriched data)
   const receiptTxRef = extractTransactionRef(savedRaw);
 
-  // Only issue receipts for orders paid on or after the receipts start date
-  // Default: 2026-01-01 (when app was "installed")
+  // STRICT CHECK: Only issue receipts for orders paid on or after the receipts start date
+  // If no receipts_start_date is configured, use far-future date to prevent any receipts
   // Note: database returns snake_case (receipts_start_date)
   const companyStartDate = company?.receipts_start_date ?? company?.receiptsStartDate ?? null;
   const receiptsStartDate = companyStartDate
     ? new Date(companyStartDate)
-    : new Date("2026-01-01T00:00:00Z");
+    : new Date("2099-01-01T00:00:00Z"); // Far future = no receipts if not configured
   // For paid orders, use effectivePaidAt or current time as fallback
   // This ensures we can issue receipts even if timestamp is missing
   const orderPaidAt = effectivePaidAt
@@ -592,13 +637,17 @@ export async function POST(request: NextRequest) {
       console.log("📦 Decoded JWS payload:", JSON.stringify(parsedPayload, null, 2).substring(0, 500));
       console.log("📦 parsedPayload keys:", Object.keys(parsedPayload || {}));
       console.log("📦 parsedPayload.instanceId:", parsedPayload?.instanceId);
-      console.log("📦 parsedPayload.instance:", parsedPayload?.instance);
+      console.log("📦 parsedPayload.instance:", parsedPayload?.instance ? parsedPayload.instance.substring(0, 50) + "..." : "NULL");
 
       // Extract siteId from the instance JWT token (critical for store identification!)
       const instanceToken = parsedPayload?.instance;
       const decodedInstance = instanceToken ? decodeWixInstance(instanceToken) : null;
-      const jwsSiteId = decodedInstance?.siteId ?? parsedPayload?.siteId ?? null;
-      console.log("📦 Decoded instance siteId:", jwsSiteId);
+      console.log("📦 decodedInstance:", JSON.stringify(decodedInstance));
+
+      // Try multiple sources for siteId
+      const jwsSiteId = decodedInstance?.siteId ?? parsedPayload?.siteId ?? parsedPayload?.site_id ?? null;
+      const jwsInstanceId = decodedInstance?.instanceId ?? parsedPayload?.instanceId ?? parsedPayload?.instance_id ?? null;
+      console.log("📦 Extracted siteId:", jwsSiteId, "instanceId:", jwsInstanceId);
 
       // Extract event data from the payload (handle triple-nested structure)
       if (parsedPayload.data) {
@@ -634,7 +683,7 @@ export async function POST(request: NextRequest) {
               metadata: {
                 eventType: "order.created",
                 entityId: eventData?.entity?.id ?? eventData?.entity?._id,
-                instanceId: parsedPayload.instanceId ?? eventData?.instanceId,
+                instanceId: jwsInstanceId ?? eventData?.instanceId,
                 siteId: jwsSiteId,
                 eventTime: eventData?.eventTime ?? new Date().toISOString(),
               }
@@ -752,7 +801,7 @@ export async function POST(request: NextRequest) {
               metadata: {
                 eventType: `order.${slug}`,
                 entityId: orderData.id ?? eventData.entityId,
-                instanceId: parsedPayload.instanceId ?? eventData.instanceId,
+                instanceId: jwsInstanceId ?? eventData.instanceId,
                 siteId: jwsSiteId,
                 eventTime: eventData.eventTime ?? new Date().toISOString(),
               }

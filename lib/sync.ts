@@ -215,24 +215,39 @@ export async function syncOrdersForSite(params: SyncParams) {
       ) {
         const receiptTxRef = extractTransactionRef(orderRaw);
 
-        // Only issue receipts for orders paid on or after the receipts start date
-        // Default: 2026-01-01 (when app was "installed")
+        // CRITICAL: Backfill should NEVER auto-issue receipts for OLD orders!
+        // Only issue receipts for orders paid in the CURRENT MONTH
+        // This prevents creating invisible receipts for old orders while still allowing recovery from webhook failures
+        const orderPaidAt = mapped.paidAt ? new Date(mapped.paidAt) : null;
+        const now = new Date();
+        const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+        const isCurrentMonth = orderPaidAt && orderPaidAt >= currentMonthStart;
+
+        // STRICT CHECK: Only issue receipts for orders paid on or after the receipts start date
+        // If no receipts_start_date is configured, use a far-future date to prevent any receipts
         const receiptsStartDate = company?.receipts_start_date
           ? new Date(company.receipts_start_date)
-          : new Date("2026-01-01T00:00:00Z");
-        const orderPaidAt = mapped.paidAt ? new Date(mapped.paidAt) : null;
+          : new Date("2099-01-01T00:00:00Z"); // Far future = no receipts if not configured
         const isAfterStartDate = orderPaidAt && orderPaidAt >= receiptsStartDate;
 
         // Skip zero-value orders
         const orderTotal = Number(mapped.total) || 0;
         const hasValue = orderTotal > 0;
 
-        if (hasFiscalCode && receiptTxRef && isAfterStartDate && hasValue) {
+        // Log skipped receipts for debugging
+        if (!isCurrentMonth && hasFiscalCode && receiptTxRef && hasValue) {
+          console.log(`⏭️ SKIPPING receipt for order ${mapped.number}: paid ${orderPaidAt?.toISOString()} is from previous month (backfill protection)`);
+        } else if (!isAfterStartDate && hasFiscalCode && receiptTxRef && hasValue && isCurrentMonth) {
+          console.log(`⏭️ SKIPPING receipt for order ${mapped.number}: paid ${orderPaidAt?.toISOString()} is BEFORE start date ${receiptsStartDate.toISOString()}`);
+        }
+
+        // BOTH conditions must be true: recent order AND after start date
+        if (hasFiscalCode && receiptTxRef && isAfterStartDate && isCurrentMonth && hasValue) {
           await issueReceipt({
             orderId: mapped.id,
             payload: mapped,
             businessId: null,
-            issuedAt: mapped.paidAt ?? mapped.createdAt ?? null,
+            issuedAt: new Date().toISOString(), // Use CURRENT time, not order's paid_at
           });
           receiptsIssued += 1;
         } else {

@@ -1,5 +1,6 @@
 import TopNav from "../components/top-nav";
 import MonthFilter from "../components/month-filter";
+import RealTimeWrapper from "../overview/real-time-wrapper";
 import { getOrderByIdForSite, initDb } from "@/lib/db";
 import {
   listReceiptsWithOrdersForPeriodForSite,
@@ -155,6 +156,7 @@ export default async function ReceiptsPage({
   }));
 
   return (
+    <RealTimeWrapper>
     <main>
       <TopNav title="Електронни бележки" />
       <div className="container">
@@ -252,5 +254,6 @@ export default async function ReceiptsPage({
       </div>
       <footer className="footer">UDITO от ДИЗАЙНС БАЙ ПО ЕООД</footer>
     </main>
+    </RealTimeWrapper>
   );
 }

@@ -1,6 +1,7 @@
 import TokenCapture from "./token-capture";
 import TopNav from "../components/top-nav";
 import MonthFilter from "../components/month-filter";
+import RealTimeWrapper from "./real-time-wrapper";
 import {
   countOrdersForPeriodForSite,
   countOrdersForSite,
@@ -366,6 +367,7 @@ export default async function OverviewPage({
   }
 
   return (
+    <RealTimeWrapper>
     <main>
       <TokenCapture />
       <AutoSync />
@@ -593,5 +595,6 @@ export default async function OverviewPage({
       </div>
       <footer className="footer">UDITO от ДИЗАЙНС БАЙ ПО ЕООД</footer>
     </main>
+    </RealTimeWrapper>
   );
 }

@@ -649,7 +649,11 @@ export async function upsertOrder(order: StoredOrder) {
       total = excluded.total,
       customer_email = excluded.customer_email,
       customer_name = excluded.customer_name,
-      source = excluded.source,
+      source = CASE
+        -- Preserve "webhook" source - don't let backfill overwrite it
+        WHEN orders.source = 'webhook' THEN 'webhook'
+        ELSE excluded.source
+      END,
       raw = excluded.raw
   `;
 }
