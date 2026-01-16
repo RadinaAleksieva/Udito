@@ -99,6 +99,89 @@ export async function POST() {
   }
 }
 
+// PUT: Revert to original IDs (emergency restore)
+export async function PUT() {
+  try {
+    await initDb();
+
+    // Original mapping: newId -> oldId (from the bad fix we did)
+    const revertMapping: Record<number, number> = {
+      1: 41, 2: 42, 3: 43, 4: 44, 5: 45, 6: 46, 7: 47, 8: 48, 9: 49, 10: 50,
+      11: 51, 12: 52, 13: 53, 14: 54, 15: 55, 16: 56, 17: 57, 18: 58, 19: 59, 20: 60,
+      21: 61, 22: 62, 23: 63, 24: 64, 25: 65, 26: 66, 27: 67, 28: 68, 29: 69, 30: 70,
+      31: 71, 32: 72, 33: 73, 34: 74, 35: 75, 36: 76, 37: 77, 38: 78, 39: 79, 40: 80,
+      41: 81, 42: 82, 43: 83, 44: 84, 45: 85, 46: 86, 47: 87,
+      48: 1, 49: 2, 50: 3, 51: 4, 52: 5, 53: 6, 54: 7, 55: 8, 56: 9, 57: 10,
+      58: 11, 59: 12, 60: 13, 61: 14, 62: 15, 63: 16, 64: 17, 65: 18, 66: 19, 67: 20,
+      68: 21, 69: 22, 70: 23, 71: 24, 72: 25, 73: 26, 74: 27, 75: 28, 76: 29, 77: 30,
+      78: 31, 79: 32, 80: 33, 81: 34, 82: 35, 83: 36, 84: 37, 85: 38, 86: 39,
+      87: 89, 88: 92, 89: 93
+    };
+
+    // Also need to restore reference_receipt_id for refunds
+    // Receipt 81 (refund) referenced sale receipt 65 (which was 18, now should be back to 18)
+    // Receipt 88 (refund) referenced sale receipt 87 (which was 89)
+    const refundRefMapping: Record<number, number> = {
+      81: 18,  // refund for order 10184, sale was receipt 18
+      88: 89   // refund for order 10273, sale was receipt 89
+    };
+
+    const receiptsResult = await sql`
+      SELECT id, order_id, type, issued_at, reference_receipt_id, refund_amount, payload, business_id, status
+      FROM receipts
+      ORDER BY id ASC
+    `;
+
+    const receipts = receiptsResult.rows;
+
+    // Store receipt data with restored IDs
+    const receiptData = receipts.map(r => {
+      const currentId = Number(r.id);
+      const restoredId = revertMapping[currentId] || currentId;
+      const restoredRefId = refundRefMapping[currentId] || r.reference_receipt_id;
+
+      return {
+        restoredId,
+        currentId,
+        order_id: r.order_id,
+        type: r.type,
+        issued_at: r.issued_at,
+        reference_receipt_id: restoredRefId,
+        refund_amount: r.refund_amount,
+        payload: r.payload,
+        business_id: r.business_id,
+        status: r.status
+      };
+    });
+
+    // Delete all receipts
+    await sql`DELETE FROM receipts`;
+
+    // Re-insert with restored IDs
+    for (const r of receiptData) {
+      await sql`
+        INSERT INTO receipts (id, order_id, type, issued_at, reference_receipt_id, refund_amount, payload, business_id, status)
+        VALUES (${r.restoredId}, ${r.order_id}, ${r.type}, ${r.issued_at}, ${r.reference_receipt_id}, ${r.refund_amount}, ${JSON.stringify(r.payload)}, ${r.business_id}, ${r.status})
+      `;
+    }
+
+    // Reset sequence to max
+    await sql`SELECT setval('receipts_id_seq', (SELECT COALESCE(MAX(id), 0) FROM receipts))`;
+
+    return NextResponse.json({
+      ok: true,
+      message: "Restored original receipt IDs",
+      restored: receiptData.map(r => ({ from: r.currentId, to: r.restoredId }))
+    });
+  } catch (error) {
+    console.error("Revert receipt numbers failed", error);
+    return NextResponse.json(
+      { ok: false, error: (error as Error).message },
+      { status: 500 }
+    );
+  }
+}
+
 // GET: Preview what would be fixed
 export async function GET() {
   try {
