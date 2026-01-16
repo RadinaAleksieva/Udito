@@ -607,6 +607,18 @@ export async function POST(request: NextRequest) {
   console.log("Body length:", rawBody.length);
   console.log("Body preview:", rawBody.substring(0, 200));
 
+  // LOG ALL HEADERS to find instance/siteId
+  console.log("=== WEBHOOK HEADERS ===");
+  const headers: Record<string, string> = {};
+  request.headers.forEach((value, key) => {
+    headers[key] = value;
+    // Log headers that might contain instance info
+    if (key.toLowerCase().includes('wix') || key.toLowerCase().includes('instance') || key.toLowerCase().includes('site')) {
+      console.log(`📌 IMPORTANT HEADER: ${key} = ${value.substring(0, 100)}...`);
+    }
+  });
+  console.log("All headers:", JSON.stringify(headers, null, 2));
+
   if (!wixClient) {
     console.error("Missing Wix app credentials");
     return NextResponse.json(
