@@ -47,8 +47,12 @@ export async function POST(request: Request) {
     }
 
     // Verify the receipt belongs to the current store
-    const storeId = store.siteId || store.instanceId;
-    if (receipt.site_id && receipt.site_id !== storeId && receipt.site_id !== store.instanceId) {
+    // Receipt site_id should match either store.siteId OR store.instanceId (for backwards compatibility)
+    const receiptSiteId = receipt.site_id;
+    const isOwner = !receiptSiteId ||
+                    receiptSiteId === store.siteId ||
+                    receiptSiteId === store.instanceId;
+    if (!isOwner) {
       return NextResponse.json(
         { ok: false, error: "Нямате права да анулирате тази бележка" },
         { status: 403 }

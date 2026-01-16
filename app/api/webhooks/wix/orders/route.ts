@@ -335,42 +335,44 @@ async function handleOrderEvent(event: any) {
   const savedRaw = savedOrder?.raw ?? orderRaw;
   const statusText = (savedOrder?.status || mapped.status || "").toLowerCase();
 
-  // Look up company by either siteId or instanceId (whichever matches)
-  let company = (mapped.siteId || instanceId) ? await getCompanyBySite(mapped.siteId, instanceId) : null;
+  // Look up company - MUST use instanceId for reliable lookup in multi-tenant
+  // siteId in webhook data is often missing or wrong, instanceId is reliable
+  let company = null;
 
-  // Fallback 1: if no siteId/instanceId, try to get from the latest token
-  if (!company) {
-    const latestToken = await getLatestWixToken();
-    if (latestToken) {
-      console.log("🔍 Fallback 1: trying company lookup from latest token:", {
-        tokenSiteId: latestToken.site_id,
-        tokenInstanceId: latestToken.instance_id
-      });
-      company = await getCompanyBySite(latestToken.site_id, latestToken.instance_id);
-      // Also set the siteId on the order if we found it via fallback
-      if (company && !mapped.siteId && latestToken.site_id) {
-        mapped.siteId = latestToken.site_id;
-        console.log("📍 Set siteId from latest token:", mapped.siteId);
+  // Strategy 1: Look up by instanceId first (most reliable)
+  if (instanceId) {
+    const companyByInstance = await sql`
+      SELECT site_id, instance_id, store_name, store_id, cod_receipts_enabled, receipts_start_date
+      FROM companies
+      WHERE instance_id = ${instanceId}
+      LIMIT 1
+    `;
+    if (companyByInstance.rows.length > 0) {
+      company = companyByInstance.rows[0];
+      // ALWAYS use the siteId from the company record - it's authoritative
+      if (company.site_id && (!mapped.siteId || mapped.siteId === instanceId)) {
+        mapped.siteId = company.site_id;
+        console.log("📍 Set siteId from company lookup by instanceId:", mapped.siteId);
       }
     }
   }
 
-  // Fallback 2: if still no company, get the first company with store_id and cod_receipts_enabled
-  if (!company) {
-    console.log("🔍 Fallback 2: getting first configured company");
-    const fallbackResult = await sql`
+  // Strategy 2: If no instanceId, try siteId
+  if (!company && mapped.siteId) {
+    const companyBySite = await sql`
       SELECT site_id, instance_id, store_name, store_id, cod_receipts_enabled, receipts_start_date
       FROM companies
-      WHERE store_id IS NOT NULL
-      ORDER BY cod_receipts_enabled DESC, updated_at DESC
+      WHERE site_id = ${mapped.siteId}
       LIMIT 1
     `;
-    company = fallbackResult.rows[0] ?? null;
-    // Also set the siteId on the order if we found it via fallback
-    if (company && !mapped.siteId && company.site_id) {
-      mapped.siteId = company.site_id;
-      console.log("📍 Set siteId from fallback company:", mapped.siteId);
+    if (companyBySite.rows.length > 0) {
+      company = companyBySite.rows[0];
     }
+  }
+
+  // NO MORE FALLBACKS - if we can't identify the store, we shouldn't process
+  if (!company) {
+    console.warn("⚠️ Could not identify company for order:", { siteId: mapped.siteId, instanceId, orderNumber: mapped.number });
   }
 
   console.log("🏢 Company lookup:", { siteId: mapped.siteId, instanceId, found: !!company, storeId: company?.store_id });

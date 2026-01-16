@@ -1309,7 +1309,8 @@ export function pickOrderFields(raw: any, source: "webhook" | "backfill") {
 
   return {
     id: raw?.id ?? raw?._id ?? raw?.orderId,
-    siteId: raw?.siteId ?? raw?.site_id ?? raw?.instanceId ?? null,
+    // IMPORTANT: Never fallback to instanceId - they are NOT the same!
+    siteId: raw?.siteId ?? raw?.site_id ?? null,
     number:
       raw?.number ??
       raw?.orderNumber?.number ??

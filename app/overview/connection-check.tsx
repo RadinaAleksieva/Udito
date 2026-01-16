@@ -41,8 +41,9 @@ export default function ConnectionCheck({ currentSiteId, currentInstanceId }: Co
         if (storesResponse.ok) {
           const storesData = await storesResponse.json();
           if (storesData?.stores?.length > 0) {
-            instanceId = storesData.stores[0].instance_id || storesData.stores[0].site_id;
-            siteId = storesData.stores[0].site_id;
+            // instance_id and site_id are different - don't mix them
+            instanceId = storesData.stores[0].instance_id || null;
+            siteId = storesData.stores[0].site_id || null;
           }
         }
       }
