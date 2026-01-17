@@ -371,16 +371,40 @@ async function handleOrderEvent(event: any) {
     }
   }
 
-  // NO MORE FALLBACKS - if we can't identify the store, we shouldn't process
+  // Strategy 3: If still no company found, try to find by looking at which company has active settings
+  // This is a fallback for when instanceId is missing from webhook payload (Wix bug)
+  // Only use this if there's exactly ONE company with receipts enabled (to avoid wrong assignment)
+  if (!company && !mapped.siteId) {
+    console.warn("⚠️ No instanceId or siteId in webhook, trying fallback lookup...");
+    const activeCompanies = await sql`
+      SELECT site_id, instance_id, store_name, store_id, cod_receipts_enabled, receipts_start_date
+      FROM companies
+      WHERE receipts_start_date IS NOT NULL
+      LIMIT 2
+    `;
+    if (activeCompanies.rows.length === 1) {
+      company = activeCompanies.rows[0];
+      console.log("📍 Using single active company as fallback:", company.store_name);
+      if (company.site_id) {
+        mapped.siteId = company.site_id;
+      }
+    } else {
+      console.warn("⚠️ Cannot determine company: found", activeCompanies.rows.length, "active companies");
+    }
+  }
+
   if (!company) {
     console.warn("⚠️ Could not identify company for order:", { siteId: mapped.siteId, instanceId, orderNumber: mapped.number });
   }
 
   console.log("🏢 Company lookup:", { siteId: mapped.siteId, instanceId, found: !!company, storeId: company?.store_id });
 
-  // If siteId was found via fallback, update the order in database
-  if (mapped.siteId && savedOrder && !savedOrder.site_id) {
-    console.log("📍 Updating order with siteId:", mapped.siteId);
+  // If siteId from company is different from what we saved, update the order
+  // This handles both null site_id AND wrong site_id (e.g. instanceId stored by mistake)
+  const savedSiteId = savedOrder?.site_id ?? null;
+  const needsSiteIdUpdate = mapped.siteId && savedSiteId !== mapped.siteId;
+  if (needsSiteIdUpdate) {
+    console.log("📍 Updating order with correct siteId:", { old: savedSiteId, new: mapped.siteId });
     await upsertOrder({
       ...mapped,
       paidAt: effectivePaidAt,
