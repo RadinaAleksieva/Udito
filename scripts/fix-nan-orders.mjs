@@ -1,4 +1,4 @@
-import { sql } from '@vercel/postgres';
+import { sql } from '../lib/supabase-sql.js';
 import fs from 'fs';
 
 const envContent = fs.readFileSync('.env.local', 'utf8');

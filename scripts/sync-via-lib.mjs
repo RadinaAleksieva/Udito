@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { sql } from '@vercel/postgres';
+import { sql } from '../lib/supabase-sql.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';

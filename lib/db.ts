@@ -1,4 +1,5 @@
-import { sql } from "@vercel/postgres";
+// Use Supabase-compatible SQL module
+import { sql } from "./supabase-sql";
 
 // Re-export sql for direct queries in other modules
 export { sql };
