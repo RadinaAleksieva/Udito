@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { sql } from "@vercel/postgres";
+import { sql } from "@/lib/supabase-sql";
 
 export async function POST(request: Request) {
   try {

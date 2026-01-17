@@ -2,7 +2,7 @@ import type { NextAuthOptions } from "next-auth";
 import type { Adapter, AdapterUser, AdapterAccount, AdapterSession, VerificationToken } from "next-auth/adapters";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { sql } from "@vercel/postgres";
+import { sql } from "@/lib/supabase-sql";
 import bcrypt from "bcryptjs";
 import { getServerSession } from "next-auth";
 

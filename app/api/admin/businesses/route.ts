@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { sql } from "@vercel/postgres";
+import { sql } from "@/lib/supabase-sql";
 import { authOptions } from "@/lib/auth";
 import { initDb } from "@/lib/db";
 

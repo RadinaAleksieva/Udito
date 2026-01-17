@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { sql } from "@vercel/postgres";
+import { sql } from "@/lib/supabase-sql";
 
 function requireSecret(request: Request) {
   const secret = process.env.ADMIN_SECRET;

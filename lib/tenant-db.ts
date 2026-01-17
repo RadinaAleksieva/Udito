@@ -17,7 +17,7 @@
  * - billing_companies
  */
 
-import { sql } from "@vercel/postgres";
+import { sql } from "@/lib/supabase-sql";
 
 // =============================================================================
 // HELPER FUNCTIONS

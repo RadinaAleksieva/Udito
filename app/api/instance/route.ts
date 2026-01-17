@@ -4,7 +4,7 @@ import { decodeWixInstanceToken } from "@/lib/wix-instance";
 import { getAppInstanceDetails, getTokenInfo, getAccessToken } from "@/lib/wix";
 import { getServerSession } from "next-auth";
 import { authOptions, linkStoreToUser } from "@/lib/auth";
-import { sql } from "@vercel/postgres";
+import { sql } from "@/lib/supabase-sql";
 
 const WIX_API_BASE = process.env.WIX_API_BASE || "https://www.wixapis.com";
 

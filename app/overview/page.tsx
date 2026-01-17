@@ -124,7 +124,7 @@ export default async function OverviewPage({
   // Check if user needs onboarding (has logged in but hasn't completed onboarding flow)
   if (session?.user?.id) {
     const { redirect } = await import("next/navigation");
-    const { sql } = await import("@vercel/postgres");
+    const { sql } = await import("@/lib/supabase-sql");
 
     // Check if user has completed onboarding via businesses table
     const businessResult = await sql`

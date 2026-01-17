@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AppStrategy, createClient } from "@wix/sdk";
 import { orders } from "@wix/ecom";
-import { sql } from "@vercel/postgres";
+import { sql } from "@/lib/supabase-sql";
 import { getCompanyBySite, getLatestWixToken, getOrderById, initDb, saveWixTokens, upsertOrder, trackOrderUsage, trackReceiptUsage } from "@/lib/db";
 import { issueReceipt, issueRefundReceipt, getSaleReceiptByOrderId } from "@/lib/receipts";
 import {

@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { sql } from "@vercel/postgres";
+import { sql } from "@/lib/supabase-sql";
 import { auth } from "@/lib/auth";
 
 /**

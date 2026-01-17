@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { sql } from "@vercel/postgres";
+import { sql } from "@/lib/supabase-sql";
 import { auth, linkStoreToUser } from "@/lib/auth";
 
 export async function POST() {
