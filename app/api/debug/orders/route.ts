@@ -15,12 +15,12 @@ export async function GET(request: Request) {
     let orderDetails = null;
 
     if (searchNumber) {
+      // Remove LIMIT 1 to check for duplicates
       const result = await sql`
         SELECT id, number, site_id, status, payment_status, created_at, paid_at, source,
                customer_name, customer_email, total, currency, raw
         FROM orders
         WHERE number = ${searchNumber}
-        LIMIT 1
       `;
       searchResult = result.rows;
 
