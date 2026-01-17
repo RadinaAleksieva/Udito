@@ -94,11 +94,12 @@ export async function GET(request: Request) {
       SELECT COUNT(*) as count FROM orders
     `;
 
-    // Get recent orders - sorted by number descending to see newest
+    // Get recent orders - sorted by created_at descending (most reliable)
+    // Using created_at instead of CAST(number) because some order numbers might have non-numeric values
     const recentOrders = await sql`
       SELECT id, number, site_id, status, payment_status, created_at, paid_at, source
       FROM orders
-      ORDER BY CAST(number AS INTEGER) DESC NULLS LAST
+      ORDER BY created_at DESC NULLS LAST
       LIMIT 20
     `;
 
