@@ -349,10 +349,11 @@ async function handleOrderEvent(event: any) {
     `;
     if (companyByInstance.rows.length > 0) {
       company = companyByInstance.rows[0];
-      // ALWAYS use the siteId from the company record - it's authoritative
-      if (company.site_id && (!mapped.siteId || mapped.siteId === instanceId)) {
+      // ALWAYS use the siteId from the company record - it's the authoritative source
+      // The webhook data often has wrong or missing siteId, so we override it
+      if (company.site_id) {
+        console.log("📍 Override siteId from company:", { old: mapped.siteId, new: company.site_id });
         mapped.siteId = company.site_id;
-        console.log("📍 Set siteId from company lookup by instanceId:", mapped.siteId);
       }
     }
   }
