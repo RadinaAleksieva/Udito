@@ -279,6 +279,71 @@ async function handleOrderEvent(event: any) {
     }
   }
 
+  // ========== EARLY COMPANY LOOKUP ==========
+  // Do company lookup BEFORE saving the order to ensure we have the correct siteId
+  // This is critical for multi-tenant architecture
+  let company = null;
+
+  // Strategy 1: Look up by instanceId first (most reliable)
+  if (instanceId) {
+    const companyByInstance = await sql`
+      SELECT site_id, instance_id, store_name, store_id, cod_receipts_enabled, receipts_start_date
+      FROM companies
+      WHERE instance_id = ${instanceId}
+      LIMIT 1
+    `;
+    if (companyByInstance.rows.length > 0) {
+      company = companyByInstance.rows[0];
+      // ALWAYS use the siteId from the company record - it's the authoritative source
+      if (company.site_id && company.site_id !== mapped.siteId) {
+        console.log("📍 [EARLY] Override siteId from company:", { old: mapped.siteId, new: company.site_id });
+        mapped.siteId = company.site_id;
+      }
+    }
+  }
+
+  // Strategy 2: If no instanceId, try siteId
+  if (!company && mapped.siteId) {
+    const companyBySite = await sql`
+      SELECT site_id, instance_id, store_name, store_id, cod_receipts_enabled, receipts_start_date
+      FROM companies
+      WHERE site_id = ${mapped.siteId}
+      LIMIT 1
+    `;
+    if (companyBySite.rows.length > 0) {
+      company = companyBySite.rows[0];
+    }
+  }
+
+  // Strategy 3: Fallback - find company by looking for single active company
+  // Only use this if there's exactly ONE company with receipts enabled
+  if (!company && !mapped.siteId && !instanceId) {
+    console.warn("⚠️ [EARLY] No instanceId or siteId in webhook, trying fallback lookup...");
+    const activeCompanies = await sql`
+      SELECT site_id, instance_id, store_name, store_id, cod_receipts_enabled, receipts_start_date
+      FROM companies
+      WHERE receipts_start_date IS NOT NULL
+      LIMIT 2
+    `;
+    if (activeCompanies.rows.length === 1) {
+      company = activeCompanies.rows[0];
+      console.log("📍 [EARLY] Using single active company as fallback:", company.store_name);
+      if (company.site_id) {
+        mapped.siteId = company.site_id;
+      }
+    } else if (activeCompanies.rows.length > 1) {
+      console.error("❌ [EARLY] Cannot determine company: found", activeCompanies.rows.length, "active companies - order will have null siteId!");
+    }
+  }
+
+  console.log("🏢 [EARLY] Company lookup result:", {
+    siteId: mapped.siteId,
+    instanceId,
+    found: !!company,
+    storeName: company?.store_name,
+    storeId: company?.store_id
+  });
+
   // Log if we still don't have siteId - this is a critical issue
   if (!mapped.siteId) {
     console.error("❌ CRITICAL: No siteId found for order", mapped.number, "- order will not appear in UI!");
@@ -287,6 +352,7 @@ async function handleOrderEvent(event: any) {
       rawSiteId: raw?.siteId,
       rawOrderSiteId: rawOrder?.siteId,
       instanceId,
+      companyFound: !!company,
     });
   }
 
@@ -335,83 +401,8 @@ async function handleOrderEvent(event: any) {
   const savedRaw = savedOrder?.raw ?? orderRaw;
   const statusText = (savedOrder?.status || mapped.status || "").toLowerCase();
 
-  // Look up company - MUST use instanceId for reliable lookup in multi-tenant
-  // siteId in webhook data is often missing or wrong, instanceId is reliable
-  let company = null;
-
-  // Strategy 1: Look up by instanceId first (most reliable)
-  if (instanceId) {
-    const companyByInstance = await sql`
-      SELECT site_id, instance_id, store_name, store_id, cod_receipts_enabled, receipts_start_date
-      FROM companies
-      WHERE instance_id = ${instanceId}
-      LIMIT 1
-    `;
-    if (companyByInstance.rows.length > 0) {
-      company = companyByInstance.rows[0];
-      // ALWAYS use the siteId from the company record - it's the authoritative source
-      // The webhook data often has wrong or missing siteId, so we override it
-      if (company.site_id) {
-        console.log("📍 Override siteId from company:", { old: mapped.siteId, new: company.site_id });
-        mapped.siteId = company.site_id;
-      }
-    }
-  }
-
-  // Strategy 2: If no instanceId, try siteId
-  if (!company && mapped.siteId) {
-    const companyBySite = await sql`
-      SELECT site_id, instance_id, store_name, store_id, cod_receipts_enabled, receipts_start_date
-      FROM companies
-      WHERE site_id = ${mapped.siteId}
-      LIMIT 1
-    `;
-    if (companyBySite.rows.length > 0) {
-      company = companyBySite.rows[0];
-    }
-  }
-
-  // Strategy 3: If still no company found, try to find by looking at which company has active settings
-  // This is a fallback for when instanceId is missing from webhook payload (Wix bug)
-  // Only use this if there's exactly ONE company with receipts enabled (to avoid wrong assignment)
-  if (!company && !mapped.siteId) {
-    console.warn("⚠️ No instanceId or siteId in webhook, trying fallback lookup...");
-    const activeCompanies = await sql`
-      SELECT site_id, instance_id, store_name, store_id, cod_receipts_enabled, receipts_start_date
-      FROM companies
-      WHERE receipts_start_date IS NOT NULL
-      LIMIT 2
-    `;
-    if (activeCompanies.rows.length === 1) {
-      company = activeCompanies.rows[0];
-      console.log("📍 Using single active company as fallback:", company.store_name);
-      if (company.site_id) {
-        mapped.siteId = company.site_id;
-      }
-    } else {
-      console.warn("⚠️ Cannot determine company: found", activeCompanies.rows.length, "active companies");
-    }
-  }
-
-  if (!company) {
-    console.warn("⚠️ Could not identify company for order:", { siteId: mapped.siteId, instanceId, orderNumber: mapped.number });
-  }
-
-  console.log("🏢 Company lookup:", { siteId: mapped.siteId, instanceId, found: !!company, storeId: company?.store_id });
-
-  // If siteId from company is different from what we saved, update the order
-  // This handles both null site_id AND wrong site_id (e.g. instanceId stored by mistake)
-  const savedSiteId = savedOrder?.site_id ?? null;
-  const needsSiteIdUpdate = mapped.siteId && savedSiteId !== mapped.siteId;
-  if (needsSiteIdUpdate) {
-    console.log("📍 Updating order with correct siteId:", { old: savedSiteId, new: mapped.siteId });
-    await upsertOrder({
-      ...mapped,
-      paidAt: effectivePaidAt,
-      businessId: null,
-      raw: orderRaw,
-    });
-  }
+  // Company was already looked up in EARLY COMPANY LOOKUP section above
+  // No need to look up again - company variable is already set with correct siteId
 
   // Check if this is a COD (cash on delivery) payment
   // Use savedRaw from database - it has enriched data
@@ -652,11 +643,21 @@ export async function POST(request: NextRequest) {
   // LOG ALL HEADERS to find instance/siteId
   console.log("=== WEBHOOK HEADERS ===");
   const headers: Record<string, string> = {};
+  let headerInstanceId: string | null = null;
+  let headerSiteId: string | null = null;
   request.headers.forEach((value, key) => {
     headers[key] = value;
+    const keyLower = key.toLowerCase();
     // Log headers that might contain instance info
-    if (key.toLowerCase().includes('wix') || key.toLowerCase().includes('instance') || key.toLowerCase().includes('site')) {
+    if (keyLower.includes('wix') || keyLower.includes('instance') || keyLower.includes('site')) {
       console.log(`📌 IMPORTANT HEADER: ${key} = ${value.substring(0, 100)}...`);
+    }
+    // Extract instance from x-wix-instance header (Wix often sends this)
+    if (keyLower === 'x-wix-instance' || keyLower === 'wix-instance') {
+      const decoded = decodeWixInstance(value);
+      headerInstanceId = decoded.instanceId;
+      headerSiteId = decoded.siteId;
+      console.log(`📌 DECODED FROM HEADER: instanceId=${headerInstanceId}, siteId=${headerSiteId}`);
     }
   });
   console.log("All headers:", JSON.stringify(headers, null, 2));
@@ -698,10 +699,15 @@ export async function POST(request: NextRequest) {
       const decodedInstance = instanceToken ? decodeWixInstance(instanceToken) : null;
       console.log("📦 decodedInstance:", JSON.stringify(decodedInstance));
 
-      // Try multiple sources for siteId - URL params are the most reliable (set during webhook registration)
-      const jwsSiteId = urlSiteId ?? decodedInstance?.siteId ?? parsedPayload?.siteId ?? parsedPayload?.site_id ?? null;
-      const jwsInstanceId = urlInstanceId ?? decodedInstance?.instanceId ?? parsedPayload?.instanceId ?? parsedPayload?.instance_id ?? null;
-      console.log("📦 Extracted siteId:", jwsSiteId, "instanceId:", jwsInstanceId, "(URL params:", urlSiteId, urlInstanceId, ")");
+      // Try multiple sources for siteId - priority order:
+      // 1. URL params (set during webhook registration)
+      // 2. HTTP headers (x-wix-instance)
+      // 3. JWS payload (instance JWT)
+      // 4. JWS payload direct fields
+      const jwsSiteId = urlSiteId ?? headerSiteId ?? decodedInstance?.siteId ?? parsedPayload?.siteId ?? parsedPayload?.site_id ?? null;
+      const jwsInstanceId = urlInstanceId ?? headerInstanceId ?? decodedInstance?.instanceId ?? parsedPayload?.instanceId ?? parsedPayload?.instance_id ?? null;
+      console.log("📦 Extracted siteId:", jwsSiteId, "instanceId:", jwsInstanceId);
+      console.log("📦 Sources - URL:", urlSiteId, urlInstanceId, "| Header:", headerSiteId, headerInstanceId, "| JWS:", decodedInstance?.siteId, decodedInstance?.instanceId);
 
       // Extract event data from the payload (handle triple-nested structure)
       if (parsedPayload.data) {
