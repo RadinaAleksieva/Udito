@@ -5,6 +5,19 @@ import { sql } from "@vercel/postgres";
 import { getCompanyBySite, getLatestWixToken, getOrderById, initDb, saveWixTokens, upsertOrder, trackOrderUsage, trackReceiptUsage } from "@/lib/db";
 import { issueReceipt, issueRefundReceipt, getSaleReceiptByOrderId } from "@/lib/receipts";
 import {
+  upsertTenantOrder,
+  logTenantWebhook,
+  webhookAlreadyProcessed,
+  incrementTenantOrderCount,
+  incrementTenantReceiptCount,
+  getTenantOrderById,
+  tenantTablesExist,
+  createTenantTables,
+  TenantOrder,
+  queuePendingRefund,
+  hasPendingRefund,
+} from "@/lib/tenant-db";
+import {
   extractTransactionRef,
   extractPaymentId,
   extractPaymentSummaryFromPayment,
@@ -37,10 +50,28 @@ async function logWebhook(params: {
   payloadPreview?: string | null;
 }) {
   try {
+    // Log to legacy shared table
     await sql`
       INSERT INTO webhook_logs (event_type, order_id, order_number, site_id, instance_id, status, error_message, payload_preview)
       VALUES (${params.eventType}, ${params.orderId ?? null}, ${params.orderNumber ?? null}, ${params.siteId ?? null}, ${params.instanceId ?? null}, ${params.status}, ${params.errorMessage ?? null}, ${params.payloadPreview ?? null})
     `;
+
+    // Also log to tenant-specific table if siteId is known
+    if (params.siteId) {
+      try {
+        await logTenantWebhook(params.siteId, {
+          eventType: params.eventType,
+          orderId: params.orderId ?? undefined,
+          orderNumber: params.orderNumber ?? undefined,
+          status: params.status,
+          errorMessage: params.errorMessage ?? undefined,
+          payloadPreview: params.payloadPreview ?? undefined,
+        });
+      } catch (tenantLogError) {
+        // Tenant table might not exist yet - ignore
+        console.warn("Failed to log to tenant webhook_logs:", tenantLogError);
+      }
+    }
   } catch (e) {
     console.warn("Failed to log webhook:", e);
   }
@@ -383,6 +414,7 @@ async function handleOrderEvent(event: any) {
     paymentStatus: mapped.paymentStatus,
   });
 
+  // Save to legacy shared table (for backwards compatibility during migration)
   await upsertOrder({
     ...mapped,
     paidAt: effectivePaidAt,
@@ -390,9 +422,52 @@ async function handleOrderEvent(event: any) {
     raw: orderRaw,
   });
 
+  // === NEW: Save to tenant-specific table ===
+  // This is a NEW order from webhook (not synced), so is_synced = false = chargeable
+  if (mapped.siteId) {
+    try {
+      // Ensure tenant tables exist
+      const tablesExist = await tenantTablesExist(mapped.siteId);
+      if (!tablesExist) {
+        console.log("Creating tenant tables for site:", mapped.siteId);
+        await createTenantTables(mapped.siteId);
+      }
+
+      const tenantOrder: TenantOrder = {
+        id: mapped.id,
+        number: mapped.number,
+        status: mapped.status,
+        paymentStatus: mapped.paymentStatus,
+        createdAt: mapped.createdAt,
+        updatedAt: mapped.updatedAt,
+        paidAt: effectivePaidAt,
+        currency: mapped.currency,
+        subtotal: mapped.subtotal,
+        taxTotal: mapped.taxTotal,
+        shippingTotal: mapped.shippingTotal,
+        discountTotal: mapped.discountTotal,
+        total: mapped.total,
+        customerEmail: mapped.customerEmail,
+        customerName: mapped.customerName,
+        source: "webhook",
+        isSynced: false, // ✅ NEW order from webhook - CHARGEABLE
+        raw: orderRaw,
+      };
+
+      await upsertTenantOrder(mapped.siteId, tenantOrder);
+      console.log("✅ Order saved to tenant table:", mapped.number);
+
+      // Increment order count for billing (only for NEW orders)
+      await incrementTenantOrderCount(mapped.siteId);
+    } catch (tenantError) {
+      console.error("Failed to save to tenant table:", tenantError);
+      // Continue - legacy table was saved
+    }
+  }
+
   console.log("✅ Order saved successfully:", mapped.number);
 
-  // Track order usage for plan limits
+  // Track order usage for plan limits (legacy)
   await trackOrderUsage(mapped.siteId, instanceId);
 
   // Read the order back from OUR database for receipt logic
@@ -553,9 +628,14 @@ async function handleOrderEvent(event: any) {
         payload: savedOrder ?? mapped,
         businessId: null,
         issuedAt: savedPaidAt ?? mapped.createdAt ?? null,
+        siteId: mapped.siteId, // For tenant-specific tables
       });
-      // Track receipt usage for plan limits
+      // Track receipt usage for plan limits (legacy)
       await trackReceiptUsage(mapped.siteId, instanceId);
+      // Track receipt in tenant table (for billing)
+      if (mapped.siteId) {
+        await incrementTenantReceiptCount(mapped.siteId);
+      }
       console.log(`✅ Receipt issued for ${isCOD ? 'COD' : 'card'} payment:`, mapped.number);
     } else if (!hasValue) {
       console.warn("❌ Skipping receipt: zero value order", orderTotal);
@@ -571,38 +651,55 @@ async function handleOrderEvent(event: any) {
     }
   }
 
-  // Handle refunds - create сторно бележка (refund receipt)
-  if ((isRefunded || hasRefundActivity) && company?.store_id) {
-    // Check if we have an original sale receipt for this order
-    const originalReceipt = await getSaleReceiptByOrderId(mapped.id);
+  // Handle refunds - queue for later processing
+  // This ensures reliability: if receipt issuance fails, we can retry via cron
+  if ((isRefunded || hasRefundActivity) && company?.store_id && mapped.siteId) {
+    const refundAmount = Number(mapped.total) || 0;
+    const refundReason = statusText.includes("cancel") ? "cancelled" : "refunded";
 
-    if (originalReceipt) {
-      // Calculate refund amount - use the original total since Wix typically does full refunds
-      // For partial refunds, we'd need to extract the actual refund amount from the event
-      const refundAmount = Number(mapped.total) || 0;
+    // Check if we already have a pending refund queued for this order
+    const alreadyQueued = await hasPendingRefund(mapped.siteId, mapped.id);
 
-      if (refundAmount > 0) {
-        const result = await issueRefundReceipt({
+    if (!alreadyQueued && refundAmount > 0) {
+      try {
+        const queueId = await queuePendingRefund(mapped.siteId, {
           orderId: mapped.id,
-          payload: {
-            ...mapped,
-            originalReceiptId: originalReceipt.id,
-            refundReason: statusText.includes("cancel") ? "cancelled" : "refunded",
-          },
-          businessId: null,
-          issuedAt: refundTimestamp ?? new Date().toISOString(),
           refundAmount,
+          reason: refundReason,
+          eventPayload: {
+            order: mapped,
+            refundTimestamp: refundTimestamp ?? new Date().toISOString(),
+            storeId: company.store_id,
+          },
         });
-
-        if (result.created) {
-          console.log("Refund receipt created for order", mapped.number, "receipt ID:", result.receiptId);
-        } else {
-          console.log("Refund receipt already exists for order", mapped.number);
+        console.log(`📋 Refund queued for order ${mapped.number}, queue ID: ${queueId}`);
+      } catch (queueError) {
+        console.error("Failed to queue refund for order", mapped.number, queueError);
+        // Fallback: try to issue directly
+        const originalReceipt = await getSaleReceiptByOrderId(mapped.id);
+        if (originalReceipt) {
+          const result = await issueRefundReceipt({
+            orderId: mapped.id,
+            payload: {
+              ...mapped,
+              originalReceiptId: originalReceipt.id,
+              refundReason,
+            },
+            businessId: null,
+            issuedAt: refundTimestamp ?? new Date().toISOString(),
+            refundAmount,
+            siteId: mapped.siteId,
+          });
+          if (result.created) {
+            console.log("Refund receipt created (fallback) for order", mapped.number);
+          }
         }
       }
-    } else {
-      console.warn("No original sale receipt found for refund, order:", mapped.number);
+    } else if (alreadyQueued) {
+      console.log(`📋 Refund already queued for order ${mapped.number}, skipping`);
     }
+  } else if ((isRefunded || hasRefundActivity) && !mapped.siteId) {
+    console.warn("❌ Cannot queue refund - no siteId for order:", mapped.number);
   }
   } catch (error) {
     console.error("❌ Error in handleOrderEvent:");

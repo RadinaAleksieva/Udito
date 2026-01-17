@@ -4,6 +4,7 @@ import { linkStoreToUser } from "@/lib/auth";
 import { getAppInstanceDetails } from "@/lib/wix";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { createTenantTables, tenantTablesExist } from "@/lib/tenant-db";
 
 const WIX_API_BASE = process.env.WIX_API_BASE || "https://www.wixapis.com";
 
@@ -192,13 +193,30 @@ export async function GET(request: Request) {
     expiresAt,
   });
 
+  // Create tenant-specific tables if they don't exist
+  if (resolvedSiteId) {
+    try {
+      const tablesExist = await tenantTablesExist(resolvedSiteId);
+      if (!tablesExist) {
+        console.log("Creating tenant tables for new store:", resolvedSiteId);
+        await createTenantTables(resolvedSiteId);
+        console.log("✅ Tenant tables created for:", resolvedSiteId);
+      } else {
+        console.log("Tenant tables already exist for:", resolvedSiteId);
+      }
+    } catch (error) {
+      console.error("Failed to create tenant tables:", error);
+      // Continue anyway - tables will be created on first use
+    }
+  }
+
   // Register webhooks automatically after successful OAuth
   // Include instanceId in webhook URL for store identification
   if (resolvedSiteId && data.access_token) {
     await registerWebhooks(data.access_token, resolvedSiteId, resolvedInstanceId, appBaseUrl);
   }
 
-  // Trigger initial sync of all orders in background
+  // Trigger initial sync of all orders in background (with is_synced = true)
   if (resolvedSiteId && data.access_token) {
     console.log("Triggering initial sync for site", resolvedSiteId);
     fetch(`${appBaseUrl}/api/sync/initial`, {

@@ -5,7 +5,8 @@ import {
   deleteReceiptById,
   deleteRefundReceiptsByReference,
 } from "@/lib/db";
-import { getActiveStore } from "@/lib/auth";
+import { auth, getActiveStore } from "@/lib/auth";
+import { deleteTenantReceipt, logAuditEvent } from "@/lib/tenant-db";
 
 export const dynamic = "force-dynamic";
 
@@ -47,11 +48,21 @@ export async function POST(request: Request) {
     }
 
     // Verify the receipt belongs to the current store
-    // Receipt site_id should match either store.siteId OR store.instanceId (for backwards compatibility)
+    // Receipt site_id MUST match either store.siteId OR store.instanceId
+    // SECURITY: If receipt has no site_id, deny deletion (prevents unauthorized access to orphan records)
     const receiptSiteId = receipt.site_id;
-    const isOwner = !receiptSiteId ||
-                    receiptSiteId === store.siteId ||
-                    receiptSiteId === store.instanceId;
+
+    if (!receiptSiteId) {
+      // Receipt has no associated site_id - cannot verify ownership
+      // This could be orphan data or a data integrity issue
+      console.warn(`Receipt ${receiptId} has no site_id - denying deletion for security`);
+      return NextResponse.json(
+        { ok: false, error: "Бележката не може да бъде анулирана - липсва идентификатор на магазина" },
+        { status: 403 }
+      );
+    }
+
+    const isOwner = receiptSiteId === store.siteId || receiptSiteId === store.instanceId;
     if (!isOwner) {
       return NextResponse.json(
         { ok: false, error: "Нямате права да анулирате тази бележка" },
@@ -64,8 +75,33 @@ export async function POST(request: Request) {
       await deleteRefundReceiptsByReference(receiptId);
     }
 
-    // Delete the receipt
+    // Delete the receipt from legacy table
     await deleteReceiptById(receiptId);
+
+    // Also delete from tenant-specific table if it exists
+    try {
+      await deleteTenantReceipt(receiptSiteId, receiptId);
+    } catch (tenantError) {
+      // Tenant table might not exist yet - ignore
+      console.warn("Could not delete from tenant table:", tenantError);
+    }
+
+    // Log audit event
+    const session = await auth();
+    try {
+      await logAuditEvent(receiptSiteId, {
+        action: 'receipt.cancelled',
+        userId: session?.user?.id ?? null,
+        orderId: receipt.order_id ?? null,
+        receiptId: receiptId,
+        details: {
+          receiptType: receipt.type,
+          orderNumber: receipt.order_number,
+        },
+      });
+    } catch (auditError) {
+      console.warn("Could not log audit event:", auditError);
+    }
 
     return NextResponse.json({
       ok: true,

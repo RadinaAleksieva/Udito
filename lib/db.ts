@@ -1262,41 +1262,89 @@ export async function getOrderByIdForBusiness(
 export async function getCompanyBySite(siteId: string | null, instanceId?: string | null) {
   if (!siteId && !instanceId) return null;
 
-  // Use explicit null checks because SQL NULL = NULL is false
-  const result = await sql`
-    select site_id,
-      instance_id,
-      store_name,
-      store_domain,
-      legal_name,
-      vat_number,
-      bulstat,
-      store_id,
-      logo_url,
-      logo_width,
-      logo_height,
-      address_line1,
-      address_line2,
-      city,
-      postal_code,
-      country,
-      email,
-      phone,
-      iban,
-      bank_name,
-      mol,
-      receipt_template,
-      accent_color,
-      receipt_number_start,
-      cod_receipts_enabled,
-      receipts_start_date,
-      updated_at
-    from companies
-    where (${siteId}::text IS NOT NULL AND site_id = ${siteId})
-       OR (${instanceId}::text IS NOT NULL AND instance_id = ${instanceId})
-    limit 1;
-  `;
-  return result.rows[0] ?? null;
+  // Priority: site_id match first, then instance_id
+  // This prevents wrong company match when instanceId of one store = siteId of another
+  // NEVER use OR between site_id and instance_id - it can return wrong results!
+
+  // First try by site_id (most reliable identifier)
+  if (siteId) {
+    const bySiteId = await sql`
+      select site_id,
+        instance_id,
+        store_name,
+        store_domain,
+        legal_name,
+        vat_number,
+        bulstat,
+        store_id,
+        logo_url,
+        logo_width,
+        logo_height,
+        address_line1,
+        address_line2,
+        city,
+        postal_code,
+        country,
+        email,
+        phone,
+        iban,
+        bank_name,
+        mol,
+        receipt_template,
+        accent_color,
+        receipt_number_start,
+        cod_receipts_enabled,
+        receipts_start_date,
+        updated_at
+      from companies
+      where site_id = ${siteId}
+      limit 1;
+    `;
+    if (bySiteId.rows.length > 0) {
+      return bySiteId.rows[0];
+    }
+  }
+
+  // Fallback: try by instance_id only if site_id didn't match
+  if (instanceId) {
+    const byInstanceId = await sql`
+      select site_id,
+        instance_id,
+        store_name,
+        store_domain,
+        legal_name,
+        vat_number,
+        bulstat,
+        store_id,
+        logo_url,
+        logo_width,
+        logo_height,
+        address_line1,
+        address_line2,
+        city,
+        postal_code,
+        country,
+        email,
+        phone,
+        iban,
+        bank_name,
+        mol,
+        receipt_template,
+        accent_color,
+        receipt_number_start,
+        cod_receipts_enabled,
+        receipts_start_date,
+        updated_at
+      from companies
+      where instance_id = ${instanceId}
+      limit 1;
+    `;
+    if (byInstanceId.rows.length > 0) {
+      return byInstanceId.rows[0];
+    }
+  }
+
+  return null;
 }
 
 export async function getBusinessProfile(businessId: string) {

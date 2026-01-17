@@ -1,4 +1,12 @@
 import { sql } from "@vercel/postgres";
+import {
+  issueTenantReceipt,
+  getTenantSaleReceiptByOrderId,
+  listTenantReceipts,
+  countTenantReceipts,
+  TenantReceipt,
+  normalizeSiteId,
+} from "./tenant-db";
 
 /**
  * Get the next receipt ID (MAX + 1, not using sequence)
@@ -14,40 +22,78 @@ export async function issueReceipt(params: {
   payload: unknown;
   businessId?: string | null;
   issuedAt?: string | null;
-}) {
-  const businessId =
-    params.businessId ??
-    null;
+  siteId?: string | null; // Add siteId for tenant tables
+}): Promise<{ created: boolean; receiptId: number | null }> {
+  const businessId = params.businessId ?? null;
   const issuedAt = params.issuedAt ? new Date(params.issuedAt).toISOString() : null;
+  const payloadJson = JSON.stringify(params.payload);
 
-  // Check if sale receipt already exists for this order
-  const existing = await sql`
-    select id from receipts
-    where order_id = ${params.orderId}
-      and type = 'sale'
-    limit 1;
-  `;
+  // Use atomic INSERT with ON CONFLICT to prevent race conditions
+  // This prevents duplicate receipts even with concurrent webhook calls
+  try {
+    const result = await sql`
+      INSERT INTO receipts (id, order_id, business_id, issued_at, status, payload, type)
+      SELECT
+        COALESCE(MAX(id), 0) + 1,
+        ${params.orderId},
+        ${businessId},
+        ${issuedAt},
+        'issued',
+        ${payloadJson}::jsonb,
+        'sale'
+      FROM receipts
+      ON CONFLICT (order_id, type) DO NOTHING
+      RETURNING id
+    `;
 
-  if (existing.rows.length > 0) {
-    // Sale receipt already exists, don't create duplicate
-    return;
+    let created = false;
+    let receiptId: number | null = null;
+
+    if (result.rows.length > 0) {
+      created = true;
+      receiptId = result.rows[0].id;
+    } else {
+      // ON CONFLICT triggered - fetch existing receipt ID
+      const existing = await sql`
+        SELECT id FROM receipts
+        WHERE order_id = ${params.orderId} AND type = 'sale'
+        LIMIT 1
+      `;
+      receiptId = existing.rows[0]?.id ?? null;
+    }
+
+    // Also save to tenant-specific table if siteId is available
+    const siteId = params.siteId ?? (params.payload as any)?.site_id ?? (params.payload as any)?.siteId ?? null;
+    if (siteId && created) {
+      try {
+        const tenantReceipt: TenantReceipt = {
+          orderId: params.orderId,
+          payload: params.payload,
+          type: 'sale',
+          issuedAt: issuedAt,
+        };
+        await issueTenantReceipt(siteId, tenantReceipt);
+        console.log("✅ Receipt saved to tenant table:", params.orderId);
+      } catch (tenantError) {
+        console.warn("Failed to save receipt to tenant table:", tenantError);
+        // Continue - legacy table was saved
+      }
+    }
+
+    return { created, receiptId };
+  } catch (error) {
+    // Handle race condition edge cases
+    const errorMessage = (error as Error).message;
+    if (errorMessage.includes('duplicate key') || errorMessage.includes('unique constraint')) {
+      const existing = await sql`
+        SELECT id FROM receipts
+        WHERE order_id = ${params.orderId} AND type = 'sale'
+        LIMIT 1
+      `;
+      return { created: false, receiptId: existing.rows[0]?.id ?? null };
+    }
+    throw error;
   }
-
-  // Get next ID (MAX + 1) instead of using sequence
-  const nextId = await getNextReceiptId();
-
-  await sql`
-    insert into receipts (id, order_id, business_id, issued_at, status, payload, type)
-    values (
-      ${nextId},
-      ${params.orderId},
-      ${businessId},
-      ${issuedAt},
-      ${"issued"},
-      ${JSON.stringify(params.payload)},
-      ${"sale"}
-    );
-  `;
 }
 
 /**
@@ -61,6 +107,7 @@ export async function issueRefundReceipt(params: {
   businessId?: string | null;
   issuedAt?: string | null;
   refundAmount: number;
+  siteId?: string | null; // Add siteId for tenant tables
 }) {
   const businessId = params.businessId ?? null;
   const issuedAt = params.issuedAt ? new Date(params.issuedAt).toISOString() : null;
@@ -98,6 +145,7 @@ export async function issueRefundReceipt(params: {
   // Get next ID (MAX + 1) instead of using sequence
   const nextId = await getNextReceiptId();
 
+  // Save to legacy shared table
   await sql`
     insert into receipts (id, order_id, business_id, issued_at, status, payload, type, reference_receipt_id, refund_amount)
     values (
@@ -112,6 +160,26 @@ export async function issueRefundReceipt(params: {
       ${-Math.abs(params.refundAmount)}
     );
   `;
+
+  // Also save to tenant-specific table if siteId is available
+  const siteId = params.siteId ?? (params.payload as any)?.site_id ?? (params.payload as any)?.siteId ?? null;
+  if (siteId) {
+    try {
+      const tenantReceipt: TenantReceipt = {
+        orderId: params.orderId,
+        payload: refundPayload,
+        type: 'refund',
+        issuedAt: issuedAt,
+        referenceReceiptId: referenceReceiptId,
+        refundAmount: -Math.abs(params.refundAmount),
+      };
+      await issueTenantReceipt(siteId, tenantReceipt);
+      console.log("✅ Refund receipt saved to tenant table:", params.orderId);
+    } catch (tenantError) {
+      console.warn("Failed to save refund receipt to tenant table:", tenantError);
+      // Continue - legacy table was saved
+    }
+  }
 
   return { created: true, receiptId: nextId };
 }
@@ -417,4 +485,46 @@ export async function listRefundReceiptsForAudit(
     order by refund_receipts.id asc;
   `;
   return result.rows;
+}
+
+// =============================================================================
+// TENANT-SPECIFIC FUNCTIONS
+// These functions query tenant-specific tables (receipts_{siteId})
+// =============================================================================
+
+/**
+ * List receipts from tenant-specific table (not legacy shared table)
+ */
+export async function listTenantReceiptsForSite(
+  siteId: string,
+  options?: {
+    limit?: number;
+    offset?: number;
+    startDate?: string;
+    endDate?: string;
+    type?: 'sale' | 'refund';
+  }
+) {
+  return listTenantReceipts(siteId, options);
+}
+
+/**
+ * Count receipts from tenant-specific table (not legacy shared table)
+ */
+export async function countTenantReceiptsForSite(
+  siteId: string,
+  options?: {
+    startDate?: string;
+    endDate?: string;
+    type?: 'sale' | 'refund';
+  }
+) {
+  return countTenantReceipts(siteId, options);
+}
+
+/**
+ * Get sale receipt from tenant-specific table
+ */
+export async function getTenantSaleReceipt(siteId: string, orderId: string) {
+  return getTenantSaleReceiptByOrderId(siteId, orderId);
 }

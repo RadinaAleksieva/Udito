@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { initDb, upsertOrder } from "@/lib/db";
-import { getAccessToken, pickOrderFields, extractTransactionRef, extractDeliveryMethodFromOrder, fetchTransactionRefForOrder, fetchPaymentRecordForOrder, fetchOrderTransactionsForOrder, extractPaymentSummaryFromPayment } from "@/lib/wix";
+import { initDb } from "@/lib/db";
+import { getAccessToken, pickOrderFields, extractTransactionRef, extractDeliveryMethodFromOrder } from "@/lib/wix";
+import { upsertTenantOrder, createTenantTables, tenantTablesExist, updateTenantSyncState, TenantOrder } from "@/lib/tenant-db";
 
 export const maxDuration = 300; // 5 minutes for long-running sync
 
@@ -82,6 +83,16 @@ export async function POST(request: NextRequest) {
   await initDb();
 
   try {
+    // Ensure tenant tables exist
+    const tablesExist = await tenantTablesExist(siteId);
+    if (!tablesExist) {
+      console.log("Creating tenant tables for site:", siteId);
+      await createTenantTables(siteId);
+    }
+
+    // Update sync state to "running"
+    await updateTenantSyncState(siteId, { status: "running" });
+
     // Get fresh access token (auto-refreshes if needed)
     console.log("Getting access token for site", siteId);
     const accessToken = await getAccessToken({ siteId });
@@ -97,9 +108,7 @@ export async function POST(request: NextRequest) {
     let synced = 0;
     let errors = 0;
 
-    // Process each order - simplified for speed
-    // Note: Only extracting data already in the order object
-    // Payment details enrichment will happen via webhooks or on-demand
+    // Process each order - mark as is_synced = true (old orders)
     for (const rawOrder of orders) {
       try {
         let orderRaw: any = rawOrder;
@@ -122,19 +131,32 @@ export async function POST(request: NextRequest) {
           };
         }
 
-        const mapped = pickOrderFields(orderRaw, "webhook");
+        const mapped = pickOrderFields(orderRaw, "backfill");
 
-        // Ensure siteId is set (Wix API doesn't include it in order objects)
-        if (!mapped.siteId) {
-          mapped.siteId = siteId;
-        }
-
-        // Upsert to database
-        await upsertOrder({
-          ...mapped,
-          businessId: null,
+        // Convert to TenantOrder format and mark as synced (old order)
+        const tenantOrder: TenantOrder = {
+          id: mapped.id,
+          number: mapped.number,
+          status: mapped.status,
+          paymentStatus: mapped.paymentStatus,
+          createdAt: mapped.createdAt,
+          updatedAt: mapped.updatedAt,
+          paidAt: mapped.paidAt,
+          currency: mapped.currency,
+          subtotal: mapped.subtotal,
+          taxTotal: mapped.taxTotal,
+          shippingTotal: mapped.shippingTotal,
+          discountTotal: mapped.discountTotal,
+          total: mapped.total,
+          customerEmail: mapped.customerEmail,
+          customerName: mapped.customerName,
+          source: "sync",
+          isSynced: true, // ✅ Mark as synced (old order) - NOT chargeable
           raw: orderRaw,
-        });
+        };
+
+        // Upsert to tenant-specific table
+        await upsertTenantOrder(siteId, tenantOrder);
 
         synced++;
 
@@ -148,6 +170,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Update sync state to "complete"
+    await updateTenantSyncState(siteId, {
+      status: "complete",
+      cursor: null,
+    });
+
     console.log(`✅ Initial sync complete: ${synced} orders synced, ${errors} errors`);
 
     return NextResponse.json({
@@ -158,6 +186,13 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("Initial sync failed:", error);
+
+    // Update sync state to "error"
+    await updateTenantSyncState(siteId, {
+      status: "error",
+      lastError: (error as Error).message,
+    });
+
     return NextResponse.json(
       {
         error: "Initial sync failed",

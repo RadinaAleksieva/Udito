@@ -20,28 +20,62 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "No active store" }, { status: 400 });
   }
 
-  const siteId = store.siteId || store.instanceId;
+  // Use site_id as primary identifier, instance_id as fallback
+  // NEVER use OR between them - it can match wrong store!
+  const primaryId = store.siteId;
+  const fallbackId = store.instanceId;
 
   try {
     // Get all users with access to this store
-    const result = await sql`
-      SELECT
-        sc.id,
-        sc.user_id,
-        sc.role,
-        sc.access_code,
-        sc.access_code_expires_at,
-        sc.connected_at,
-        sc.invited_by,
-        sc.invited_at,
-        u.email,
-        u.name,
-        u.image
-      FROM store_connections sc
-      LEFT JOIN users u ON sc.user_id = u.id
-      WHERE (sc.site_id = ${siteId} OR sc.instance_id = ${siteId})
-      ORDER BY sc.connected_at ASC
-    `;
+    // Priority: match by site_id first, then by instance_id
+    let result;
+
+    if (primaryId) {
+      result = await sql`
+        SELECT
+          sc.id,
+          sc.user_id,
+          sc.role,
+          sc.access_code,
+          sc.access_code_expires_at,
+          sc.connected_at,
+          sc.invited_by,
+          sc.invited_at,
+          u.email,
+          u.name,
+          u.image
+        FROM store_connections sc
+        LEFT JOIN users u ON sc.user_id = u.id
+        WHERE sc.site_id = ${primaryId}
+        ORDER BY sc.connected_at ASC
+      `;
+    }
+
+    // If no results by site_id and we have instanceId, try by instance_id
+    if ((!result || result.rows.length === 0) && fallbackId) {
+      result = await sql`
+        SELECT
+          sc.id,
+          sc.user_id,
+          sc.role,
+          sc.access_code,
+          sc.access_code_expires_at,
+          sc.connected_at,
+          sc.invited_by,
+          sc.invited_at,
+          u.email,
+          u.name,
+          u.image
+        FROM store_connections sc
+        LEFT JOIN users u ON sc.user_id = u.id
+        WHERE sc.instance_id = ${fallbackId}
+        ORDER BY sc.connected_at ASC
+      `;
+    }
+
+    if (!result) {
+      result = { rows: [] };
+    }
 
     // Check if current user is owner/admin
     const currentUserRole = result.rows.find(r => r.user_id === session.user.id)?.role || "member";
