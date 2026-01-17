@@ -7,13 +7,18 @@ import { authOptions } from "@/lib/auth";
 
 const WIX_API_BASE = process.env.WIX_API_BASE || "https://www.wixapis.com";
 
-async function registerWebhooks(accessToken: string, siteId: string, appBaseUrl: string) {
+async function registerWebhooks(accessToken: string, siteId: string, instanceId: string | null, appBaseUrl: string) {
   try {
     const authHeader = accessToken.startsWith("Bearer ")
       ? accessToken
       : `Bearer ${accessToken}`;
 
-    const webhookUrl = `${appBaseUrl}/api/webhooks/wix/orders`;
+    // Include instanceId and siteId in webhook URL so we can identify the store
+    // when receiving webhooks (Wix doesn't always include these in the payload)
+    const params = new URLSearchParams();
+    if (instanceId) params.set("instanceId", instanceId);
+    if (siteId) params.set("siteId", siteId);
+    const webhookUrl = `${appBaseUrl}/api/webhooks/wix/orders?${params.toString()}`;
 
     const response = await fetch(`${WIX_API_BASE}/webhooks/v1/webhooks`, {
       method: "POST",
@@ -188,8 +193,9 @@ export async function GET(request: Request) {
   });
 
   // Register webhooks automatically after successful OAuth
+  // Include instanceId in webhook URL for store identification
   if (resolvedSiteId && data.access_token) {
-    await registerWebhooks(data.access_token, resolvedSiteId, appBaseUrl);
+    await registerWebhooks(data.access_token, resolvedSiteId, resolvedInstanceId, appBaseUrl);
   }
 
   // Trigger initial sync of all orders in background
