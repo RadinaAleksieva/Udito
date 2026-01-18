@@ -8,18 +8,17 @@ export async function GET() {
     // Test database connection
     const result = await sql`SELECT 1 as test`;
 
-    // Get some basic stats
-    const stats = await sql`
-      SELECT
-        (SELECT COUNT(*) FROM orders) as orders,
-        (SELECT COUNT(*) FROM receipts) as receipts,
-        (SELECT COUNT(*) FROM businesses) as businesses
-    `;
+    // Get basic stats from shared tables
+    const businessCount = await sql`SELECT COUNT(*) as count FROM businesses`;
+    const storeCount = await sql`SELECT COUNT(*) as count FROM store_connections`;
 
     return NextResponse.json({
       status: 'healthy',
       database: 'connected',
-      stats: stats.rows[0],
+      stats: {
+        businesses: businessCount.rows[0]?.count ?? 0,
+        stores: storeCount.rows[0]?.count ?? 0,
+      },
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
