@@ -1,42 +1,98 @@
 /**
  * Tenant-based database architecture
  *
- * Всеки магазин (tenant) има собствени таблици:
- * - orders_{siteId}
- * - receipts_{siteId}
- * - users_{siteId}
- * - webhook_logs_{siteId}
- * - sync_state_{siteId}
- * - monthly_usage_{siteId}
+ * Всеки магазин (tenant) има собствена PostgreSQL схема:
+ * - {schema_name}.orders
+ * - {schema_name}.receipts
+ * - {schema_name}.audit_logs
+ * - {schema_name}.webhook_logs
+ * - {schema_name}.sync_state
+ * - {schema_name}.monthly_usage
+ * - {schema_name}.pending_refunds
  *
- * Споделени таблици (общи за всички):
+ * Споделени таблици (в public schema):
  * - companies
  * - wix_tokens
  * - businesses
  * - subscription_plans
  * - billing_companies
+ * - store_connections
  */
 
 import { sql } from "@/lib/supabase-sql";
 
 // =============================================================================
-// HELPER FUNCTIONS
+// SCHEMA CACHE & LOOKUP
+// =============================================================================
+
+// In-memory cache for schema lookups (siteId -> schemaName)
+const schemaCache = new Map<string, string>();
+
+/**
+ * Взима schema name за даден siteId от базата или кеша
+ */
+export async function getSchemaForSite(siteId: string): Promise<string> {
+  // Check cache first
+  const cached = schemaCache.get(siteId);
+  if (cached) {
+    return cached;
+  }
+
+  // Lookup from store_connections
+  const result = await sql.query(`
+    SELECT schema_name FROM store_connections WHERE site_id = $1 LIMIT 1
+  `, [siteId]);
+
+  if (result.rows.length > 0 && result.rows[0].schema_name) {
+    const schemaName = result.rows[0].schema_name;
+    schemaCache.set(siteId, schemaName);
+    return schemaName;
+  }
+
+  // Fallback: try companies table
+  const companyResult = await sql.query(`
+    SELECT schema_name FROM companies WHERE site_id = $1 LIMIT 1
+  `, [siteId]);
+
+  if (companyResult.rows.length > 0 && companyResult.rows[0].schema_name) {
+    const schemaName = companyResult.rows[0].schema_name;
+    schemaCache.set(siteId, schemaName);
+    return schemaName;
+  }
+
+  // No schema found - throw error
+  throw new Error(`No schema found for site ${siteId}. Please ensure the store is properly configured.`);
+}
+
+/**
+ * Инвалидира кеша за даден siteId (при промяна на schema)
+ */
+export function invalidateSchemaCache(siteId?: string): void {
+  if (siteId) {
+    schemaCache.delete(siteId);
+  } else {
+    schemaCache.clear();
+  }
+}
+
+// =============================================================================
+// HELPER FUNCTIONS (Legacy - kept for backwards compatibility)
 // =============================================================================
 
 /**
  * Нормализира siteId за използване в име на таблица
- * Премахва тирета и специални символи
+ * @deprecated Use getSchemaForSite instead
  */
 export function normalizeSiteId(siteId: string): string {
   return siteId.replace(/-/g, "_").replace(/[^a-zA-Z0-9_]/g, "");
 }
 
 /**
- * Генерира име на таблица за даден tenant
+ * Генерира schema-qualified име на таблица
  */
-export function getTableName(baseName: string, siteId: string): string {
-  const normalized = normalizeSiteId(siteId);
-  return `${baseName}_${normalized}`;
+export async function getTableName(baseName: string, siteId: string): Promise<string> {
+  const schema = await getSchemaForSite(siteId);
+  return `"${schema}"."${baseName}"`;
 }
 
 /**
@@ -57,18 +113,31 @@ export const TENANT_TABLES = [
 // =============================================================================
 
 /**
- * Създава всички таблици за нов tenant (магазин)
+ * Създава всички таблици за нов tenant (магазин) в собствена schema
  */
-export async function createTenantTables(siteId: string): Promise<void> {
-  const n = normalizeSiteId(siteId);
+export async function createTenantTables(siteId: string, schemaName?: string): Promise<void> {
+  // Generate schema name from store name or use provided
+  const schema = schemaName || `site_${normalizeSiteId(siteId)}`;
 
-  console.log(`Creating tenant tables for site: ${siteId} (normalized: ${n})`);
+  console.log(`Creating tenant schema and tables for site: ${siteId} (schema: ${schema})`);
 
-  // orders_{siteId}
-  // is_synced = true означава стара поръчка (от initial sync)
-  // is_synced = false означава нова поръчка (от webhook след регистрация) - таксуема
+  // Create the schema
+  await sql.query(`CREATE SCHEMA IF NOT EXISTS "${schema}"`);
+
+  // Store schema_name in store_connections and companies
   await sql.query(`
-    CREATE TABLE IF NOT EXISTS orders_${n} (
+    UPDATE store_connections SET schema_name = $1 WHERE site_id = $2
+  `, [schema, siteId]);
+  await sql.query(`
+    UPDATE companies SET schema_name = $1 WHERE site_id = $2
+  `, [schema, siteId]);
+
+  // Cache it
+  schemaCache.set(siteId, schema);
+
+  // orders table
+  await sql.query(`
+    CREATE TABLE IF NOT EXISTS "${schema}".orders (
       id text PRIMARY KEY,
       number text,
       status text,
@@ -91,9 +160,9 @@ export async function createTenantTables(siteId: string): Promise<void> {
     )
   `);
 
-  // receipts_{siteId}
+  // receipts table
   await sql.query(`
-    CREATE TABLE IF NOT EXISTS receipts_${n} (
+    CREATE TABLE IF NOT EXISTS "${schema}".receipts (
       id bigserial PRIMARY KEY,
       order_id text,
       issued_at timestamptz DEFAULT now(),
@@ -108,29 +177,13 @@ export async function createTenantTables(siteId: string): Promise<void> {
 
   // Unique constraint: one sale + one refund per order
   await sql.query(`
-    CREATE UNIQUE INDEX IF NOT EXISTS receipts_${n}_order_type_idx
-    ON receipts_${n} (order_id, type)
+    CREATE UNIQUE INDEX IF NOT EXISTS receipts_order_type_idx
+    ON "${schema}".receipts (order_id, type)
   `);
 
-  // users_{siteId}
+  // webhook_logs table
   await sql.query(`
-    CREATE TABLE IF NOT EXISTS users_${n} (
-      id text PRIMARY KEY DEFAULT gen_random_uuid()::text,
-      email text UNIQUE NOT NULL,
-      name text,
-      password_hash text,
-      password_salt text,
-      email_verified timestamptz,
-      image text,
-      role text DEFAULT 'member',
-      created_at timestamptz DEFAULT now(),
-      updated_at timestamptz DEFAULT now()
-    )
-  `);
-
-  // webhook_logs_{siteId}
-  await sql.query(`
-    CREATE TABLE IF NOT EXISTS webhook_logs_${n} (
+    CREATE TABLE IF NOT EXISTS "${schema}".webhook_logs (
       id bigserial PRIMARY KEY,
       event_type text,
       event_id text,
@@ -145,13 +198,13 @@ export async function createTenantTables(siteId: string): Promise<void> {
 
   // Index for idempotency check
   await sql.query(`
-    CREATE INDEX IF NOT EXISTS webhook_logs_${n}_event_id_idx
-    ON webhook_logs_${n} (event_id)
+    CREATE INDEX IF NOT EXISTS webhook_logs_event_id_idx
+    ON "${schema}".webhook_logs (event_id)
   `);
 
-  // sync_state_{siteId}
+  // sync_state table
   await sql.query(`
-    CREATE TABLE IF NOT EXISTS sync_state_${n} (
+    CREATE TABLE IF NOT EXISTS "${schema}".sync_state (
       id bigserial PRIMARY KEY,
       cursor text,
       status text,
@@ -160,9 +213,9 @@ export async function createTenantTables(siteId: string): Promise<void> {
     )
   `);
 
-  // monthly_usage_{siteId}
+  // monthly_usage table
   await sql.query(`
-    CREATE TABLE IF NOT EXISTS monthly_usage_${n} (
+    CREATE TABLE IF NOT EXISTS "${schema}".monthly_usage (
       id bigserial PRIMARY KEY,
       year_month text NOT NULL UNIQUE,
       orders_count integer DEFAULT 0,
@@ -171,9 +224,9 @@ export async function createTenantTables(siteId: string): Promise<void> {
     )
   `);
 
-  // pending_refunds_{siteId} - queue for refund receipts that need processing
+  // pending_refunds table
   await sql.query(`
-    CREATE TABLE IF NOT EXISTS pending_refunds_${n} (
+    CREATE TABLE IF NOT EXISTS "${schema}".pending_refunds (
       id bigserial PRIMARY KEY,
       order_id text NOT NULL,
       refund_amount numeric,
@@ -189,43 +242,71 @@ export async function createTenantTables(siteId: string): Promise<void> {
 
   // Index for processing pending refunds
   await sql.query(`
-    CREATE INDEX IF NOT EXISTS pending_refunds_${n}_status_idx
-    ON pending_refunds_${n} (status, created_at)
+    CREATE INDEX IF NOT EXISTS pending_refunds_status_idx
+    ON "${schema}".pending_refunds (status, created_at)
     WHERE status = 'pending'
   `);
 
-  console.log(`Tenant tables created for site: ${siteId}`);
-}
-
-/**
- * Изтрива всички таблици за tenant (при изтриване на магазин)
- */
-export async function dropTenantTables(siteId: string): Promise<void> {
-  const n = normalizeSiteId(siteId);
-
-  console.log(`Dropping tenant tables for site: ${siteId}`);
-
-  for (const table of TENANT_TABLES) {
-    await sql.query(`DROP TABLE IF EXISTS ${table}_${n} CASCADE`);
-  }
-
-  console.log(`Tenant tables dropped for site: ${siteId}`);
-}
-
-/**
- * Проверява дали tenant таблиците съществуват
- */
-export async function tenantTablesExist(siteId: string): Promise<boolean> {
-  const n = normalizeSiteId(siteId);
-
-  const result = await sql.query(`
-    SELECT EXISTS (
-      SELECT FROM information_schema.tables
-      WHERE table_name = 'orders_${n}'
-    ) as exists
+  // audit_logs table
+  await sql.query(`
+    CREATE TABLE IF NOT EXISTS "${schema}".audit_logs (
+      id bigserial PRIMARY KEY,
+      action text NOT NULL,
+      user_id text,
+      order_id text,
+      receipt_id bigint,
+      details jsonb,
+      ip_address text,
+      created_at timestamptz DEFAULT now()
+    )
   `);
 
-  return result.rows[0]?.exists === true;
+  await sql.query(`
+    CREATE INDEX IF NOT EXISTS audit_logs_action_idx
+    ON "${schema}".audit_logs (action, created_at DESC)
+  `);
+
+  console.log(`Tenant schema and tables created for site: ${siteId} (schema: ${schema})`);
+}
+
+/**
+ * Изтрива schema и всички таблици за tenant
+ */
+export async function dropTenantTables(siteId: string): Promise<void> {
+  try {
+    const schema = await getSchemaForSite(siteId);
+    console.log(`Dropping tenant schema for site: ${siteId} (schema: ${schema})`);
+
+    await sql.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
+
+    // Clear from cache
+    schemaCache.delete(siteId);
+
+    console.log(`Tenant schema dropped for site: ${siteId}`);
+  } catch (error) {
+    console.warn(`Could not drop tenant schema for ${siteId}:`, error);
+  }
+}
+
+/**
+ * Проверява дали tenant schema съществува
+ */
+export async function tenantTablesExist(siteId: string): Promise<boolean> {
+  try {
+    const schema = await getSchemaForSite(siteId);
+
+    const result = await sql.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables
+        WHERE table_schema = $1 AND table_name = 'orders'
+      ) as exists
+    `, [schema]);
+
+    return result.rows[0]?.exists === true;
+  } catch (error) {
+    // No schema found
+    return false;
+  }
 }
 
 // =============================================================================
@@ -254,7 +335,7 @@ export interface TenantOrder {
 }
 
 export async function upsertTenantOrder(siteId: string, order: TenantOrder): Promise<void> {
-  const n = normalizeSiteId(siteId);
+  const schema = await getSchemaForSite(siteId);
 
   const createdAt = order.createdAt ? new Date(order.createdAt).toISOString() : null;
   const updatedAt = order.updatedAt ? new Date(order.updatedAt).toISOString() : null;
@@ -262,7 +343,7 @@ export async function upsertTenantOrder(siteId: string, order: TenantOrder): Pro
   const isSynced = order.isSynced ?? false;
 
   await sql.query(`
-    INSERT INTO orders_${n} (
+    INSERT INTO "${schema}".orders (
       id, number, status, payment_status, created_at, updated_at, paid_at,
       currency, subtotal, tax_total, shipping_total, discount_total, total,
       customer_email, customer_name, source, is_synced, raw
@@ -274,12 +355,9 @@ export async function upsertTenantOrder(siteId: string, order: TenantOrder): Pro
       created_at = EXCLUDED.created_at,
       updated_at = EXCLUDED.updated_at,
       paid_at = CASE
-        -- If payment just changed to PAID and we have a new paid_at, use it
         WHEN EXCLUDED.payment_status = 'PAID' AND EXCLUDED.paid_at IS NOT NULL THEN EXCLUDED.paid_at
-        -- If payment just changed to PAID but no paid_at, use current time
-        WHEN EXCLUDED.payment_status = 'PAID' AND orders_${n}.paid_at IS NULL THEN NOW()
-        -- Otherwise keep existing paid_at (don't let null overwrite a valid timestamp)
-        ELSE COALESCE(orders_${n}.paid_at, EXCLUDED.paid_at)
+        WHEN EXCLUDED.payment_status = 'PAID' AND "${schema}".orders.paid_at IS NULL THEN NOW()
+        ELSE COALESCE("${schema}".orders.paid_at, EXCLUDED.paid_at)
       END,
       currency = EXCLUDED.currency,
       subtotal = EXCLUDED.subtotal,
@@ -289,8 +367,8 @@ export async function upsertTenantOrder(siteId: string, order: TenantOrder): Pro
       total = EXCLUDED.total,
       customer_email = EXCLUDED.customer_email,
       customer_name = EXCLUDED.customer_name,
-      source = CASE WHEN orders_${n}.source = 'webhook' THEN 'webhook' ELSE EXCLUDED.source END,
-      is_synced = orders_${n}.is_synced,
+      source = CASE WHEN "${schema}".orders.source = 'webhook' THEN 'webhook' ELSE EXCLUDED.source END,
+      is_synced = "${schema}".orders.is_synced,
       raw = EXCLUDED.raw
   `, [
     order.id,
@@ -315,10 +393,10 @@ export async function upsertTenantOrder(siteId: string, order: TenantOrder): Pro
 }
 
 export async function getTenantOrderById(siteId: string, orderId: string): Promise<any | null> {
-  const n = normalizeSiteId(siteId);
+  const schema = await getSchemaForSite(siteId);
 
   const result = await sql.query(`
-    SELECT * FROM orders_${n} WHERE id = $1 LIMIT 1
+    SELECT * FROM "${schema}".orders WHERE id = $1 LIMIT 1
   `, [orderId]);
 
   return result.rows[0] || null;
@@ -330,11 +408,11 @@ export async function listTenantOrders(siteId: string, options?: {
   startDate?: string;
   endDate?: string;
 }): Promise<any[]> {
-  const n = normalizeSiteId(siteId);
+  const schema = await getSchemaForSite(siteId);
   const limit = options?.limit ?? 50;
   const offset = options?.offset ?? 0;
 
-  let query = `SELECT * FROM orders_${n}`;
+  let query = `SELECT * FROM "${schema}".orders`;
   const params: any[] = [];
   const conditions: string[] = [];
 
@@ -364,9 +442,9 @@ export async function countTenantOrders(siteId: string, options?: {
   endDate?: string;
   isSynced?: boolean;
 }): Promise<number> {
-  const n = normalizeSiteId(siteId);
+  const schema = await getSchemaForSite(siteId);
 
-  let query = `SELECT COUNT(*) as count FROM orders_${n}`;
+  let query = `SELECT COUNT(*) as count FROM "${schema}".orders`;
   const params: any[] = [];
   const conditions: string[] = [];
 
@@ -405,7 +483,7 @@ export async function getTenantStats(siteId: string): Promise<{
   refundReceipts: number;
   currentMonthUsage: { ordersCount: number; receiptsCount: number };
 }> {
-  const n = normalizeSiteId(siteId);
+  const schema = await getSchemaForSite(siteId);
 
   // Count orders
   const ordersResult = await sql.query(`
@@ -413,7 +491,7 @@ export async function getTenantStats(siteId: string): Promise<{
       COUNT(*) as total,
       COUNT(*) FILTER (WHERE is_synced = true) as synced,
       COUNT(*) FILTER (WHERE is_synced = false) as new
-    FROM orders_${n}
+    FROM "${schema}".orders
   `);
 
   // Count receipts
@@ -422,7 +500,7 @@ export async function getTenantStats(siteId: string): Promise<{
       COUNT(*) as total,
       COUNT(*) FILTER (WHERE type = 'sale') as sales,
       COUNT(*) FILTER (WHERE type = 'refund') as refunds
-    FROM receipts_${n}
+    FROM "${schema}".receipts
   `);
 
   // Current month usage
@@ -454,10 +532,10 @@ export interface TenantReceipt {
 }
 
 export async function getNextTenantReceiptId(siteId: string): Promise<number> {
-  const n = normalizeSiteId(siteId);
+  const schema = await getSchemaForSite(siteId);
 
   const result = await sql.query(`
-    SELECT COALESCE(MAX(id), 0) + 1 as next_id FROM receipts_${n}
+    SELECT COALESCE(MAX(id), 0) + 1 as next_id FROM "${schema}".receipts
   `);
 
   return parseInt(result.rows[0]?.next_id ?? '1', 10);
@@ -467,23 +545,20 @@ export async function issueTenantReceipt(siteId: string, receipt: TenantReceipt)
   created: boolean;
   receiptId: number | null;
 }> {
-  const n = normalizeSiteId(siteId);
+  const schema = await getSchemaForSite(siteId);
   const type = receipt.type ?? 'sale';
   const issuedAt = receipt.issuedAt ? new Date(receipt.issuedAt).toISOString() : new Date().toISOString();
 
-  // Use atomic INSERT with ON CONFLICT to prevent race conditions
-  // The UNIQUE index on (order_id, type) ensures only one receipt per order+type
-  // We use a subquery to get the next ID atomically
   try {
     const result = await sql.query(`
-      INSERT INTO receipts_${n} (
+      INSERT INTO "${schema}".receipts (
         id, order_id, issued_at, payload, type,
         reference_receipt_id, refund_amount, return_payment_type
       )
       SELECT
         COALESCE(MAX(id), 0) + 1,
         $1, $2, $3, $4, $5, $6, $7
-      FROM receipts_${n}
+      FROM "${schema}".receipts
       ON CONFLICT (order_id, type) DO NOTHING
       RETURNING id
     `, [
@@ -497,7 +572,6 @@ export async function issueTenantReceipt(siteId: string, receipt: TenantReceipt)
     ]);
 
     if (result.rows.length > 0) {
-      // Insert succeeded - log audit event
       const receiptId = result.rows[0].id;
       try {
         await logAuditEvent(siteId, {
@@ -512,46 +586,43 @@ export async function issueTenantReceipt(siteId: string, receipt: TenantReceipt)
       return { created: true, receiptId };
     }
 
-    // ON CONFLICT triggered - receipt already exists, fetch its ID
     const existing = await sql.query(`
-      SELECT id FROM receipts_${n}
+      SELECT id FROM "${schema}".receipts
       WHERE order_id = $1 AND type = $2
       LIMIT 1
     `, [receipt.orderId, type]);
 
     return { created: false, receiptId: existing.rows[0]?.id ?? null };
   } catch (error) {
-    // Handle any remaining race condition edge cases
     const errorMessage = (error as Error).message;
     if (errorMessage.includes('duplicate key') || errorMessage.includes('unique constraint')) {
-      // Another process inserted first - fetch the existing receipt
       const existing = await sql.query(`
-        SELECT id FROM receipts_${n}
+        SELECT id FROM "${schema}".receipts
         WHERE order_id = $1 AND type = $2
         LIMIT 1
       `, [receipt.orderId, type]);
 
       return { created: false, receiptId: existing.rows[0]?.id ?? null };
     }
-    throw error; // Re-throw other errors
+    throw error;
   }
 }
 
 export async function getTenantReceiptById(siteId: string, receiptId: number): Promise<any | null> {
-  const n = normalizeSiteId(siteId);
+  const schema = await getSchemaForSite(siteId);
 
   const result = await sql.query(`
-    SELECT * FROM receipts_${n} WHERE id = $1 LIMIT 1
+    SELECT * FROM "${schema}".receipts WHERE id = $1 LIMIT 1
   `, [receiptId]);
 
   return result.rows[0] || null;
 }
 
 export async function getTenantSaleReceiptByOrderId(siteId: string, orderId: string): Promise<any | null> {
-  const n = normalizeSiteId(siteId);
+  const schema = await getSchemaForSite(siteId);
 
   const result = await sql.query(`
-    SELECT * FROM receipts_${n}
+    SELECT * FROM "${schema}".receipts
     WHERE order_id = $1 AND type = 'sale'
     LIMIT 1
   `, [orderId]);
@@ -566,11 +637,11 @@ export async function listTenantReceipts(siteId: string, options?: {
   endDate?: string;
   type?: 'sale' | 'refund';
 }): Promise<any[]> {
-  const n = normalizeSiteId(siteId);
+  const schema = await getSchemaForSite(siteId);
   const limit = options?.limit ?? 50;
   const offset = options?.offset ?? 0;
 
-  let query = `SELECT * FROM receipts_${n}`;
+  let query = `SELECT * FROM "${schema}".receipts`;
   const params: any[] = [];
   const conditions: string[] = [];
 
@@ -605,9 +676,9 @@ export async function countTenantReceipts(siteId: string, options?: {
   endDate?: string;
   type?: 'sale' | 'refund';
 }): Promise<number> {
-  const n = normalizeSiteId(siteId);
+  const schema = await getSchemaForSite(siteId);
 
-  let query = `SELECT COUNT(*) as count FROM receipts_${n}`;
+  let query = `SELECT COUNT(*) as count FROM "${schema}".receipts`;
   const params: any[] = [];
   const conditions: string[] = [];
 
@@ -635,62 +706,13 @@ export async function countTenantReceipts(siteId: string, options?: {
 }
 
 export async function deleteTenantReceipt(siteId: string, receiptId: number): Promise<boolean> {
-  const n = normalizeSiteId(siteId);
+  const schema = await getSchemaForSite(siteId);
 
   const result = await sql.query(`
-    DELETE FROM receipts_${n} WHERE id = $1 RETURNING id
+    DELETE FROM "${schema}".receipts WHERE id = $1 RETURNING id
   `, [receiptId]);
 
   return result.rows.length > 0;
-}
-
-// =============================================================================
-// USERS
-// =============================================================================
-
-export async function getTenantUserByEmail(siteId: string, email: string): Promise<any | null> {
-  const n = normalizeSiteId(siteId);
-
-  const result = await sql.query(`
-    SELECT * FROM users_${n} WHERE email = $1 LIMIT 1
-  `, [email]);
-
-  return result.rows[0] || null;
-}
-
-export async function createTenantUser(siteId: string, user: {
-  email: string;
-  name?: string;
-  passwordHash?: string;
-  passwordSalt?: string;
-  role?: string;
-}): Promise<string> {
-  const n = normalizeSiteId(siteId);
-
-  const result = await sql.query(`
-    INSERT INTO users_${n} (email, name, password_hash, password_salt, role)
-    VALUES ($1, $2, $3, $4, $5)
-    RETURNING id
-  `, [
-    user.email,
-    user.name,
-    user.passwordHash,
-    user.passwordSalt,
-    user.role ?? 'member',
-  ]);
-
-  return result.rows[0].id;
-}
-
-export async function listTenantUsers(siteId: string): Promise<any[]> {
-  const n = normalizeSiteId(siteId);
-
-  const result = await sql.query(`
-    SELECT id, email, name, role, created_at FROM users_${n}
-    ORDER BY created_at DESC
-  `);
-
-  return result.rows;
 }
 
 // =============================================================================
@@ -706,10 +728,10 @@ export async function logTenantWebhook(siteId: string, params: {
   errorMessage?: string;
   payloadPreview?: string;
 }): Promise<void> {
-  const n = normalizeSiteId(siteId);
+  const schema = await getSchemaForSite(siteId);
 
   await sql.query(`
-    INSERT INTO webhook_logs_${n} (
+    INSERT INTO "${schema}".webhook_logs (
       event_type, event_id, order_id, order_number, status, error_message, payload_preview
     ) VALUES ($1, $2, $3, $4, $5, $6, $7)
   `, [
@@ -724,10 +746,10 @@ export async function logTenantWebhook(siteId: string, params: {
 }
 
 export async function webhookAlreadyProcessed(siteId: string, eventId: string): Promise<boolean> {
-  const n = normalizeSiteId(siteId);
+  const schema = await getSchemaForSite(siteId);
 
   const result = await sql.query(`
-    SELECT id FROM webhook_logs_${n}
+    SELECT id FROM "${schema}".webhook_logs
     WHERE event_id = $1 AND status = 'processed'
     LIMIT 1
   `, [eventId]);
@@ -740,10 +762,10 @@ export async function webhookAlreadyProcessed(siteId: string, eventId: string): 
 // =============================================================================
 
 export async function getTenantSyncState(siteId: string): Promise<any | null> {
-  const n = normalizeSiteId(siteId);
+  const schema = await getSchemaForSite(siteId);
 
   const result = await sql.query(`
-    SELECT * FROM sync_state_${n} ORDER BY id DESC LIMIT 1
+    SELECT * FROM "${schema}".sync_state ORDER BY id DESC LIMIT 1
   `);
 
   return result.rows[0] || null;
@@ -754,10 +776,10 @@ export async function updateTenantSyncState(siteId: string, state: {
   status: string;
   lastError?: string | null;
 }): Promise<void> {
-  const n = normalizeSiteId(siteId);
+  const schema = await getSchemaForSite(siteId);
 
   await sql.query(`
-    INSERT INTO sync_state_${n} (cursor, status, last_error, updated_at)
+    INSERT INTO "${schema}".sync_state (cursor, status, last_error, updated_at)
     VALUES ($1, $2, $3, NOW())
   `, [state.cursor, state.status, state.lastError]);
 }
@@ -767,27 +789,27 @@ export async function updateTenantSyncState(siteId: string, state: {
 // =============================================================================
 
 export async function incrementTenantOrderCount(siteId: string): Promise<void> {
-  const n = normalizeSiteId(siteId);
-  const yearMonth = new Date().toISOString().slice(0, 7); // "2026-01"
+  const schema = await getSchemaForSite(siteId);
+  const yearMonth = new Date().toISOString().slice(0, 7);
 
   await sql.query(`
-    INSERT INTO monthly_usage_${n} (year_month, orders_count, updated_at)
+    INSERT INTO "${schema}".monthly_usage (year_month, orders_count, updated_at)
     VALUES ($1, 1, NOW())
     ON CONFLICT (year_month) DO UPDATE SET
-      orders_count = monthly_usage_${n}.orders_count + 1,
+      orders_count = "${schema}".monthly_usage.orders_count + 1,
       updated_at = NOW()
   `, [yearMonth]);
 }
 
 export async function incrementTenantReceiptCount(siteId: string): Promise<void> {
-  const n = normalizeSiteId(siteId);
+  const schema = await getSchemaForSite(siteId);
   const yearMonth = new Date().toISOString().slice(0, 7);
 
   await sql.query(`
-    INSERT INTO monthly_usage_${n} (year_month, receipts_count, updated_at)
+    INSERT INTO "${schema}".monthly_usage (year_month, receipts_count, updated_at)
     VALUES ($1, 1, NOW())
     ON CONFLICT (year_month) DO UPDATE SET
-      receipts_count = monthly_usage_${n}.receipts_count + 1,
+      receipts_count = "${schema}".monthly_usage.receipts_count + 1,
       updated_at = NOW()
   `, [yearMonth]);
 }
@@ -796,11 +818,11 @@ export async function getTenantMonthlyUsage(siteId: string, yearMonth?: string):
   ordersCount: number;
   receiptsCount: number;
 }> {
-  const n = normalizeSiteId(siteId);
+  const schema = await getSchemaForSite(siteId);
   const ym = yearMonth ?? new Date().toISOString().slice(0, 7);
 
   const result = await sql.query(`
-    SELECT orders_count, receipts_count FROM monthly_usage_${n}
+    SELECT orders_count, receipts_count FROM "${schema}".monthly_usage
     WHERE year_month = $1
     LIMIT 1
   `, [ym]);
@@ -809,57 +831,6 @@ export async function getTenantMonthlyUsage(siteId: string, yearMonth?: string):
     ordersCount: result.rows[0]?.orders_count ?? 0,
     receiptsCount: result.rows[0]?.receipts_count ?? 0,
   };
-}
-
-// =============================================================================
-// FIND USER ACROSS ALL TENANTS
-// =============================================================================
-
-/**
- * Намира потребител по email във ВСИЧКИ tenant таблици
- * Използва се при login за да се определи до кои магазини има достъп
- */
-export async function findUserAcrossAllTenants(email: string): Promise<Array<{
-  siteId: string;
-  userId: string;
-  role: string;
-  storeName: string;
-}>> {
-  // Get all companies (sites)
-  const companies = await sql`
-    SELECT site_id, store_name FROM companies WHERE site_id IS NOT NULL
-  `;
-
-  const results: Array<{
-    siteId: string;
-    userId: string;
-    role: string;
-    storeName: string;
-  }> = [];
-
-  for (const company of companies.rows) {
-    const n = normalizeSiteId(company.site_id);
-
-    try {
-      const userResult = await sql.query(`
-        SELECT id, role FROM users_${n} WHERE email = $1 LIMIT 1
-      `, [email]);
-
-      if (userResult.rows.length > 0) {
-        results.push({
-          siteId: company.site_id,
-          userId: userResult.rows[0].id,
-          role: userResult.rows[0].role,
-          storeName: company.store_name,
-        });
-      }
-    } catch (e) {
-      // Table might not exist yet, skip
-      console.warn(`Could not check users_${n}:`, e);
-    }
-  }
-
-  return results;
 }
 
 // =============================================================================
@@ -877,10 +848,10 @@ export interface PendingRefund {
  * Добавя refund в опашката за обработка
  */
 export async function queuePendingRefund(siteId: string, refund: PendingRefund): Promise<number> {
-  const n = normalizeSiteId(siteId);
+  const schema = await getSchemaForSite(siteId);
 
   const result = await sql.query(`
-    INSERT INTO pending_refunds_${n} (order_id, refund_amount, reason, event_payload)
+    INSERT INTO "${schema}".pending_refunds (order_id, refund_amount, reason, event_payload)
     VALUES ($1, $2, $3, $4)
     RETURNING id
   `, [
@@ -892,7 +863,6 @@ export async function queuePendingRefund(siteId: string, refund: PendingRefund):
 
   const queueId = result.rows[0].id;
 
-  // Log audit event
   try {
     await logAuditEvent(siteId, {
       action: 'refund.queued',
@@ -922,11 +892,11 @@ export async function getPendingRefunds(siteId: string, limit = 10): Promise<Arr
   attempts: number;
   createdAt: string;
 }>> {
-  const n = normalizeSiteId(siteId);
+  const schema = await getSchemaForSite(siteId);
 
   const result = await sql.query(`
     SELECT id, order_id, refund_amount, reason, event_payload, attempts, created_at
-    FROM pending_refunds_${n}
+    FROM "${schema}".pending_refunds
     WHERE status = 'pending'
     AND attempts < 3
     ORDER BY created_at ASC
@@ -948,10 +918,10 @@ export async function getPendingRefunds(siteId: string, limit = 10): Promise<Arr
  * Маркира refund като обработен
  */
 export async function markRefundProcessed(siteId: string, refundId: number): Promise<void> {
-  const n = normalizeSiteId(siteId);
+  const schema = await getSchemaForSite(siteId);
 
   await sql.query(`
-    UPDATE pending_refunds_${n}
+    UPDATE "${schema}".pending_refunds
     SET status = 'processed', processed_at = NOW()
     WHERE id = $1
   `, [refundId]);
@@ -961,10 +931,10 @@ export async function markRefundProcessed(siteId: string, refundId: number): Pro
  * Маркира refund като неуспешен (увеличава опитите)
  */
 export async function markRefundFailed(siteId: string, refundId: number, error: string): Promise<void> {
-  const n = normalizeSiteId(siteId);
+  const schema = await getSchemaForSite(siteId);
 
   await sql.query(`
-    UPDATE pending_refunds_${n}
+    UPDATE "${schema}".pending_refunds
     SET attempts = attempts + 1, last_error = $2,
         status = CASE WHEN attempts >= 2 THEN 'failed' ELSE 'pending' END
     WHERE id = $1
@@ -975,10 +945,10 @@ export async function markRefundFailed(siteId: string, refundId: number, error: 
  * Проверява дали има pending refund за поръчка
  */
 export async function hasPendingRefund(siteId: string, orderId: string): Promise<boolean> {
-  const n = normalizeSiteId(siteId);
+  const schema = await getSchemaForSite(siteId);
 
   const result = await sql.query(`
-    SELECT 1 FROM pending_refunds_${n}
+    SELECT 1 FROM "${schema}".pending_refunds
     WHERE order_id = $1 AND status = 'pending'
     LIMIT 1
   `, [orderId]);
@@ -1013,33 +983,12 @@ export interface AuditLogEntry {
 
 /**
  * Logs an audit event to the tenant's audit_logs table
- * Creates the table if it doesn't exist
  */
 export async function logAuditEvent(siteId: string, entry: AuditLogEntry): Promise<void> {
-  const n = normalizeSiteId(siteId);
-
-  // Ensure audit_logs table exists
-  await sql.query(`
-    CREATE TABLE IF NOT EXISTS audit_logs_${n} (
-      id bigserial PRIMARY KEY,
-      action text NOT NULL,
-      user_id text,
-      order_id text,
-      receipt_id bigint,
-      details jsonb,
-      ip_address text,
-      created_at timestamptz DEFAULT now()
-    )
-  `);
-
-  // Create index for efficient querying
-  await sql.query(`
-    CREATE INDEX IF NOT EXISTS audit_logs_${n}_action_idx
-    ON audit_logs_${n} (action, created_at DESC)
-  `);
+  const schema = await getSchemaForSite(siteId);
 
   await sql.query(`
-    INSERT INTO audit_logs_${n} (action, user_id, order_id, receipt_id, details, ip_address)
+    INSERT INTO "${schema}".audit_logs (action, user_id, order_id, receipt_id, details, ip_address)
     VALUES ($1, $2, $3, $4, $5, $6)
   `, [
     entry.action,
@@ -1070,23 +1019,11 @@ export async function getAuditLogs(siteId: string, options?: {
   ipAddress: string | null;
   createdAt: string;
 }>> {
-  const n = normalizeSiteId(siteId);
+  const schema = await getSchemaForSite(siteId);
   const limit = options?.limit ?? 50;
   const offset = options?.offset ?? 0;
 
-  // Check if table exists
-  const tableExists = await sql.query(`
-    SELECT EXISTS (
-      SELECT FROM information_schema.tables
-      WHERE table_name = 'audit_logs_${n}'
-    ) as exists
-  `);
-
-  if (!tableExists.rows[0]?.exists) {
-    return [];
-  }
-
-  let query = `SELECT * FROM audit_logs_${n}`;
+  let query = `SELECT * FROM "${schema}".audit_logs`;
   const params: any[] = [];
   const conditions: string[] = [];
 

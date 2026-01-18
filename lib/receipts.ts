@@ -5,7 +5,7 @@ import {
   listTenantReceipts,
   countTenantReceipts,
   TenantReceipt,
-  normalizeSiteId,
+  getSchemaForSite,
 } from "./tenant-db";
 
 // Legacy getNextReceiptId removed - using tenant tables now
@@ -96,11 +96,11 @@ export async function countReceiptsForPeriodForSite(
   endIso: string,
   siteId: string
 ): Promise<number> {
-  const n = normalizeSiteId(siteId);
+  const schema = await getSchemaForSite(siteId);
 
   const result = await sql.query(`
     SELECT COUNT(*) as total
-    FROM receipts_${n}
+    FROM "${schema}".receipts
     WHERE issued_at BETWEEN $1 AND $2
   `, [startIso, endIso]);
 
@@ -112,10 +112,10 @@ export async function countReceiptsForPeriodForSite(
  * Now requires siteId for tenant tables.
  */
 export async function hasRefundReceipt(siteId: string, orderId: string): Promise<boolean> {
-  const n = normalizeSiteId(siteId);
+  const schema = await getSchemaForSite(siteId);
 
   const result = await sql.query(`
-    SELECT 1 FROM receipts_${n}
+    SELECT 1 FROM "${schema}".receipts
     WHERE order_id = $1
       AND type = 'refund'
     LIMIT 1
@@ -129,11 +129,11 @@ export async function hasRefundReceipt(siteId: string, orderId: string): Promise
  * Now requires siteId for tenant tables.
  */
 export async function getSaleReceiptByOrderId(siteId: string, orderId: string) {
-  const n = normalizeSiteId(siteId);
+  const schema = await getSchemaForSite(siteId);
 
   const result = await sql.query(`
     SELECT id, issued_at, payload, type
-    FROM receipts_${n}
+    FROM "${schema}".receipts
     WHERE order_id = $1
       AND type = 'sale'
     LIMIT 1
@@ -143,11 +143,11 @@ export async function getSaleReceiptByOrderId(siteId: string, orderId: string) {
 }
 
 export async function getReceiptByOrderId(siteId: string, orderId: string) {
-  const n = normalizeSiteId(siteId);
+  const schema = await getSchemaForSite(siteId);
 
   const result = await sql.query(`
     SELECT id, issued_at, payload
-    FROM receipts_${n}
+    FROM "${schema}".receipts
     WHERE order_id = $1
     LIMIT 1
   `, [orderId]);
@@ -156,11 +156,11 @@ export async function getReceiptByOrderId(siteId: string, orderId: string) {
 }
 
 export async function getReceiptByOrderIdAndType(siteId: string, orderId: string, type: string) {
-  const n = normalizeSiteId(siteId);
+  const schema = await getSchemaForSite(siteId);
 
   const result = await sql.query(`
     SELECT id, issued_at, payload, type, refund_amount, reference_receipt_id, return_payment_type
-    FROM receipts_${n}
+    FROM "${schema}".receipts
     WHERE order_id = $1
       AND type = $2
     LIMIT 1
@@ -214,7 +214,7 @@ export async function listReceiptsWithOrdersForSite(
   siteId: string,
   limit = 200
 ) {
-  const n = normalizeSiteId(siteId);
+  const schema = await getSchemaForSite(siteId);
 
   const result = await sql.query(`
     SELECT r.order_id,
@@ -229,8 +229,8 @@ export async function listReceiptsWithOrdersForSite(
       o.customer_name,
       o.total,
       o.currency
-    FROM receipts_${n} r
-    LEFT JOIN orders_${n} o ON o.id = r.order_id
+    FROM "${schema}".receipts r
+    LEFT JOIN "${schema}".orders o ON o.id = r.order_id
     ORDER BY r.id DESC
     LIMIT $1
   `, [limit]);
@@ -292,7 +292,7 @@ export async function listReceiptsWithOrdersForPeriodForSite(
   endIso: string,
   siteId: string
 ) {
-  const n = normalizeSiteId(siteId);
+  const schema = await getSchemaForSite(siteId);
 
   const result = await sql.query(`
     SELECT r.order_id,
@@ -308,8 +308,8 @@ export async function listReceiptsWithOrdersForPeriodForSite(
       o.total,
       o.currency,
       o.raw as order_raw
-    FROM receipts_${n} r
-    LEFT JOIN orders_${n} o ON o.id = r.order_id
+    FROM "${schema}".receipts r
+    LEFT JOIN "${schema}".orders o ON o.id = r.order_id
     WHERE r.issued_at BETWEEN $1 AND $2
     ORDER BY r.id DESC
   `, [startIso, endIso]);
@@ -352,7 +352,7 @@ export async function listOrdersWithReceiptsForAudit(
   endIso: string,
   siteId: string
 ) {
-  const n = normalizeSiteId(siteId);
+  const schema = await getSchemaForSite(siteId);
 
   const result = await sql.query(`
     SELECT
@@ -369,8 +369,8 @@ export async function listOrdersWithReceiptsForAudit(
       r.id as receipt_id,
       r.issued_at as receipt_issued_at,
       r.type as receipt_type
-    FROM receipts_${n} r
-    INNER JOIN orders_${n} o ON o.id = r.order_id
+    FROM "${schema}".receipts r
+    INNER JOIN "${schema}".orders o ON o.id = r.order_id
     WHERE r.type = 'sale'
       AND r.issued_at BETWEEN $1 AND $2
     ORDER BY r.id DESC
@@ -388,7 +388,7 @@ export async function listRefundReceiptsForAudit(
   endIso: string,
   siteId: string
 ) {
-  const n = normalizeSiteId(siteId);
+  const schema = await getSchemaForSite(siteId);
 
   const result = await sql.query(`
     SELECT
@@ -404,8 +404,8 @@ export async function listRefundReceiptsForAudit(
       r.refund_amount,
       r.reference_receipt_id,
       r.return_payment_type
-    FROM receipts_${n} r
-    INNER JOIN orders_${n} o ON o.id = r.order_id
+    FROM "${schema}".receipts r
+    INNER JOIN "${schema}".orders o ON o.id = r.order_id
     WHERE r.type = 'refund'
       AND r.issued_at BETWEEN $1 AND $2
     ORDER BY r.id ASC

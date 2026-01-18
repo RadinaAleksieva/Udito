@@ -1,5 +1,6 @@
 // Use Supabase-compatible SQL module
 import { sql } from "./supabase-sql";
+import { getSchemaForSite } from "./tenant-db";
 
 // Re-export sql for direct queries in other modules
 export { sql };
@@ -823,12 +824,11 @@ export async function listRecentOrdersForPeriodForSite(
   siteId: string,
   limit = 10
 ) {
-  // Use tenant table for site-specific orders
-  const n = siteId.replace(/-/g, '_');
+  const schema = await getSchemaForSite(siteId);
 
   const result = await sql.query(`
     SELECT id, number, payment_status, status, created_at, total, currency, source
-    FROM orders_${n}
+    FROM "${schema}".orders
     WHERE (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
       AND COALESCE(raw->>'archived', 'false') <> 'true'
       AND COALESCE(raw->>'isArchived', 'false') <> 'true'
@@ -850,14 +850,13 @@ export async function listPaginatedOrdersForSite(
   startIso: string | null = null,
   endIso: string | null = null
 ) {
-  // Use tenant table for site-specific orders
-  const n = siteId.replace(/-/g, '_');
+  const schema = await getSchemaForSite(siteId);
 
   // Count total
   const countResult = startIso && endIso
     ? await sql.query(`
         SELECT COUNT(*) as total
-        FROM orders_${n}
+        FROM "${schema}".orders
         WHERE (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
           AND COALESCE(raw->>'archived', 'false') <> 'true'
           AND COALESCE(raw->>'isArchived', 'false') <> 'true'
@@ -868,7 +867,7 @@ export async function listPaginatedOrdersForSite(
       `, [startIso, endIso])
     : await sql.query(`
         SELECT COUNT(*) as total
-        FROM orders_${n}
+        FROM "${schema}".orders
         WHERE (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
           AND COALESCE(raw->>'archived', 'false') <> 'true'
           AND COALESCE(raw->>'isArchived', 'false') <> 'true'
@@ -878,11 +877,11 @@ export async function listPaginatedOrdersForSite(
       `);
   const total = Number(countResult.rows[0]?.total || 0);
 
-  // Get paginated results - optimized: don't fetch raw column for list views
+  // Get paginated results
   const ordersResult = startIso && endIso
     ? await sql.query(`
         SELECT id, number, payment_status, status, created_at, paid_at, total, currency, customer_name, customer_email, source
-        FROM orders_${n}
+        FROM "${schema}".orders
         WHERE (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
           AND COALESCE(raw->>'archived', 'false') <> 'true'
           AND COALESCE(raw->>'isArchived', 'false') <> 'true'
@@ -895,7 +894,7 @@ export async function listPaginatedOrdersForSite(
       `, [startIso, endIso, limit, offset])
     : await sql.query(`
         SELECT id, number, payment_status, status, created_at, paid_at, total, currency, customer_name, customer_email, source
-        FROM orders_${n}
+        FROM "${schema}".orders
         WHERE (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
           AND COALESCE(raw->>'archived', 'false') <> 'true'
           AND COALESCE(raw->>'isArchived', 'false') <> 'true'
@@ -910,12 +909,11 @@ export async function listPaginatedOrdersForSite(
 }
 
 export async function countOrdersForSite(siteId: string) {
-  // Use tenant table for site-specific orders
-  const n = siteId.replace(/-/g, '_');
+  const schema = await getSchemaForSite(siteId);
 
   const result = await sql.query(`
     SELECT COUNT(*) as total
-    FROM orders_${n}
+    FROM "${schema}".orders
     WHERE (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
       AND COALESCE(raw->>'archived', 'false') <> 'true'
       AND COALESCE(raw->>'isArchived', 'false') <> 'true'
@@ -932,12 +930,11 @@ export async function countOrdersForPeriodForSite(
   endIso: string,
   siteId: string
 ) {
-  // Use tenant table for site-specific orders
-  const n = siteId.replace(/-/g, '_');
+  const schema = await getSchemaForSite(siteId);
 
   const result = await sql.query(`
     SELECT COUNT(*) as total
-    FROM orders_${n}
+    FROM "${schema}".orders
     WHERE (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
       AND COALESCE(raw->>'archived', 'false') <> 'true'
       AND COALESCE(raw->>'isArchived', 'false') <> 'true'
@@ -1053,8 +1050,7 @@ export async function listAllDetailedOrders() {
 }
 
 export async function listAllDetailedOrdersForSite(siteId: string, limit = 500) {
-  // Use tenant table for site-specific orders
-  const n = siteId.replace(/-/g, '_');
+  const schema = await getSchemaForSite(siteId);
 
   const result = await sql.query(`
     SELECT id,
@@ -1069,7 +1065,7 @@ export async function listAllDetailedOrdersForSite(siteId: string, limit = 500) 
       customer_email,
       raw,
       source
-    FROM orders_${n}
+    FROM "${schema}".orders
     ORDER BY created_at DESC NULLS LAST
     LIMIT $1
   `, [limit]);
@@ -1128,8 +1124,8 @@ export async function listDetailedOrdersForPeriodForSite(
   endIso: string,
   siteId: string
 ) {
-  // Use tenant table for site-specific orders
-  const n = siteId.replace(/-/g, '_');
+  // Use schema-qualified table name
+  const schema = await getSchemaForSite(siteId);
 
   const result = await sql.query(`
     SELECT id,
@@ -1144,7 +1140,7 @@ export async function listDetailedOrdersForPeriodForSite(
       customer_email,
       raw,
       source
-    FROM orders_${n}
+    FROM "${schema}".orders
     WHERE created_at BETWEEN $1 AND $2
     ORDER BY created_at DESC NULLS LAST
   `, [startIso, endIso]);
