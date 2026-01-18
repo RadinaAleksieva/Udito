@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
       let fixedCount = 0;
       for (const orderId of orderIds) {
         await sql.query(`
-          UPDATE thewhiterabbitshop.orders
+          UPDATE public.orders
           SET raw = raw || '{"archived": true}'::jsonb
           WHERE id = $1
         `, [orderId]);
@@ -52,14 +52,15 @@ export async function POST(request: NextRequest) {
     // Otherwise, check all non-archived orders against Wix
     const ordersResult = await sql.query(`
       SELECT o.id, o.number, o.status, o.raw
-      FROM thewhiterabbitshop.orders o
-      WHERE (o.status IS NULL OR LOWER(o.status) NOT LIKE 'archiv%')
+      FROM public.orders o
+      WHERE site_id = $1
+        AND (o.status IS NULL OR LOWER(o.status) NOT LIKE 'archiv%')
         AND COALESCE(o.raw->>'archived', 'false') <> 'true'
         AND COALESCE(o.raw->>'isArchived', 'false') <> 'true'
         AND o.raw->>'archivedAt' IS NULL
       ORDER BY o.created_at DESC
       LIMIT 50
-    `);
+    `, [siteId]);
 
     let fixedCount = 0;
     const fixedOrders: string[] = [];
@@ -85,7 +86,7 @@ export async function POST(request: NextRequest) {
         if (isArchived) {
           // Update local database with archived flag
           await sql.query(`
-            UPDATE thewhiterabbitshop.orders
+            UPDATE public.orders
             SET raw = raw || '{"archived": true}'::jsonb,
                 status = COALESCE($1, status)
             WHERE id = $2
@@ -125,11 +126,11 @@ export async function GET() {
 
     // Find orders that are showing as non-archived but might be archived in Wix
     const ordersResult = await sql.query(`
-      SELECT o.id, o.number, o.status, o.payment_status, o.created_at,
+      SELECT o.id, o.number, o.status, o.payment_status, o.created_at, o.site_id,
              o.raw->>'archived' as archived_flag,
              o.raw->>'isArchived' as is_archived_flag,
              o.raw->>'status' as raw_status
-      FROM thewhiterabbitshop.orders o
+      FROM public.orders o
       WHERE (o.status IS NULL OR LOWER(o.status) NOT LIKE 'archiv%')
         AND COALESCE(o.raw->>'archived', 'false') <> 'true'
         AND COALESCE(o.raw->>'isArchived', 'false') <> 'true'
