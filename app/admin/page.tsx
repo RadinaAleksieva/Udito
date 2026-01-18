@@ -271,6 +271,29 @@ export default function AdminPage() {
     }
   }
 
+  async function fixArchivedOrders() {
+    setDbLoading(true);
+    setActionMessage("Проверка на архивирани поръчки...");
+    try {
+      const res = await fetch("/api/admin/fix-archived", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) throw new Error("Failed to fix archived orders");
+      const data = await res.json();
+      if (data.fixed > 0) {
+        setActionMessage(`Оправени ${data.fixed} архивирани поръчки: ${data.fixedOrders?.join(", ")}`);
+      } else {
+        setActionMessage(`Проверени ${data.checked} поръчки, няма нужда от корекции.`);
+      }
+    } catch (err) {
+      setActionMessage(`Грешка: ${(err as Error).message}`);
+    } finally {
+      setDbLoading(false);
+    }
+  }
+
   async function loadTables(schema: string) {
     setDbLoading(true);
     try {
@@ -688,6 +711,15 @@ export default function AdminPage() {
         {activeTab === "database" && (
           <div className="admin-database">
             {dbLoading && <div className="db-loading">Зареждане...</div>}
+
+            {/* Actions bar */}
+            {dbView === "schemas" && !dbLoading && (
+              <div className="db-actions">
+                <button className="admin-btn" onClick={fixArchivedOrders} disabled={dbLoading}>
+                  🔧 Оправи архивирани поръчки
+                </button>
+              </div>
+            )}
 
             {/* Schemas View */}
             {dbView === "schemas" && !dbLoading && (
@@ -1195,6 +1227,12 @@ export default function AdminPage() {
           cursor: pointer;
         }
         /* Database tab styles */
+        .db-actions {
+          display: flex;
+          gap: 0.5rem;
+          margin-bottom: 1rem;
+          flex-wrap: wrap;
+        }
         .db-loading {
           text-align: center;
           padding: 2rem;
