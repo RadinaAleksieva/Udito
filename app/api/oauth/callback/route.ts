@@ -228,13 +228,9 @@ export async function GET(request: Request) {
     });
   }
 
-  const responseRedirect = data.access_token
-    ? NextResponse.redirect(
-        `https://www.wix.com/installer/close-window?access_token=${encodeURIComponent(
-          data.access_token
-        )}`
-      )
-    : NextResponse.redirect(`${appBaseUrl}/overview?connected=1`);
+  // Always redirect to our app's overview page after successful OAuth
+  // The Wix close-window URL often shows a blank page
+  const responseRedirect = NextResponse.redirect(`${appBaseUrl}/overview?connected=1&store=${resolvedSiteId || ''}`);
   if (resolvedInstanceId) {
     responseRedirect.cookies.set("udito_instance_id", resolvedInstanceId, {
       path: "/",

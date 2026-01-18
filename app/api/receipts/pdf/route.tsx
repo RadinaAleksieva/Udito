@@ -192,7 +192,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
-    const receiptRecord = await getReceiptByOrderIdAndType(orderId, receiptType);
+    const receiptRecord = await getReceiptByOrderIdAndType(siteId!, orderId, receiptType);
     const company = await getCompanyBySite(siteId, instanceId);
 
     // Debug: log template being used

@@ -133,6 +133,8 @@ async function fetchAccessToken(params?: {
     throw new Error("Missing Wix access token or refresh credentials.");
   }
 
+  console.log("Refreshing Wix token for site:", dbToken?.site_id);
+
   const response = await fetch("https://www.wix.com/oauth/access", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -149,10 +151,30 @@ async function fetchAccessToken(params?: {
     throw new Error(`Wix token refresh failed: ${response.status} ${text}`);
   }
 
-  const data = (await response.json()) as { access_token?: string };
+  const data = (await response.json()) as {
+    access_token?: string;
+    refresh_token?: string;
+    expires_in?: number;
+  };
   if (!data.access_token) {
     throw new Error("Wix token refresh returned no access_token.");
   }
+
+  // Save the refreshed token to database
+  const expiresAt = typeof data.expires_in === "number"
+    ? new Date(Date.now() + data.expires_in * 1000).toISOString()
+    : null;
+
+  await saveWixTokens({
+    businessId: params?.businessId ?? null,
+    instanceId: dbToken?.instance_id ?? null,
+    siteId: dbToken?.site_id ?? null,
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token ?? refreshToken, // Keep old refresh token if not provided
+    expiresAt,
+  });
+
+  console.log("✅ Wix token refreshed and saved for site:", dbToken?.site_id);
 
   return data.access_token;
 }

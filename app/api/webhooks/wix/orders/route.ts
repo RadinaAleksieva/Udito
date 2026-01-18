@@ -676,7 +676,7 @@ async function handleOrderEvent(event: any) {
       } catch (queueError) {
         console.error("Failed to queue refund for order", mapped.number, queueError);
         // Fallback: try to issue directly
-        const originalReceipt = await getSaleReceiptByOrderId(mapped.id);
+        const originalReceipt = await getSaleReceiptByOrderId(mapped.siteId!, mapped.id);
         if (originalReceipt) {
           const result = await issueRefundReceipt({
             orderId: mapped.id,

@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
           const { orderId, refundAmount, reason, eventPayload } = refund;
 
           // Check if we have an original sale receipt
-          const originalReceipt = await getSaleReceiptByOrderId(orderId);
+          const originalReceipt = await getSaleReceiptByOrderId(siteId, orderId);
 
           if (!originalReceipt) {
             // No sale receipt yet - might need to wait

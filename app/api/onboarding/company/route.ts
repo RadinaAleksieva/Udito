@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { sql } from "@/lib/supabase-sql";
 import { authOptions } from "@/lib/auth";
+import { backfillReceiptsForSite } from "@/lib/receipt-backfill";
 
 export async function POST(request: Request) {
   try {

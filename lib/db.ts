@@ -670,23 +670,55 @@ export async function saveWixTokens(params: {
   const expiresAt = params.expiresAt
     ? new Date(params.expiresAt).toISOString()
     : null;
-  await sql`
-    insert into wix_tokens (
-      business_id,
-      instance_id,
-      site_id,
-      access_token,
-      refresh_token,
-      expires_at
-    ) values (
-      ${params.businessId ?? null},
-      ${params.instanceId ?? null},
-      ${params.siteId ?? null},
-      ${params.accessToken ?? null},
-      ${params.refreshToken ?? null},
-      ${expiresAt}
-    );
-  `;
+
+  // Use UPSERT - update existing token if site_id matches, otherwise insert
+  if (params.siteId) {
+    await sql`
+      INSERT INTO wix_tokens (
+        business_id,
+        instance_id,
+        site_id,
+        access_token,
+        refresh_token,
+        expires_at,
+        updated_at
+      ) VALUES (
+        ${params.businessId ?? null},
+        ${params.instanceId ?? null},
+        ${params.siteId},
+        ${params.accessToken ?? null},
+        ${params.refreshToken ?? null},
+        ${expiresAt},
+        NOW()
+      )
+      ON CONFLICT (site_id) WHERE site_id IS NOT NULL
+      DO UPDATE SET
+        instance_id = COALESCE(EXCLUDED.instance_id, wix_tokens.instance_id),
+        access_token = COALESCE(EXCLUDED.access_token, wix_tokens.access_token),
+        refresh_token = COALESCE(EXCLUDED.refresh_token, wix_tokens.refresh_token),
+        expires_at = COALESCE(EXCLUDED.expires_at, wix_tokens.expires_at),
+        updated_at = NOW();
+    `;
+  } else {
+    // Fallback to simple insert if no siteId
+    await sql`
+      INSERT INTO wix_tokens (
+        business_id,
+        instance_id,
+        site_id,
+        access_token,
+        refresh_token,
+        expires_at
+      ) VALUES (
+        ${params.businessId ?? null},
+        ${params.instanceId ?? null},
+        ${params.siteId ?? null},
+        ${params.accessToken ?? null},
+        ${params.refreshToken ?? null},
+        ${expiresAt}
+      );
+    `;
+  }
 }
 
 export async function getLatestWixToken() {
@@ -791,21 +823,23 @@ export async function listRecentOrdersForPeriodForSite(
   siteId: string,
   limit = 10
 ) {
-  // Optimized: don't fetch raw column for list views - use extracted columns instead
-  const result = await sql`
-    select id, number, payment_status, status, created_at, total, currency, source
-    from orders
-    where site_id = ${siteId}
-      and (status is null or lower(status) not like 'archiv%')
-      and coalesce(raw->>'archived', 'false') <> 'true'
-      and coalesce(raw->>'isArchived', 'false') <> 'true'
-      and raw->>'archivedAt' is null
-      and raw->>'archivedDate' is null
-      and raw->>'archiveDate' is null
-      and created_at between ${startIso} and ${endIso}
-    order by created_at desc nulls last
-    limit ${limit};
-  `;
+  // Use tenant table for site-specific orders
+  const n = siteId.replace(/-/g, '_');
+
+  const result = await sql.query(`
+    SELECT id, number, payment_status, status, created_at, total, currency, source
+    FROM orders_${n}
+    WHERE (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
+      AND COALESCE(raw->>'archived', 'false') <> 'true'
+      AND COALESCE(raw->>'isArchived', 'false') <> 'true'
+      AND raw->>'archivedAt' IS NULL
+      AND raw->>'archivedDate' IS NULL
+      AND raw->>'archiveDate' IS NULL
+      AND created_at BETWEEN $1 AND $2
+    ORDER BY created_at DESC NULLS LAST
+    LIMIT $3
+  `, [startIso, endIso, limit]);
+
   return result.rows;
 }
 
@@ -816,78 +850,80 @@ export async function listPaginatedOrdersForSite(
   startIso: string | null = null,
   endIso: string | null = null
 ) {
+  // Use tenant table for site-specific orders
+  const n = siteId.replace(/-/g, '_');
+
   // Count total
   const countResult = startIso && endIso
-    ? await sql`
-        select count(*) as total
-        from orders
-        where site_id = ${siteId}
-          and (status is null or lower(status) not like 'archiv%')
-          and coalesce(raw->>'archived', 'false') <> 'true'
-          and coalesce(raw->>'isArchived', 'false') <> 'true'
-          and raw->>'archivedAt' is null
-          and raw->>'archivedDate' is null
-          and raw->>'archiveDate' is null
-          and created_at between ${startIso} and ${endIso};
-      `
-    : await sql`
-        select count(*) as total
-        from orders
-        where site_id = ${siteId}
-          and (status is null or lower(status) not like 'archiv%')
-          and coalesce(raw->>'archived', 'false') <> 'true'
-          and coalesce(raw->>'isArchived', 'false') <> 'true'
-          and raw->>'archivedAt' is null
-          and raw->>'archivedDate' is null
-          and raw->>'archiveDate' is null;
-      `;
+    ? await sql.query(`
+        SELECT COUNT(*) as total
+        FROM orders_${n}
+        WHERE (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
+          AND COALESCE(raw->>'archived', 'false') <> 'true'
+          AND COALESCE(raw->>'isArchived', 'false') <> 'true'
+          AND raw->>'archivedAt' IS NULL
+          AND raw->>'archivedDate' IS NULL
+          AND raw->>'archiveDate' IS NULL
+          AND created_at BETWEEN $1 AND $2
+      `, [startIso, endIso])
+    : await sql.query(`
+        SELECT COUNT(*) as total
+        FROM orders_${n}
+        WHERE (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
+          AND COALESCE(raw->>'archived', 'false') <> 'true'
+          AND COALESCE(raw->>'isArchived', 'false') <> 'true'
+          AND raw->>'archivedAt' IS NULL
+          AND raw->>'archivedDate' IS NULL
+          AND raw->>'archiveDate' IS NULL
+      `);
   const total = Number(countResult.rows[0]?.total || 0);
 
   // Get paginated results - optimized: don't fetch raw column for list views
   const ordersResult = startIso && endIso
-    ? await sql`
-        select id, number, payment_status, status, created_at, paid_at, total, currency, customer_name, customer_email, source
-        from orders
-        where site_id = ${siteId}
-          and (status is null or lower(status) not like 'archiv%')
-          and coalesce(raw->>'archived', 'false') <> 'true'
-          and coalesce(raw->>'isArchived', 'false') <> 'true'
-          and raw->>'archivedAt' is null
-          and raw->>'archivedDate' is null
-          and raw->>'archiveDate' is null
-          and created_at between ${startIso} and ${endIso}
-        order by created_at desc nulls last
-        limit ${limit} offset ${offset};
-      `
-    : await sql`
-        select id, number, payment_status, status, created_at, paid_at, total, currency, customer_name, customer_email, source
-        from orders
-        where site_id = ${siteId}
-          and (status is null or lower(status) not like 'archiv%')
-          and coalesce(raw->>'archived', 'false') <> 'true'
-          and coalesce(raw->>'isArchived', 'false') <> 'true'
-          and raw->>'archivedAt' is null
-          and raw->>'archivedDate' is null
-          and raw->>'archiveDate' is null
-        order by created_at desc nulls last
-        limit ${limit} offset ${offset};
-      `;
+    ? await sql.query(`
+        SELECT id, number, payment_status, status, created_at, paid_at, total, currency, customer_name, customer_email, source
+        FROM orders_${n}
+        WHERE (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
+          AND COALESCE(raw->>'archived', 'false') <> 'true'
+          AND COALESCE(raw->>'isArchived', 'false') <> 'true'
+          AND raw->>'archivedAt' IS NULL
+          AND raw->>'archivedDate' IS NULL
+          AND raw->>'archiveDate' IS NULL
+          AND created_at BETWEEN $1 AND $2
+        ORDER BY created_at DESC NULLS LAST
+        LIMIT $3 OFFSET $4
+      `, [startIso, endIso, limit, offset])
+    : await sql.query(`
+        SELECT id, number, payment_status, status, created_at, paid_at, total, currency, customer_name, customer_email, source
+        FROM orders_${n}
+        WHERE (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
+          AND COALESCE(raw->>'archived', 'false') <> 'true'
+          AND COALESCE(raw->>'isArchived', 'false') <> 'true'
+          AND raw->>'archivedAt' IS NULL
+          AND raw->>'archivedDate' IS NULL
+          AND raw->>'archiveDate' IS NULL
+        ORDER BY created_at DESC NULLS LAST
+        LIMIT $1 OFFSET $2
+      `, [limit, offset]);
 
   return { orders: ordersResult.rows, total };
 }
 
 export async function countOrdersForSite(siteId: string) {
-  const result = await sql`
-    select count(*) as total
-    from orders
-    where site_id = ${siteId}
-      and (status is null or lower(status) not like 'archiv%')
-      and coalesce(raw->>'archived', 'false') <> 'true'
-      and coalesce(raw->>'isArchived', 'false') <> 'true'
-      and raw->>'archivedAt' is null
-      and raw->>'archivedDate' is null
-      and raw->>'archiveDate' is null;
-  `;
+  // Use tenant table for site-specific orders
+  const n = siteId.replace(/-/g, '_');
+
+  const result = await sql.query(`
+    SELECT COUNT(*) as total
+    FROM orders_${n}
+    WHERE (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
+      AND COALESCE(raw->>'archived', 'false') <> 'true'
+      AND COALESCE(raw->>'isArchived', 'false') <> 'true'
+      AND raw->>'archivedAt' IS NULL
+      AND raw->>'archivedDate' IS NULL
+      AND raw->>'archiveDate' IS NULL
+  `);
+
   return Number(result.rows[0]?.total ?? 0);
 }
 
@@ -896,18 +932,21 @@ export async function countOrdersForPeriodForSite(
   endIso: string,
   siteId: string
 ) {
-  const result = await sql`
-    select count(*) as total
-    from orders
-    where site_id = ${siteId}
-      and (status is null or lower(status) not like 'archiv%')
-      and coalesce(raw->>'archived', 'false') <> 'true'
-      and coalesce(raw->>'isArchived', 'false') <> 'true'
-      and raw->>'archivedAt' is null
-      and raw->>'archivedDate' is null
-      and raw->>'archiveDate' is null
-      and created_at between ${startIso} and ${endIso};
-  `;
+  // Use tenant table for site-specific orders
+  const n = siteId.replace(/-/g, '_');
+
+  const result = await sql.query(`
+    SELECT COUNT(*) as total
+    FROM orders_${n}
+    WHERE (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
+      AND COALESCE(raw->>'archived', 'false') <> 'true'
+      AND COALESCE(raw->>'isArchived', 'false') <> 'true'
+      AND raw->>'archivedAt' IS NULL
+      AND raw->>'archivedDate' IS NULL
+      AND raw->>'archiveDate' IS NULL
+      AND created_at BETWEEN $1 AND $2
+  `, [startIso, endIso]);
+
   return Number(result.rows[0]?.total ?? 0);
 }
 
@@ -1014,8 +1053,11 @@ export async function listAllDetailedOrders() {
 }
 
 export async function listAllDetailedOrdersForSite(siteId: string, limit = 500) {
-  const result = await sql`
-    select id,
+  // Use tenant table for site-specific orders
+  const n = siteId.replace(/-/g, '_');
+
+  const result = await sql.query(`
+    SELECT id,
       number,
       payment_status,
       status,
@@ -1027,11 +1069,11 @@ export async function listAllDetailedOrdersForSite(siteId: string, limit = 500) 
       customer_email,
       raw,
       source
-    from orders
-    where site_id = ${siteId}
-    order by created_at desc nulls last
-    limit ${limit};
-  `;
+    FROM orders_${n}
+    ORDER BY created_at DESC NULLS LAST
+    LIMIT $1
+  `, [limit]);
+
   return result.rows;
 }
 
@@ -1086,8 +1128,11 @@ export async function listDetailedOrdersForPeriodForSite(
   endIso: string,
   siteId: string
 ) {
-  const result = await sql`
-    select id,
+  // Use tenant table for site-specific orders
+  const n = siteId.replace(/-/g, '_');
+
+  const result = await sql.query(`
+    SELECT id,
       number,
       payment_status,
       status,
@@ -1099,11 +1144,11 @@ export async function listDetailedOrdersForPeriodForSite(
       customer_email,
       raw,
       source
-    from orders
-    where site_id = ${siteId}
-      and created_at between ${startIso} and ${endIso}
-    order by created_at desc nulls last;
-  `;
+    FROM orders_${n}
+    WHERE created_at BETWEEN $1 AND $2
+    ORDER BY created_at DESC NULLS LAST
+  `, [startIso, endIso]);
+
   return result.rows;
 }
 

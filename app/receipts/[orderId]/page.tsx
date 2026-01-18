@@ -418,7 +418,7 @@ export default async function ReceiptPage({
   if (!record) {
     notFound();
   }
-  const receiptRecord = await getReceiptByOrderIdAndType(orderId, receiptType);
+  const receiptRecord = await getReceiptByOrderIdAndType(siteId, orderId, receiptType);
   const companySiteId = record.site_id || siteId;
   const company = companySiteId ? await getCompanyBySite(companySiteId, instanceId) : null;
   const currency = record.currency || "BGN";

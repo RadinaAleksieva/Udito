@@ -8,92 +8,35 @@ import {
   normalizeSiteId,
 } from "./tenant-db";
 
-/**
- * Get the next receipt ID (MAX + 1, not using sequence)
- * This ensures deleted receipt numbers can be reused
- */
-async function getNextReceiptId(): Promise<number> {
-  const result = await sql`SELECT COALESCE(MAX(id), 0) + 1 as next_id FROM receipts`;
-  return result.rows[0].next_id;
-}
+// Legacy getNextReceiptId removed - using tenant tables now
 
 export async function issueReceipt(params: {
   orderId: string;
   payload: unknown;
   businessId?: string | null;
   issuedAt?: string | null;
-  siteId?: string | null; // Add siteId for tenant tables
+  siteId?: string | null;
 }): Promise<{ created: boolean; receiptId: number | null }> {
-  const businessId = params.businessId ?? null;
   const issuedAt = params.issuedAt ? new Date(params.issuedAt).toISOString() : null;
-  const payloadJson = JSON.stringify(params.payload);
 
-  // Use atomic INSERT with ON CONFLICT to prevent race conditions
-  // This prevents duplicate receipts even with concurrent webhook calls
-  try {
-    const result = await sql`
-      INSERT INTO receipts (id, order_id, business_id, issued_at, status, payload, type)
-      SELECT
-        COALESCE(MAX(id), 0) + 1,
-        ${params.orderId},
-        ${businessId},
-        ${issuedAt},
-        'issued',
-        ${payloadJson}::jsonb,
-        'sale'
-      FROM receipts
-      ON CONFLICT (order_id, type) DO NOTHING
-      RETURNING id
-    `;
+  // Get siteId - required for tenant tables
+  const siteId = params.siteId ?? (params.payload as any)?.site_id ?? (params.payload as any)?.siteId ?? null;
 
-    let created = false;
-    let receiptId: number | null = null;
-
-    if (result.rows.length > 0) {
-      created = true;
-      receiptId = result.rows[0].id;
-    } else {
-      // ON CONFLICT triggered - fetch existing receipt ID
-      const existing = await sql`
-        SELECT id FROM receipts
-        WHERE order_id = ${params.orderId} AND type = 'sale'
-        LIMIT 1
-      `;
-      receiptId = existing.rows[0]?.id ?? null;
-    }
-
-    // Also save to tenant-specific table if siteId is available
-    const siteId = params.siteId ?? (params.payload as any)?.site_id ?? (params.payload as any)?.siteId ?? null;
-    if (siteId && created) {
-      try {
-        const tenantReceipt: TenantReceipt = {
-          orderId: params.orderId,
-          payload: params.payload,
-          type: 'sale',
-          issuedAt: issuedAt,
-        };
-        await issueTenantReceipt(siteId, tenantReceipt);
-        console.log("✅ Receipt saved to tenant table:", params.orderId);
-      } catch (tenantError) {
-        console.warn("Failed to save receipt to tenant table:", tenantError);
-        // Continue - legacy table was saved
-      }
-    }
-
-    return { created, receiptId };
-  } catch (error) {
-    // Handle race condition edge cases
-    const errorMessage = (error as Error).message;
-    if (errorMessage.includes('duplicate key') || errorMessage.includes('unique constraint')) {
-      const existing = await sql`
-        SELECT id FROM receipts
-        WHERE order_id = ${params.orderId} AND type = 'sale'
-        LIMIT 1
-      `;
-      return { created: false, receiptId: existing.rows[0]?.id ?? null };
-    }
-    throw error;
+  if (!siteId) {
+    throw new Error("siteId is required for issuing receipts");
   }
+
+  const tenantReceipt: TenantReceipt = {
+    orderId: params.orderId,
+    payload: params.payload,
+    type: 'sale',
+    issuedAt: issuedAt,
+  };
+
+  const result = await issueTenantReceipt(siteId, tenantReceipt);
+  console.log("✅ Receipt saved to tenant table:", params.orderId, "created:", result.created);
+
+  return result;
 }
 
 /**
@@ -107,32 +50,20 @@ export async function issueRefundReceipt(params: {
   businessId?: string | null;
   issuedAt?: string | null;
   refundAmount: number;
-  siteId?: string | null; // Add siteId for tenant tables
+  siteId?: string | null;
 }) {
-  const businessId = params.businessId ?? null;
   const issuedAt = params.issuedAt ? new Date(params.issuedAt).toISOString() : null;
 
-  // Get the original sale receipt to reference it
-  const originalReceipt = await sql`
-    select id from receipts
-    where order_id = ${params.orderId}
-      and type = 'sale'
-    limit 1;
-  `;
-  const referenceReceiptId = originalReceipt.rows[0]?.id ?? null;
+  // Get siteId - required for tenant tables
+  const siteId = params.siteId ?? (params.payload as any)?.site_id ?? (params.payload as any)?.siteId ?? null;
 
-  // Check if refund receipt already exists for this order
-  const existingRefund = await sql`
-    select id from receipts
-    where order_id = ${params.orderId}
-      and type = 'refund'
-    limit 1;
-  `;
-
-  if (existingRefund.rows.length > 0) {
-    // Refund receipt already exists, don't create duplicate
-    return { created: false, receiptId: existingRefund.rows[0].id };
+  if (!siteId) {
+    throw new Error("siteId is required for issuing refund receipts");
   }
+
+  // Get the original sale receipt to reference it (from tenant table)
+  const originalReceipt = await getTenantSaleReceiptByOrderId(siteId, params.orderId);
+  const referenceReceiptId = originalReceipt?.id ?? null;
 
   // Create the refund receipt with negative amount in payload
   const refundPayload = {
@@ -142,46 +73,19 @@ export async function issueRefundReceipt(params: {
     originalReceiptId: referenceReceiptId,
   };
 
-  // Get next ID (MAX + 1) instead of using sequence
-  const nextId = await getNextReceiptId();
+  const tenantReceipt: TenantReceipt = {
+    orderId: params.orderId,
+    payload: refundPayload,
+    type: 'refund',
+    issuedAt: issuedAt,
+    referenceReceiptId: referenceReceiptId,
+    refundAmount: -Math.abs(params.refundAmount),
+  };
 
-  // Save to legacy shared table
-  await sql`
-    insert into receipts (id, order_id, business_id, issued_at, status, payload, type, reference_receipt_id, refund_amount)
-    values (
-      ${nextId},
-      ${params.orderId},
-      ${businessId},
-      ${issuedAt},
-      ${"issued"},
-      ${JSON.stringify(refundPayload)},
-      ${"refund"},
-      ${referenceReceiptId},
-      ${-Math.abs(params.refundAmount)}
-    );
-  `;
+  const result = await issueTenantReceipt(siteId, tenantReceipt);
+  console.log("✅ Refund receipt saved to tenant table:", params.orderId, "created:", result.created);
 
-  // Also save to tenant-specific table if siteId is available
-  const siteId = params.siteId ?? (params.payload as any)?.site_id ?? (params.payload as any)?.siteId ?? null;
-  if (siteId) {
-    try {
-      const tenantReceipt: TenantReceipt = {
-        orderId: params.orderId,
-        payload: refundPayload,
-        type: 'refund',
-        issuedAt: issuedAt,
-        referenceReceiptId: referenceReceiptId,
-        refundAmount: -Math.abs(params.refundAmount),
-      };
-      await issueTenantReceipt(siteId, tenantReceipt);
-      console.log("✅ Refund receipt saved to tenant table:", params.orderId);
-    } catch (tenantError) {
-      console.warn("Failed to save refund receipt to tenant table:", tenantError);
-      // Continue - legacy table was saved
-    }
-  }
-
-  return { created: true, receiptId: nextId };
+  return result;
 }
 
 /**
@@ -192,61 +96,76 @@ export async function countReceiptsForPeriodForSite(
   endIso: string,
   siteId: string
 ): Promise<number> {
-  const result = await sql`
+  const n = normalizeSiteId(siteId);
+
+  const result = await sql.query(`
     SELECT COUNT(*) as total
-    FROM receipts r
-    LEFT JOIN orders o ON o.id = r.order_id
-    WHERE o.site_id = ${siteId}
-      AND r.issued_at BETWEEN ${startIso} AND ${endIso}
-  `;
+    FROM receipts_${n}
+    WHERE issued_at BETWEEN $1 AND $2
+  `, [startIso, endIso]);
+
   return Number(result.rows[0]?.total ?? 0);
 }
 
 /**
  * Check if a refund receipt already exists for an order.
+ * Now requires siteId for tenant tables.
  */
-export async function hasRefundReceipt(orderId: string): Promise<boolean> {
-  const result = await sql`
-    select 1 from receipts
-    where order_id = ${orderId}
-      and type = 'refund'
-    limit 1;
-  `;
+export async function hasRefundReceipt(siteId: string, orderId: string): Promise<boolean> {
+  const n = normalizeSiteId(siteId);
+
+  const result = await sql.query(`
+    SELECT 1 FROM receipts_${n}
+    WHERE order_id = $1
+      AND type = 'refund'
+    LIMIT 1
+  `, [orderId]);
+
   return result.rows.length > 0;
 }
 
 /**
  * Get the original sale receipt for an order.
+ * Now requires siteId for tenant tables.
  */
-export async function getSaleReceiptByOrderId(orderId: string) {
-  const result = await sql`
-    select id, issued_at, payload, type
-    from receipts
-    where order_id = ${orderId}
-      and type = 'sale'
-    limit 1;
-  `;
+export async function getSaleReceiptByOrderId(siteId: string, orderId: string) {
+  const n = normalizeSiteId(siteId);
+
+  const result = await sql.query(`
+    SELECT id, issued_at, payload, type
+    FROM receipts_${n}
+    WHERE order_id = $1
+      AND type = 'sale'
+    LIMIT 1
+  `, [orderId]);
+
   return result.rows[0] ?? null;
 }
 
-export async function getReceiptByOrderId(orderId: string) {
-  const result = await sql`
-    select id, issued_at, payload
-    from receipts
-    where order_id = ${orderId}
-    limit 1;
-  `;
+export async function getReceiptByOrderId(siteId: string, orderId: string) {
+  const n = normalizeSiteId(siteId);
+
+  const result = await sql.query(`
+    SELECT id, issued_at, payload
+    FROM receipts_${n}
+    WHERE order_id = $1
+    LIMIT 1
+  `, [orderId]);
+
   return result.rows[0] ?? null;
 }
 
-export async function getReceiptByOrderIdAndType(orderId: string, type: string) {
-  const result = await sql`
-    select id, issued_at, payload, type, refund_amount, reference_receipt_id, return_payment_type
-    from receipts
-    where order_id = ${orderId}
-      and type = ${type}
-    limit 1;
-  `;
+export async function getReceiptByOrderIdAndType(siteId: string, orderId: string, type: string) {
+  const n = normalizeSiteId(siteId);
+
+  const result = await sql.query(`
+    SELECT id, issued_at, payload, type, refund_amount, reference_receipt_id, return_payment_type
+    FROM receipts_${n}
+    WHERE order_id = $1
+      AND type = $2
+    LIMIT 1
+  `, [orderId, type]);
+
   return result.rows[0] ?? null;
 }
 
@@ -295,25 +214,27 @@ export async function listReceiptsWithOrdersForSite(
   siteId: string,
   limit = 200
 ) {
-  const result = await sql`
-    select receipts.order_id,
-      receipts.id as receipt_id,
-      receipts.issued_at,
-      receipts.status,
-      receipts.payload,
-      receipts.type as receipt_type,
-      receipts.reference_receipt_id,
-      receipts.refund_amount,
-      orders.number as order_number,
-      orders.customer_name,
-      orders.total,
-      orders.currency
-    from receipts
-    left join orders on orders.id = receipts.order_id
-    where orders.site_id = ${siteId}
-    order by receipts.id desc
-    limit ${limit};
-  `;
+  const n = normalizeSiteId(siteId);
+
+  const result = await sql.query(`
+    SELECT r.order_id,
+      r.id as receipt_id,
+      r.issued_at,
+      r.status,
+      r.payload,
+      r.type as receipt_type,
+      r.reference_receipt_id,
+      r.refund_amount,
+      o.number as order_number,
+      o.customer_name,
+      o.total,
+      o.currency
+    FROM receipts_${n} r
+    LEFT JOIN orders_${n} o ON o.id = r.order_id
+    ORDER BY r.id DESC
+    LIMIT $1
+  `, [limit]);
+
   return result.rows;
 }
 
@@ -371,26 +292,28 @@ export async function listReceiptsWithOrdersForPeriodForSite(
   endIso: string,
   siteId: string
 ) {
-  const result = await sql`
-    select receipts.order_id,
-      receipts.id as receipt_id,
-      receipts.issued_at,
-      receipts.status,
-      receipts.payload,
-      receipts.type as receipt_type,
-      receipts.reference_receipt_id,
-      receipts.refund_amount,
-      orders.number as order_number,
-      orders.customer_name,
-      orders.total,
-      orders.currency,
-      orders.raw as order_raw
-    from receipts
-    left join orders on orders.id = receipts.order_id
-    where (orders.site_id = ${siteId})
-      and receipts.issued_at between ${startIso} and ${endIso}
-    order by receipts.id desc;
-  `;
+  const n = normalizeSiteId(siteId);
+
+  const result = await sql.query(`
+    SELECT r.order_id,
+      r.id as receipt_id,
+      r.issued_at,
+      r.status,
+      r.payload,
+      r.type as receipt_type,
+      r.reference_receipt_id,
+      r.refund_amount,
+      o.number as order_number,
+      o.customer_name,
+      o.total,
+      o.currency,
+      o.raw as order_raw
+    FROM receipts_${n} r
+    LEFT JOIN orders_${n} o ON o.id = r.order_id
+    WHERE r.issued_at BETWEEN $1 AND $2
+    ORDER BY r.id DESC
+  `, [startIso, endIso]);
+
   return result.rows;
 }
 
@@ -429,28 +352,30 @@ export async function listOrdersWithReceiptsForAudit(
   endIso: string,
   siteId: string
 ) {
-  const result = await sql`
-    select
-      orders.id,
-      orders.number,
-      orders.created_at,
-      orders.paid_at,
-      orders.total,
-      orders.currency,
-      orders.customer_name,
-      orders.customer_email,
-      orders.status,
-      orders.payment_status,
-      sale_receipts.id as receipt_id,
-      sale_receipts.issued_at as receipt_issued_at,
-      sale_receipts.type as receipt_type
-    from receipts as sale_receipts
-    inner join orders on orders.id = sale_receipts.order_id
-    where (orders.site_id = ${siteId})
-      and sale_receipts.type = 'sale'
-      and sale_receipts.issued_at between ${startIso} and ${endIso}
-    order by sale_receipts.id desc;
-  `;
+  const n = normalizeSiteId(siteId);
+
+  const result = await sql.query(`
+    SELECT
+      o.id,
+      o.number,
+      o.created_at,
+      o.paid_at,
+      o.total,
+      o.currency,
+      o.customer_name,
+      o.customer_email,
+      o.status,
+      o.payment_status,
+      r.id as receipt_id,
+      r.issued_at as receipt_issued_at,
+      r.type as receipt_type
+    FROM receipts_${n} r
+    INNER JOIN orders_${n} o ON o.id = r.order_id
+    WHERE r.type = 'sale'
+      AND r.issued_at BETWEEN $1 AND $2
+    ORDER BY r.id DESC
+  `, [startIso, endIso]);
+
   return result.rows;
 }
 
@@ -463,27 +388,29 @@ export async function listRefundReceiptsForAudit(
   endIso: string,
   siteId: string
 ) {
-  const result = await sql`
-    select
-      orders.id,
-      orders.number,
-      orders.created_at,
-      orders.paid_at,
-      orders.total,
-      orders.currency,
-      orders.raw,
-      refund_receipts.id as receipt_id,
-      refund_receipts.issued_at as receipt_issued_at,
-      refund_receipts.refund_amount,
-      refund_receipts.reference_receipt_id,
-      refund_receipts.return_payment_type
-    from receipts as refund_receipts
-    inner join orders on orders.id = refund_receipts.order_id
-    where (orders.site_id = ${siteId})
-      and refund_receipts.type = 'refund'
-      and refund_receipts.issued_at between ${startIso} and ${endIso}
-    order by refund_receipts.id asc;
-  `;
+  const n = normalizeSiteId(siteId);
+
+  const result = await sql.query(`
+    SELECT
+      o.id,
+      o.number,
+      o.created_at,
+      o.paid_at,
+      o.total,
+      o.currency,
+      o.raw,
+      r.id as receipt_id,
+      r.issued_at as receipt_issued_at,
+      r.refund_amount,
+      r.reference_receipt_id,
+      r.return_payment_type
+    FROM receipts_${n} r
+    INNER JOIN orders_${n} o ON o.id = r.order_id
+    WHERE r.type = 'refund'
+      AND r.issued_at BETWEEN $1 AND $2
+    ORDER BY r.id ASC
+  `, [startIso, endIso]);
+
   return result.rows;
 }
 
