@@ -53,6 +53,23 @@ interface Stats {
   trialUsers: number;
 }
 
+interface DbSchema {
+  name: string;
+  tableCount: number;
+}
+
+interface DbTable {
+  name: string;
+  rowCount: number;
+}
+
+interface DbColumn {
+  name: string;
+  type: string;
+  nullable: boolean;
+  default: string | null;
+}
+
 interface OrdersBySite {
   site_id: string;
   store_name: string;
@@ -72,7 +89,7 @@ const PLAN_LIMITS: Record<string, number> = {
 export default function AdminPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"overview" | "businesses" | "users" | "access">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "businesses" | "users" | "access" | "database">("overview");
   const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState<Stats | null>(null);
   const [businesses, setBusinesses] = useState<Business[]>([]);
@@ -86,6 +103,25 @@ export default function AdminPage() {
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [modalAction, setModalAction] = useState("");
+
+  // Database tab states
+  const [dbSchemas, setDbSchemas] = useState<DbSchema[]>([]);
+  const [dbTables, setDbTables] = useState<DbTable[]>([]);
+  const [dbData, setDbData] = useState<{
+    columns: DbColumn[];
+    primaryKeys: string[];
+    rows: Record<string, unknown>[];
+    total: number;
+    page: number;
+    totalPages: number;
+  } | null>(null);
+  const [dbView, setDbView] = useState<"schemas" | "tables" | "data">("schemas");
+  const [selectedSchema, setSelectedSchema] = useState<string | null>(null);
+  const [selectedTable, setSelectedTable] = useState<string | null>(null);
+  const [dbPage, setDbPage] = useState(1);
+  const [editingRow, setEditingRow] = useState<Record<string, unknown> | null>(null);
+  const [editFormData, setEditFormData] = useState<Record<string, unknown>>({});
+  const [dbLoading, setDbLoading] = useState(false);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -201,9 +237,141 @@ export default function AdminPage() {
     }
   }
 
+  async function handleSyncOrders(siteId: string, days: number = 7) {
+    setActionMessage("Синхронизиране...");
+    try {
+      const response = await fetch("/api/admin/sync-recent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ siteId, days }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Sync failed");
+
+      setActionMessage(`Синхронизирани ${data.syncedCount} поръчки (${data.archivedCount} архивирани)`);
+      loadData();
+    } catch (err) {
+      setActionMessage(`Грешка при синхронизиране: ${(err as Error).message}`);
+    }
+  }
+
+  // Database functions
+  async function loadSchemas() {
+    setDbLoading(true);
+    try {
+      const res = await fetch("/api/admin/database/schemas");
+      if (!res.ok) throw new Error("Failed to load schemas");
+      const data = await res.json();
+      setDbSchemas(data.schemas || []);
+    } catch (err) {
+      setActionMessage(`Грешка: ${(err as Error).message}`);
+    } finally {
+      setDbLoading(false);
+    }
+  }
+
+  async function loadTables(schema: string) {
+    setDbLoading(true);
+    try {
+      const res = await fetch(`/api/admin/database/tables?schema=${schema}`);
+      if (!res.ok) throw new Error("Failed to load tables");
+      const data = await res.json();
+      setDbTables(data.tables || []);
+      setSelectedSchema(schema);
+      setDbView("tables");
+    } catch (err) {
+      setActionMessage(`Грешка: ${(err as Error).message}`);
+    } finally {
+      setDbLoading(false);
+    }
+  }
+
+  async function loadTableData(schema: string, table: string, page: number = 1) {
+    setDbLoading(true);
+    try {
+      const res = await fetch(`/api/admin/database/data?schema=${schema}&table=${table}&page=${page}&limit=50`);
+      if (!res.ok) throw new Error("Failed to load data");
+      const data = await res.json();
+      setDbData(data);
+      setSelectedTable(table);
+      setDbPage(page);
+      setDbView("data");
+    } catch (err) {
+      setActionMessage(`Грешка: ${(err as Error).message}`);
+    } finally {
+      setDbLoading(false);
+    }
+  }
+
+  async function handleUpdateRow() {
+    if (!selectedSchema || !selectedTable || !editingRow) return;
+    const pk = dbData?.primaryKeys[0] || "id";
+    const id = editingRow[pk];
+
+    try {
+      const res = await fetch("/api/admin/database/data", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          schema: selectedSchema,
+          table: selectedTable,
+          id,
+          data: editFormData
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to update row");
+      setActionMessage("Редът е обновен успешно");
+      setEditingRow(null);
+      loadTableData(selectedSchema, selectedTable, dbPage);
+    } catch (err) {
+      setActionMessage(`Грешка: ${(err as Error).message}`);
+    }
+  }
+
+  async function handleDeleteRow(row: Record<string, unknown>) {
+    if (!selectedSchema || !selectedTable) return;
+    const pk = dbData?.primaryKeys[0] || "id";
+    const id = row[pk];
+
+    if (!confirm(`Сигурни ли сте, че искате да изтриете този ред (${pk}=${id})?`)) return;
+
+    try {
+      const res = await fetch("/api/admin/database/data", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          schema: selectedSchema,
+          table: selectedTable,
+          id
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to delete row");
+      setActionMessage("Редът е изтрит успешно");
+      loadTableData(selectedSchema, selectedTable, dbPage);
+    } catch (err) {
+      setActionMessage(`Грешка: ${(err as Error).message}`);
+    }
+  }
+
+  function startEditRow(row: Record<string, unknown>) {
+    setEditingRow(row);
+    setEditFormData({ ...row });
+  }
+
   function formatDate(dateStr: string | null) {
     if (!dateStr) return "—";
     return new Date(dateStr).toLocaleDateString("bg-BG");
+  }
+
+  function formatCellValue(value: unknown): string {
+    if (value === null || value === undefined) return "—";
+    if (typeof value === "object") {
+      const str = JSON.stringify(value);
+      return str.length > 50 ? str.substring(0, 47) + "..." : str;
+    }
+    const str = String(value);
+    return str.length > 50 ? str.substring(0, 47) + "..." : str;
   }
 
   function getDaysRemaining(dateStr: string | null) {
@@ -272,6 +440,9 @@ export default function AdminPage() {
           <button className={activeTab === "access" ? "active" : ""} onClick={() => setActiveTab("access")}>
             Достъп ({accessCodes.length})
           </button>
+          <button className={activeTab === "database" ? "active" : ""} onClick={() => { setActiveTab("database"); if (dbSchemas.length === 0) loadSchemas(); }}>
+            База данни
+          </button>
         </div>
 
         {/* Overview Tab */}
@@ -317,6 +488,7 @@ export default function AdminPage() {
                       <th>Поръчки</th>
                       <th>Бележки</th>
                       <th>Site ID</th>
+                      <th>Действия</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -328,10 +500,19 @@ export default function AdminPage() {
                         <td><strong>{site.order_count}</strong></td>
                         <td>{site.receipt_count}</td>
                         <td><code>{site.site_id?.slice(0, 12)}...</code></td>
+                        <td>
+                          <button
+                            className="admin-btn small"
+                            onClick={() => handleSyncOrders(site.site_id, 7)}
+                            title="Синхронизирай последните 7 дни"
+                          >
+                            Sync 7d
+                          </button>
+                        </td>
                       </tr>
                     ))}
                     {ordersBySite.length === 0 && (
-                      <tr><td colSpan={6} className="admin-empty">Няма поръчки</td></tr>
+                      <tr><td colSpan={7} className="admin-empty">Няма поръчки</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -499,6 +680,202 @@ export default function AdminPage() {
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* Database Tab */}
+        {activeTab === "database" && (
+          <div className="admin-database">
+            {dbLoading && <div className="db-loading">Зареждане...</div>}
+
+            {/* Schemas View */}
+            {dbView === "schemas" && !dbLoading && (
+              <div className="admin-section">
+                <h2>Схеми (магазини)</h2>
+                <div className="admin-table-wrapper">
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>Схема</th>
+                        <th>Таблици</th>
+                        <th>Действия</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dbSchemas.map((schema) => (
+                        <tr key={schema.name}>
+                          <td><code>{schema.name}</code></td>
+                          <td>{schema.tableCount} таблици</td>
+                          <td>
+                            <button className="admin-btn small" onClick={() => loadTables(schema.name)}>
+                              Виж таблици
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                      {dbSchemas.length === 0 && (
+                        <tr><td colSpan={3} className="admin-empty">Няма схеми</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Tables View */}
+            {dbView === "tables" && !dbLoading && selectedSchema && (
+              <div className="admin-section">
+                <div className="db-header">
+                  <h2>{selectedSchema}</h2>
+                  <button className="admin-btn small" onClick={() => setDbView("schemas")}>
+                    ← Назад
+                  </button>
+                </div>
+                <div className="admin-table-wrapper">
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>Таблица</th>
+                        <th>Редове</th>
+                        <th>Действия</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dbTables.map((table) => (
+                        <tr key={table.name}>
+                          <td><code>{table.name}</code></td>
+                          <td>{table.rowCount}</td>
+                          <td>
+                            <button className="admin-btn small" onClick={() => loadTableData(selectedSchema, table.name)}>
+                              Виж данни
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                      {dbTables.length === 0 && (
+                        <tr><td colSpan={3} className="admin-empty">Няма таблици</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Data View */}
+            {dbView === "data" && !dbLoading && dbData && selectedSchema && selectedTable && (
+              <div className="admin-section">
+                <div className="db-header">
+                  <h2>{selectedSchema}.{selectedTable}</h2>
+                  <button className="admin-btn small" onClick={() => { setDbView("tables"); setDbData(null); }}>
+                    ← Назад
+                  </button>
+                </div>
+                <div className="db-data-wrapper">
+                  <table className="admin-table db-data-table">
+                    <thead>
+                      <tr>
+                        {dbData.columns.slice(0, 6).map((col) => (
+                          <th key={col.name} title={`${col.type}${col.nullable ? ' (nullable)' : ''}`}>
+                            {col.name}
+                          </th>
+                        ))}
+                        <th>Действия</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dbData.rows.map((row, idx) => (
+                        <tr key={idx}>
+                          {dbData.columns.slice(0, 6).map((col) => (
+                            <td key={col.name} className="db-cell">
+                              {formatCellValue(row[col.name])}
+                            </td>
+                          ))}
+                          <td>
+                            <button className="admin-btn small" onClick={() => startEditRow(row)} title="Редактирай">
+                              ✏️
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                      {dbData.rows.length === 0 && (
+                        <tr><td colSpan={7} className="admin-empty">Няма данни</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                {/* Pagination */}
+                {dbData.totalPages > 1 && (
+                  <div className="db-pagination">
+                    <button
+                      className="admin-btn small"
+                      disabled={dbPage <= 1}
+                      onClick={() => loadTableData(selectedSchema, selectedTable, dbPage - 1)}
+                    >
+                      &lt; Prev
+                    </button>
+                    <span>Страница {dbPage} от {dbData.totalPages}</span>
+                    <button
+                      className="admin-btn small"
+                      disabled={dbPage >= dbData.totalPages}
+                      onClick={() => loadTableData(selectedSchema, selectedTable, dbPage + 1)}
+                    >
+                      Next &gt;
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Edit Row Modal */}
+        {editingRow && dbData && (
+          <div className="admin-modal-overlay" onClick={() => setEditingRow(null)}>
+            <div className="admin-modal edit-modal" onClick={(e) => e.stopPropagation()}>
+              <h3>Редактиране на ред</h3>
+              <div className="edit-form">
+                {dbData.columns.map((col) => (
+                  <div key={col.name} className="edit-field">
+                    <label>{col.name} <span className="field-type">({col.type})</span></label>
+                    {dbData.primaryKeys.includes(col.name) ? (
+                      <input
+                        type="text"
+                        value={String(editFormData[col.name] ?? '')}
+                        disabled
+                        className="edit-input disabled"
+                      />
+                    ) : col.type === 'jsonb' || col.type === 'json' ? (
+                      <textarea
+                        value={typeof editFormData[col.name] === 'object'
+                          ? JSON.stringify(editFormData[col.name], null, 2)
+                          : String(editFormData[col.name] ?? '')}
+                        onChange={(e) => {
+                          try {
+                            setEditFormData({ ...editFormData, [col.name]: JSON.parse(e.target.value) });
+                          } catch {
+                            setEditFormData({ ...editFormData, [col.name]: e.target.value });
+                          }
+                        }}
+                        className="edit-textarea"
+                        rows={4}
+                      />
+                    ) : (
+                      <input
+                        type="text"
+                        value={String(editFormData[col.name] ?? '')}
+                        onChange={(e) => setEditFormData({ ...editFormData, [col.name]: e.target.value })}
+                        className="edit-input"
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div className="modal-buttons">
+                <button className="admin-btn success" onClick={handleUpdateRow}>Запази</button>
+                <button className="admin-btn danger" onClick={() => { handleDeleteRow(editingRow); setEditingRow(null); }}>Изтрий</button>
+                <button className="admin-btn" onClick={() => setEditingRow(null)}>Отказ</button>
+              </div>
             </div>
           </div>
         )}
@@ -816,6 +1193,89 @@ export default function AdminPage() {
           padding: 0.5rem;
           border-radius: 6px;
           cursor: pointer;
+        }
+        /* Database tab styles */
+        .db-loading {
+          text-align: center;
+          padding: 2rem;
+          color: #888;
+        }
+        .db-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 1rem;
+        }
+        .db-header h2 {
+          margin: 0;
+        }
+        .db-data-wrapper {
+          overflow-x: auto;
+        }
+        .db-data-table {
+          min-width: 100%;
+          table-layout: auto;
+        }
+        .db-cell {
+          max-width: 200px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          font-family: monospace;
+          font-size: 0.8rem;
+        }
+        .db-pagination {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          gap: 1rem;
+          margin-top: 1rem;
+          padding: 0.75rem;
+          color: #888;
+        }
+        .db-pagination button:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+        .edit-modal {
+          max-width: 600px;
+          max-height: 80vh;
+          overflow-y: auto;
+        }
+        .edit-form {
+          display: flex;
+          flex-direction: column;
+          gap: 0.75rem;
+          margin-bottom: 1rem;
+        }
+        .edit-field {
+          display: flex;
+          flex-direction: column;
+          gap: 0.25rem;
+        }
+        .edit-field label {
+          color: #888;
+          font-size: 0.75rem;
+        }
+        .field-type {
+          color: #666;
+        }
+        .edit-input, .edit-textarea {
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 6px;
+          padding: 0.5rem;
+          color: #fff;
+          font-family: monospace;
+          font-size: 0.85rem;
+        }
+        .edit-input.disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+        .edit-textarea {
+          resize: vertical;
+          min-height: 80px;
         }
       `}</style>
     </main>

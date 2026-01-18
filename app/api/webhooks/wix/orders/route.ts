@@ -950,6 +950,37 @@ export async function POST(request: NextRequest) {
             console.log("📦 Extracted order from entity (canceled)");
             console.log("📦 Canceled order data:", JSON.stringify(orderData, null, 2).substring(0, 1000));
           }
+          // For order.archived events
+          else if (slug === "archived") {
+            orderData = eventData.archivedEvent?.entity ??
+              eventData.archivedEvent?.order ??
+              eventData.entity ??
+              eventData.order ??
+              null;
+            if (orderData) {
+              // Ensure archived flag is set
+              orderData = { ...orderData, archived: true };
+              console.log("📦 Extracted order from archived event");
+            }
+          }
+          // For order.rejected events
+          else if (slug === "rejected") {
+            orderData = eventData.entity ?? eventData.order ?? null;
+            if (orderData) {
+              console.log("📦 Extracted order from rejected event");
+            }
+          }
+          // Generic fallback for any other order event types
+          else if (!orderData) {
+            orderData = eventData.entity ??
+              eventData.order ??
+              eventData.updatedEvent?.currentEntity ??
+              eventData.actionEvent?.body?.order ??
+              null;
+            if (orderData) {
+              console.log(`📦 Extracted order from generic fallback for slug: ${slug}`);
+            }
+          }
 
           if (orderData) {
             console.log("✅ Found order data, ID:", orderData.id);

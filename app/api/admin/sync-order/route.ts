@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchOrderDetails, pickOrderFields, needsOrderEnrichment, extractTransactionRef, extractDeliveryMethodFromOrder, fetchTransactionRefForOrder, fetchPaymentRecordForOrder, fetchOrderTransactionsForOrder, extractPaymentSummaryFromPayment } from "@/lib/wix";
 import { initDb, upsertOrder } from "@/lib/db";
+import { upsertTenantOrder, TenantOrder, tenantTablesExist, createTenantTables } from "@/lib/tenant-db";
 
 export async function POST(request: NextRequest) {
   const { orderId, adminSecret, siteId } = await request.json();
@@ -135,12 +136,49 @@ export async function POST(request: NextRequest) {
       mapped.siteId = targetSiteId;
     }
 
-    // Upsert to database
+    // Upsert to legacy shared table
     await upsertOrder({
       ...mapped,
       businessId: null,
       raw: orderRaw,
     });
+
+    // Also upsert to tenant-specific table
+    if (mapped.siteId) {
+      try {
+        const tablesExist = await tenantTablesExist(mapped.siteId);
+        if (!tablesExist) {
+          await createTenantTables(mapped.siteId);
+        }
+
+        const tenantOrder: TenantOrder = {
+          id: mapped.id,
+          number: mapped.number,
+          status: mapped.status,
+          paymentStatus: mapped.paymentStatus,
+          createdAt: mapped.createdAt,
+          updatedAt: mapped.updatedAt,
+          paidAt: mapped.paidAt,
+          currency: mapped.currency,
+          subtotal: mapped.subtotal,
+          taxTotal: mapped.taxTotal,
+          shippingTotal: mapped.shippingTotal,
+          discountTotal: mapped.discountTotal,
+          total: mapped.total,
+          customerEmail: mapped.customerEmail,
+          customerName: mapped.customerName,
+          source: "webhook", // Admin sync uses webhook source
+          isSynced: true, // Synced orders are not chargeable
+          raw: orderRaw,
+        };
+
+        await upsertTenantOrder(mapped.siteId, tenantOrder);
+        console.log("✅ Order synced to tenant table:", mapped.number);
+      } catch (tenantError) {
+        console.error("Failed to sync to tenant table:", tenantError);
+        // Continue - legacy table was saved
+      }
+    }
 
     return NextResponse.json({
       success: true,
@@ -149,6 +187,7 @@ export async function POST(request: NextRequest) {
         number: mapped.number,
         status: mapped.status,
         paymentStatus: mapped.paymentStatus,
+        archived: orderRaw?.archived ?? false,
       }
     });
 
