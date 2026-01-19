@@ -22,11 +22,25 @@ export async function POST(request: Request) {
       } else if (instanceIdCookie) {
         // Try to get site_id from wix_tokens using instance_id
         const tokenResult = await sql`
-          SELECT site_id FROM wix_tokens WHERE instance_id = ${instanceIdCookie} LIMIT 1
+          SELECT site_id FROM wix_tokens WHERE instance_id = ${instanceIdCookie} AND site_id IS NOT NULL LIMIT 1
         `;
         if (tokenResult.rows[0]?.site_id) {
           wixSiteId = tokenResult.rows[0].site_id;
           console.log("Resolved site_id from instance_id:", wixSiteId);
+        }
+      }
+
+      // Last resort: get the most recent wix_tokens entry with a site_id
+      if (!wixSiteId) {
+        const recentToken = await sql`
+          SELECT site_id, instance_id FROM wix_tokens
+          WHERE site_id IS NOT NULL
+          ORDER BY created_at DESC
+          LIMIT 1
+        `;
+        if (recentToken.rows[0]?.site_id) {
+          wixSiteId = recentToken.rows[0].site_id;
+          console.log("Using most recent site_id from wix_tokens:", wixSiteId);
         }
       }
     }
