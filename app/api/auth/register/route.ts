@@ -114,12 +114,14 @@ export async function POST(request: Request) {
             SET business_id = ${businessId}, user_id = ${userId}, role = 'owner', updated_at = NOW()
             WHERE site_id = ${wixSiteId}
           `;
+          console.log("✅ Updated existing store_connection for site:", wixSiteId);
         } else {
-          // Create new store connection
+          // Create new store connection (id is bigint with auto-increment, don't specify it)
           await sql`
-            INSERT INTO store_connections (id, business_id, user_id, site_id, instance_id, role, store_name, provider, created_at, updated_at)
-            VALUES (gen_random_uuid(), ${businessId}, ${userId}, ${wixSiteId}, ${instanceId}, 'owner', ${finalStoreName}, 'wix', NOW(), NOW())
+            INSERT INTO store_connections (business_id, user_id, site_id, instance_id, role, store_name, provider)
+            VALUES (${businessId}, ${userId}, ${wixSiteId}, ${instanceId}, 'owner', ${finalStoreName}, 'wix')
           `;
+          console.log("✅ Created new store_connection for site:", wixSiteId);
         }
 
         console.log("✅ Linked Wix store to new user:", { userId, wixSiteId });
