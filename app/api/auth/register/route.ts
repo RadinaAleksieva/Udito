@@ -110,11 +110,47 @@ export async function POST(request: Request) {
     // If coming from Wix, link the store to the user
     if (fromWix && wixSiteId) {
       try {
-        // Get instance_id from wix_tokens if available
+        // Get instance_id and other info from wix_tokens
         const wixTokens = await sql`
           SELECT instance_id FROM wix_tokens WHERE site_id = ${wixSiteId} LIMIT 1
         `;
         const instanceId = wixTokens.rows[0]?.instance_id || null;
+
+        // Get store_domain and store_name from tenant company table (created by OAuth callback)
+        const normalizedSiteId = wixSiteId.replace(/-/g, "_").replace(/[^a-zA-Z0-9_]/g, "");
+        const schemaName = `site_${normalizedSiteId}`;
+
+        let storeDomain: string | null = null;
+        let storeNameFromDb: string | null = null;
+
+        // Try to get store info from tenant company table
+        try {
+          const companyResult = await sql.query(`
+            SELECT store_domain, store_name FROM "${schemaName}".company WHERE site_id = $1 LIMIT 1
+          `, [wixSiteId]);
+
+          if (companyResult.rows[0]) {
+            storeDomain = companyResult.rows[0].store_domain;
+            storeNameFromDb = companyResult.rows[0].store_name;
+            console.log("Got store info from tenant company:", { storeDomain, storeNameFromDb });
+          }
+        } catch (schemaError) {
+          console.log("Could not read tenant company (schema may not exist yet)");
+        }
+
+        // Fallback: try public.companies table
+        if (!storeDomain) {
+          const publicCompany = await sql`
+            SELECT store_domain, store_name, schema_name FROM companies WHERE site_id = ${wixSiteId} LIMIT 1
+          `;
+          if (publicCompany.rows[0]) {
+            storeDomain = publicCompany.rows[0].store_domain;
+            storeNameFromDb = storeNameFromDb || publicCompany.rows[0].store_name;
+          }
+        }
+
+        // Use the best available store name
+        const bestStoreName = storeNameFromDb || storeName?.trim() || (storeDomain ? storeDomain : "Wix Store");
 
         // Check if store_connection already exists for this site_id
         const existingConnection = await sql`
@@ -122,23 +158,29 @@ export async function POST(request: Request) {
         `;
 
         if (existingConnection.rows.length > 0) {
-          // Update existing connection to link to new user
+          // Update existing connection to link to new user AND add schema_name/store_domain
           await sql`
             UPDATE store_connections
-            SET business_id = ${businessId}, user_id = ${userId}, role = 'owner', updated_at = NOW()
+            SET business_id = ${businessId},
+                user_id = ${userId},
+                role = 'owner',
+                schema_name = COALESCE(schema_name, ${schemaName}),
+                store_domain = COALESCE(store_domain, ${storeDomain}),
+                store_name = COALESCE(NULLIF(store_name, 'Wix Store'), ${bestStoreName}),
+                updated_at = NOW()
             WHERE site_id = ${wixSiteId}
           `;
-          console.log("✅ Updated existing store_connection for site:", wixSiteId);
+          console.log("✅ Updated existing store_connection for site:", wixSiteId, { schemaName, storeDomain, bestStoreName });
         } else {
-          // Create new store connection (id is bigint with auto-increment, don't specify it)
+          // Create new store connection with schema_name and store_domain
           await sql`
-            INSERT INTO store_connections (business_id, user_id, site_id, instance_id, role, store_name, provider)
-            VALUES (${businessId}, ${userId}, ${wixSiteId}, ${instanceId}, 'owner', ${finalStoreName}, 'wix')
+            INSERT INTO store_connections (business_id, user_id, site_id, instance_id, role, store_name, store_domain, schema_name, provider)
+            VALUES (${businessId}, ${userId}, ${wixSiteId}, ${instanceId}, 'owner', ${bestStoreName}, ${storeDomain}, ${schemaName}, 'wix')
           `;
-          console.log("✅ Created new store_connection for site:", wixSiteId);
+          console.log("✅ Created new store_connection for site:", wixSiteId, { schemaName, storeDomain, bestStoreName });
         }
 
-        console.log("✅ Linked Wix store to new user:", { userId, wixSiteId });
+        console.log("✅ Linked Wix store to new user:", { userId, wixSiteId, schemaName, storeDomain });
       } catch (linkError) {
         // Don't fail registration if store linking fails
         console.error("Failed to link Wix store:", linkError);

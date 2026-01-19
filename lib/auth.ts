@@ -438,15 +438,10 @@ export function createAuthOptions(siteId: string | null): NextAuthOptions {
     },
     callbacks: {
       async signIn({ user, account }) {
-        // Store site_id in session for later use
-        if (siteId && user?.id) {
-          try {
-            // Link user to store if not already linked
-            await linkStoreToUser(user.id, siteId);
-          } catch (error) {
-            console.error("[signIn] Error linking store to user:", error);
-          }
-        }
+        // SECURITY: Do NOT auto-link stores here!
+        // Store linking must be done EXPLICITLY through /api/stores/link
+        // after user confirmation on /add-store page.
+        // Auto-linking would allow attackers to hijack stores.
         return true;
       },
       async jwt({ token, user }) {
@@ -578,7 +573,7 @@ export async function getActiveStore(requestedStoreId?: string | null): Promise<
  */
 export async function getUserStores(userId: string) {
   const result = await sql`
-    SELECT sc.id, sc.site_id, sc.instance_id, sc.user_id, sc.connected_at, sc.schema_name,
+    SELECT sc.id, sc.site_id, sc.instance_id, sc.user_id, sc.connected_at, sc.schema_name, sc.role,
            COALESCE(sc.store_name, c.store_name) as store_name,
            c.store_domain
     FROM store_connections sc

@@ -36,6 +36,7 @@ const schemaCache = new Map<string, string>();
 
 /**
  * Взима schema name за даден siteId от базата или кеша
+ * Автоматично поправя липсващи schema_name стойности
  * Връща null ако schema не е намерена (вместо да хвърля грешка)
  */
 export async function getSchemaForSite(siteId: string): Promise<string | null> {
@@ -47,7 +48,7 @@ export async function getSchemaForSite(siteId: string): Promise<string | null> {
 
   // Lookup from store_connections
   const result = await sql.query(`
-    SELECT schema_name FROM store_connections WHERE site_id = $1 LIMIT 1
+    SELECT id, schema_name FROM store_connections WHERE site_id = $1 LIMIT 1
   `, [siteId]);
 
   if (result.rows.length > 0 && result.rows[0].schema_name) {
@@ -56,15 +57,70 @@ export async function getSchemaForSite(siteId: string): Promise<string | null> {
     return schemaName;
   }
 
-  // Fallback: try companies table
-  const companyResult = await sql.query(`
-    SELECT schema_name FROM companies WHERE site_id = $1 LIMIT 1
-  `, [siteId]);
+  // AUTO-FIX: If store_connection exists but schema_name is NULL, try to find and fix it
+  if (result.rows.length > 0 && !result.rows[0].schema_name) {
+    const connectionId = result.rows[0].id;
+    const expectedSchema = `site_${normalizeSiteId(siteId)}`;
 
-  if (companyResult.rows.length > 0 && companyResult.rows[0].schema_name) {
-    const schemaName = companyResult.rows[0].schema_name;
-    schemaCache.set(siteId, schemaName);
-    return schemaName;
+    // Check if schema actually exists in PostgreSQL
+    const schemaExists = await sql.query(`
+      SELECT schema_name FROM information_schema.schemata WHERE schema_name = $1
+    `, [expectedSchema]);
+
+    if (schemaExists.rows.length > 0) {
+      // Schema exists! Auto-fix the store_connection
+      await sql.query(`
+        UPDATE store_connections SET schema_name = $1 WHERE id = $2
+      `, [expectedSchema, connectionId]);
+      console.log(`[getSchemaForSite] AUTO-FIXED: Set schema_name=${expectedSchema} for site ${siteId}`);
+      schemaCache.set(siteId, expectedSchema);
+      return expectedSchema;
+    }
+  }
+
+  // Fallback: try companies table (legacy)
+  try {
+    const companyResult = await sql.query(`
+      SELECT schema_name FROM companies WHERE site_id = $1 LIMIT 1
+    `, [siteId]);
+
+    if (companyResult.rows.length > 0 && companyResult.rows[0].schema_name) {
+      const schemaName = companyResult.rows[0].schema_name;
+      schemaCache.set(siteId, schemaName);
+
+      // Also fix store_connections if it exists
+      if (result.rows.length > 0) {
+        await sql.query(`
+          UPDATE store_connections SET schema_name = $1 WHERE site_id = $2 AND schema_name IS NULL
+        `, [schemaName, siteId]);
+        console.log(`[getSchemaForSite] AUTO-FIXED from companies table: ${schemaName}`);
+      }
+
+      return schemaName;
+    }
+  } catch {
+    // companies table might not exist
+  }
+
+  // Last resort: check if schema exists by pattern
+  const expectedSchema = `site_${normalizeSiteId(siteId)}`;
+  const schemaCheck = await sql.query(`
+    SELECT schema_name FROM information_schema.schemata WHERE schema_name = $1
+  `, [expectedSchema]);
+
+  if (schemaCheck.rows.length > 0) {
+    console.log(`[getSchemaForSite] Found orphan schema ${expectedSchema}, caching it`);
+    schemaCache.set(siteId, expectedSchema);
+
+    // Try to fix store_connections
+    if (result.rows.length > 0) {
+      await sql.query(`
+        UPDATE store_connections SET schema_name = $1 WHERE site_id = $2
+      `, [expectedSchema, siteId]);
+      console.log(`[getSchemaForSite] AUTO-FIXED orphan: Set schema_name=${expectedSchema}`);
+    }
+
+    return expectedSchema;
   }
 
   // No schema found - return null (let caller decide what to do)
@@ -136,15 +192,24 @@ export async function createTenantTables(siteId: string, schemaName?: string): P
   // Create the schema
   await sql.query(`CREATE SCHEMA IF NOT EXISTS "${schema}"`);
 
-  // UPSERT store_connections - ако няма запис, създава го
-  await sql.query(`
-    INSERT INTO store_connections (site_id, schema_name, provider, connected_at)
-    VALUES ($1, $2, 'wix', NOW())
-    ON CONFLICT (site_id) DO UPDATE SET schema_name = $2
+  // ALWAYS ensure schema_name is set in store_connections
+  // First try to update existing row
+  const updateResult = await sql.query(`
+    UPDATE store_connections
+    SET schema_name = COALESCE(schema_name, $2)
+    WHERE site_id = $1
+    RETURNING id
   `, [siteId, schema]);
 
-  // Cache it
+  // If no row exists, we need to log this - the row should be created by register API
+  if (updateResult.rowCount === 0) {
+    console.warn(`[createTenantTables] No store_connection found for site ${siteId}, schema_name not saved to DB`);
+    // Still cache it locally for this request
+  }
+
+  // Cache it for fast lookup
   schemaCache.set(siteId, schema);
+  console.log(`[createTenantTables] Cached schema ${schema} for site ${siteId}`);
 
   // ==========================================================================
   // USERS TABLE - потребители с достъп до магазина
@@ -290,9 +355,16 @@ export async function createTenantTables(siteId: string, schemaName?: string): P
       type text DEFAULT 'sale',
       reference_receipt_id bigint,
       refund_amount numeric,
-      return_payment_type integer DEFAULT 2
+      return_payment_type integer DEFAULT 2,
+      transaction_ref text
     )
   `);
+
+  // Add transaction_ref column if it doesn't exist (for existing tables)
+  await sql.query(`
+    ALTER TABLE "${schema}".receipts
+    ADD COLUMN IF NOT EXISTS transaction_ref text
+  `).catch(() => {});
 
   // Unique constraint: one sale + one refund per order
   await sql.query(`
@@ -475,6 +547,47 @@ export async function upsertTenantOrder(siteId: string, order: TenantOrder): Pro
   const paidAt = order.paidAt ? new Date(order.paidAt).toISOString() : null;
   const isSynced = order.isSynced ?? false;
 
+  // CRITICAL FIX: Extract totals from raw JSON as fallback when direct values are null
+  // This ensures we never lose financial data even if the webhook payload structure varies
+  const raw = order.raw || {};
+  const priceSummary = raw?.priceSummary || raw?.totals || raw?.payNow || raw?.balanceSummary || {};
+
+  const extractAmount = (value: any): number | null => {
+    if (value == null) return null;
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string') {
+      const parsed = parseFloat(value.replace(',', '.'));
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+    if (typeof value === 'object') {
+      const amount = value?.amount ?? value?.value ?? value?.total ?? null;
+      if (amount != null) return extractAmount(amount);
+    }
+    return null;
+  };
+
+  // Use order values if present, otherwise extract from raw
+  const total = order.total ?? extractAmount(priceSummary?.total ?? priceSummary?.totalAmount ?? priceSummary?.paid);
+  const subtotal = order.subtotal ?? extractAmount(priceSummary?.subtotal);
+  const taxTotal = order.taxTotal ?? extractAmount(priceSummary?.tax ?? priceSummary?.taxAmount);
+  const shippingTotal = order.shippingTotal ?? extractAmount(priceSummary?.shipping ?? priceSummary?.shippingAmount);
+  const discountTotal = order.discountTotal ?? extractAmount(priceSummary?.discount?.amount ?? priceSummary?.discount);
+  const currency = order.currency ?? priceSummary?.currency ?? raw?.currency ?? 'EUR';
+
+  // Also extract customer info from raw if missing
+  const buyerInfo = raw?.buyerInfo || raw?.buyer || raw?.customerInfo || {};
+  const billingContact = raw?.billingInfo?.contactDetails || raw?.billingInfo || {};
+  const customerName = order.customerName ||
+    [buyerInfo?.firstName, buyerInfo?.lastName].filter(Boolean).join(' ') ||
+    [billingContact?.firstName, billingContact?.lastName].filter(Boolean).join(' ') ||
+    null;
+  const customerEmail = order.customerEmail || buyerInfo?.email || billingContact?.email || null;
+
+  // Debug log if we're using fallback extraction
+  if (order.total == null && total != null) {
+    console.log(`[upsertTenantOrder] Order ${order.number}: Using fallback total extraction: ${total} ${currency}`);
+  }
+
   await sql.query(`
     INSERT INTO "${schema}".orders (
       id, number, status, payment_status, created_at, updated_at, paid_at,
@@ -511,14 +624,14 @@ export async function upsertTenantOrder(siteId: string, order: TenantOrder): Pro
     createdAt,
     updatedAt,
     paidAt,
-    order.currency,
-    order.subtotal,
-    order.taxTotal,
-    order.shippingTotal,
-    order.discountTotal,
-    order.total,
-    order.customerEmail,
-    order.customerName,
+    currency, // Use extracted value with fallback
+    subtotal, // Use extracted value with fallback
+    taxTotal, // Use extracted value with fallback
+    shippingTotal, // Use extracted value with fallback
+    discountTotal, // Use extracted value with fallback
+    total, // Use extracted value with fallback
+    customerEmail, // Use extracted value with fallback
+    customerName, // Use extracted value with fallback
     order.source,
     isSynced,
     JSON.stringify(order.raw),
@@ -551,11 +664,9 @@ export async function listTenantOrders(siteId: string, options?: {
   const params: any[] = [];
   const conditions: string[] = [];
 
-  // Exclude archived orders
+  // Filter: exclude CANCELED orders, but show archived orders that are not canceled
+  conditions.push(`(status IS NULL OR UPPER(status) NOT IN ('CANCELED', 'CANCELLED'))`);
   conditions.push(`(status IS NULL OR LOWER(status) NOT LIKE 'archiv%')`);
-  conditions.push(`COALESCE(raw->>'archived', 'false') <> 'true'`);
-  conditions.push(`COALESCE(raw->>'isArchived', 'false') <> 'true'`);
-  conditions.push(`raw->>'archivedAt' IS NULL`);
 
   if (options?.startDate) {
     params.push(options.startDate);
@@ -587,11 +698,9 @@ export async function countTenantOrders(siteId: string, options?: {
   const params: any[] = [];
   const conditions: string[] = [];
 
-  // Exclude archived orders
+  // Filter: exclude CANCELED orders, but show archived orders that are not canceled
+  conditions.push(`(status IS NULL OR UPPER(status) NOT IN ('CANCELED', 'CANCELLED'))`);
   conditions.push(`(status IS NULL OR LOWER(status) NOT LIKE 'archiv%')`);
-  conditions.push(`COALESCE(raw->>'archived', 'false') <> 'true'`);
-  conditions.push(`COALESCE(raw->>'isArchived', 'false') <> 'true'`);
-  conditions.push(`raw->>'archivedAt' IS NULL`);
 
   if (options?.startDate) {
     params.push(options.startDate);
@@ -639,17 +748,15 @@ export async function getTenantStats(siteId: string): Promise<{
     };
   }
 
-  // Count orders (excluding archived)
+  // Count orders (exclude CANCELED, but show archived non-canceled orders)
   const ordersResult = await sql.query(`
     SELECT
       COUNT(*) as total,
       COUNT(*) FILTER (WHERE is_synced = true) as synced,
       COUNT(*) FILTER (WHERE is_synced = false) as new
     FROM "${schema}".orders
-    WHERE (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
-      AND COALESCE(raw->>'archived', 'false') <> 'true'
-      AND COALESCE(raw->>'isArchived', 'false') <> 'true'
-      AND raw->>'archivedAt' IS NULL
+    WHERE (status IS NULL OR UPPER(status) NOT IN ('CANCELED', 'CANCELLED'))
+      AND (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
   `);
 
   // Count receipts
@@ -687,6 +794,7 @@ export interface TenantReceipt {
   referenceReceiptId?: number | null;
   refundAmount?: number | null;
   returnPaymentType?: number | null;
+  transactionRef?: string | null;
 }
 
 export async function getNextTenantReceiptId(siteId: string): Promise<number> {
@@ -717,11 +825,11 @@ export async function issueTenantReceipt(siteId: string, receipt: TenantReceipt)
     const result = await sql.query(`
       INSERT INTO "${schema}".receipts (
         id, order_id, issued_at, payload, type,
-        reference_receipt_id, refund_amount, return_payment_type
+        reference_receipt_id, refund_amount, return_payment_type, transaction_ref
       )
       SELECT
         COALESCE(MAX(id), 0) + 1,
-        $1, $2, $3, $4, $5, $6, $7
+        $1, $2, $3, $4, $5, $6, $7, $8
       FROM "${schema}".receipts
       ON CONFLICT (order_id, type) DO NOTHING
       RETURNING id
@@ -733,6 +841,7 @@ export async function issueTenantReceipt(siteId: string, receipt: TenantReceipt)
       receipt.referenceReceiptId,
       receipt.refundAmount,
       receipt.returnPaymentType ?? 2,
+      receipt.transactionRef ?? null,
     ]);
 
     if (result.rows.length > 0) {

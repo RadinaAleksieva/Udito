@@ -4,9 +4,37 @@ import { linkStoreToUser } from "@/lib/auth";
 import { getAppInstanceDetails } from "@/lib/wix";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { createTenantTables, tenantTablesExist } from "@/lib/tenant-db";
+import { createTenantTables, tenantTablesExist, updateTenantCompany } from "@/lib/tenant-db";
 
 const WIX_API_BASE = process.env.WIX_API_BASE || "https://www.wixapis.com";
+
+async function fetchSiteInfo(accessToken: string, siteId: string | null): Promise<{ domain: string | null; name: string | null }> {
+  try {
+    const authHeader = accessToken.startsWith("Bearer ") ? accessToken : `Bearer ${accessToken}`;
+    const response = await fetch(`${WIX_API_BASE}/sites/v1/site`, {
+      method: "GET",
+      headers: {
+        Authorization: authHeader,
+        ...(siteId ? { "wix-site-id": siteId } : {}),
+      },
+    });
+
+    if (!response.ok) {
+      console.warn("Failed to fetch site info:", response.status);
+      return { domain: null, name: null };
+    }
+
+    const data = await response.json();
+    const site = data?.site ?? data?.data ?? data ?? {};
+    const domain = site?.displayUrl ?? site?.url ?? site?.siteDisplayUrl ?? site?.siteUrl ?? site?.domain ?? null;
+    const name = site?.displayName ?? site?.name ?? site?.siteName ?? null;
+    console.log("Fetched site info:", { domain, name });
+    return { domain, name };
+  } catch (error) {
+    console.error("Error fetching site info:", error);
+    return { domain: null, name: null };
+  }
+}
 
 async function registerWebhooks(accessToken: string, siteId: string, instanceId: string | null, appBaseUrl: string) {
   try {
@@ -213,6 +241,15 @@ export async function GET(request: Request) {
     expiresAt,
   });
 
+  // Fetch site info (domain/name) from Wix
+  let storeDomain: string | null = null;
+  let storeName: string | null = null;
+  if (resolvedSiteId && data.access_token) {
+    const siteInfo = await fetchSiteInfo(data.access_token, resolvedSiteId);
+    storeDomain = siteInfo.domain;
+    storeName = siteInfo.name;
+  }
+
   // Create tenant-specific tables if they don't exist
   if (resolvedSiteId) {
     try {
@@ -223,6 +260,30 @@ export async function GET(request: Request) {
         console.log("✅ Tenant tables created for:", resolvedSiteId);
       } else {
         console.log("Tenant tables already exist for:", resolvedSiteId);
+      }
+
+      // Save store domain and name to tenant company
+      if (storeDomain || storeName) {
+        await updateTenantCompany(resolvedSiteId, {
+          storeDomain: storeDomain ?? undefined,
+          storeName: storeName ?? undefined,
+        });
+        console.log("✅ Saved store info:", { storeDomain, storeName });
+      }
+
+      // Also update store_connections with name, domain and schema_name
+      const normalizedSiteId = resolvedSiteId.replace(/-/g, "_").replace(/[^a-zA-Z0-9_]/g, "");
+      const schemaName = `site_${normalizedSiteId}`;
+
+      if (storeName || storeDomain) {
+        await sql`
+          UPDATE store_connections
+          SET store_name = COALESCE(${storeName}, ${storeDomain}, store_name),
+              store_domain = COALESCE(${storeDomain}, store_domain),
+              schema_name = COALESCE(schema_name, ${schemaName})
+          WHERE site_id = ${resolvedSiteId}
+        `;
+        console.log("✅ Updated store_connections:", { storeName, storeDomain, schemaName });
       }
     } catch (error) {
       console.error("Failed to create tenant tables:", error);
@@ -248,42 +309,13 @@ export async function GET(request: Request) {
     });
   }
 
-  // Check if user is logged in and link the store to them
+  // SECURITY: Always redirect to register for new Wix installations
+  // DO NOT auto-link stores based on existing session - this would be a data leak
+  // Each store installation requires explicit user authentication
   let redirectPath = "/register";
   let redirectParams = `from=wix&store=${resolvedSiteId || ''}`;
 
-  console.log("OAuth callback - redirect will use:", { redirectPath, redirectParams, resolvedSiteId });
-
-  try {
-    const session = await getServerSession(authOptions);
-    if (session?.user?.id) {
-      // Verify user actually exists in database (session might be stale)
-      const userCheck = await sql`
-        SELECT u.id FROM users u
-        JOIN business_users bu ON bu.user_id = u.id
-        WHERE u.id = ${session.user.id}
-        LIMIT 1
-      `;
-
-      if (userCheck.rows.length > 0) {
-        // User exists and has a business - link the store
-        if (resolvedSiteId) {
-          await linkStoreToUser(session.user.id, resolvedSiteId, resolvedInstanceId ?? undefined);
-          console.log("✅ Linked store to user:", session.user.id, resolvedSiteId);
-        }
-        redirectPath = "/onboarding";
-        redirectParams = `connected=1&store=${resolvedSiteId || ''}`;
-      } else {
-        // User doesn't exist or has no business - treat as new user
-        console.log("⚠️ User session exists but user not found in DB, redirecting to register");
-      }
-    } else {
-      // No user logged in - redirect to register with Wix context
-      console.log("📝 No user session, redirecting to register with Wix context");
-    }
-  } catch (error) {
-    console.error("Failed to link store to user:", error);
-  }
+  console.log("OAuth callback - redirecting to register (no auto-link for security):", { resolvedSiteId });
 
   // Redirect after successful OAuth
   const responseRedirect = NextResponse.redirect(`${appBaseUrl}${redirectPath}?${redirectParams}`);

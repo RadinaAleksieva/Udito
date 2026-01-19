@@ -98,6 +98,31 @@ export default function OnboardingPlanPage() {
     setShowPaymentForm(false);
   }
 
+  async function handleSkipPayment() {
+    if (!selectedPlan || !businessId) return;
+
+    try {
+      const response = await fetch("/api/onboarding/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          planId: selectedPlan,
+          skipPayment: true,
+        }),
+      });
+
+      if (response.ok) {
+        router.push("/overview");
+      } else {
+        const data = await response.json();
+        setStatusMessage(data.error || "Грешка при завършване на регистрацията");
+      }
+    } catch (error) {
+      console.error("Skip payment error:", error);
+      setStatusMessage("Грешка при завършване на регистрацията");
+    }
+  }
+
   if (status === "loading" || isLoading) {
     return (
       <main className="login-page">
@@ -263,6 +288,16 @@ export default function OnboardingPlanPage() {
                 Продължи към плащане
               </button>
             </div>
+
+            <button
+              type="button"
+              className="login-btn login-btn--ghost"
+              onClick={handleSkipPayment}
+              disabled={!selectedPlan}
+              style={{ marginTop: "16px" }}
+            >
+              Пропусни плащането (за тестове)
+            </button>
           </form>
 
           <p className="login-footer">

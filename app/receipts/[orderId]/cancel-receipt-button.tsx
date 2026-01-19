@@ -5,9 +5,11 @@ import { useState } from "react";
 type Props = {
   receiptId: number;
   receiptType: string;
+  orderId: string;
+  storeId: string;
 };
 
-export default function CancelReceiptButton({ receiptId, receiptType }: Props) {
+export default function CancelReceiptButton({ receiptId, receiptType, orderId, storeId }: Props) {
   const [canceling, setCanceling] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
@@ -17,7 +19,7 @@ export default function CancelReceiptButton({ receiptId, receiptType }: Props) {
       const response = await fetch("/api/receipts/cancel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ receiptId }),
+        body: JSON.stringify({ receiptId, orderId, storeId }),
       });
 
       const data = await response.json();

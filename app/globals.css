@@ -38,12 +38,20 @@ a {
 
 main {
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch;
 }
 
 .container {
   max-width: 1100px;
   margin: 0 auto;
   padding: 56px 24px 80px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch;
 }
 
 .hero {
@@ -289,6 +297,12 @@ main {
   font-family: "Source Sans 3", "Segoe UI", sans-serif;
   text-align: center;
   color: var(--ink-secondary);
+  margin-top: auto;
+}
+
+/* Push footer to bottom */
+main > .container {
+  flex: 1;
 }
 
 .form-card {
@@ -644,6 +658,9 @@ main {
 
 .orders {
   margin-top: 60px;
+  text-align: left;
+  min-height: 200px;
+  width: 100%;
 }
 
 .orders h2 {
@@ -681,6 +698,13 @@ main {
 .orders p {
   font-family: "Source Sans 3", "Segoe UI", sans-serif;
   margin: 0;
+}
+
+/* Empty state message in orders/receipts sections */
+.orders > p:only-of-type {
+  padding: 40px 0;
+  color: var(--ink-secondary);
+  font-size: 15px;
 }
 
 .orders-table {
@@ -4858,6 +4882,37 @@ main {
   background: var(--bg-card-hover) !important;
 }
 
+.login-btn--ghost {
+  background: transparent !important;
+  border: none !important;
+  color: var(--ink-secondary) !important;
+  font-size: 14px !important;
+  text-decoration: underline;
+}
+
+.login-btn--ghost:hover {
+  color: var(--ink) !important;
+}
+
+/* Receipt number input with preview */
+.receipt-number-input {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.receipt-number-input input {
+  flex: 0 0 140px;
+  width: 140px;
+}
+
+.receipt-number-preview {
+  font-family: "SF Mono", "Monaco", "Consolas", monospace;
+  font-size: 16px;
+  color: var(--ink-secondary);
+  letter-spacing: 1px;
+}
+
 .register-buttons {
   display: flex;
   gap: 12px;
@@ -4995,6 +5050,99 @@ main {
   .login-card {
     order: 1;
   }
+}
+
+/* Add Store Page Styles */
+.add-store-icon {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 24px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.add-store-icon svg {
+  width: 40px;
+  height: 40px;
+  color: var(--purple);
+}
+
+.add-store-icon--success {
+  background: rgba(52, 199, 89, 0.15);
+  border-color: rgba(52, 199, 89, 0.3);
+}
+
+.add-store-icon--success svg {
+  color: var(--green);
+}
+
+.add-store-info {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 16px;
+  margin: 24px 0;
+  text-align: left;
+}
+
+.add-store-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.add-store-info-row:not(:last-child) {
+  border-bottom: 1px solid var(--border-color);
+}
+
+.add-store-info-label {
+  font-size: 14px;
+  color: var(--ink-secondary);
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+}
+
+.add-store-info-value {
+  font-size: 14px;
+  color: var(--ink);
+  font-weight: 500;
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+}
+
+.add-store-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: rgba(255, 159, 10, 0.1);
+  border: 1px solid rgba(255, 159, 10, 0.3);
+  border-radius: 12px;
+  padding: 16px;
+  margin: 16px 0 24px;
+  text-align: left;
+}
+
+.add-store-warning svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+.add-store-warning span {
+  font-size: 14px;
+  color: var(--ink-secondary);
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+  line-height: 1.5;
+}
+
+.add-store-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 /* Connect Store Box */
@@ -6173,6 +6321,18 @@ main {
   background: rgba(255, 255, 255, 0.3);
 }
 
+/* Warning banner for uninstalled app */
+.warning-banner {
+  background: linear-gradient(135deg, #ff9f0a, #f5a623);
+  padding: 12px 24px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+}
+
 /* ============================================
    BILLING PAGE
    ============================================ */
@@ -6838,21 +6998,31 @@ main {
 
 /* Wide card variant for onboarding */
 .login-card--wide {
-  max-width: 720px;
-  width: 92%;
+  max-width: 900px;
+  width: calc(100vw - 48px);
+  padding: 56px 64px;
 }
 
 .login-card--wide .login-email-form {
-  gap: 20px;
+  gap: 24px;
 }
 
 .login-card--wide .form-row {
-  gap: 20px;
+  gap: 24px;
 }
 
 .login-card--plans {
-  max-width: 1000px;
-  width: 95%;
+  max-width: 1200px;
+  width: calc(100vw - 48px);
+  padding: 56px 64px;
+}
+
+@media (max-width: 768px) {
+  .login-card--wide,
+  .login-card--plans {
+    padding: 32px 24px;
+    width: calc(100vw - 24px);
+  }
 }
 
 /* Form sections */

@@ -2,17 +2,30 @@
 
 import { useEffect } from "react";
 
+// SYNC VERSION: Increment this when sync logic changes significantly
+// This forces all stores to re-sync automatically
+const SYNC_VERSION = 2; // v2: Fixed offset-based pagination (was cursor-based, only got first page)
+
 const INITIAL_SYNC_KEY = "udito_initial_sync_done";
+const SYNC_VERSION_KEY = "udito_sync_version";
 const AUTO_SYNC_KEY = "udito_auto_sync_at";
-const AUTO_SYNC_WINDOW_MS = 10 * 60 * 1000; // 10 minutes window (less frequent)
-const AUTO_SYNC_MAX_RUNS = 5; // Fewer runs since we only sync recent orders
-const AUTO_SYNC_DELAY_MS = 500;
+const AUTO_SYNC_WINDOW_MS = 30 * 60 * 1000; // 30 minutes window - balance between freshness and resource usage
+const AUTO_SYNC_DELAY_MS = 300;
 const FIX_PAYMENTS_KEY = "udito_fix_payments_at";
 const FIX_PAYMENTS_WINDOW_MS = 30 * 60 * 1000; // 30 minutes window
 
 export default function AutoSync() {
   useEffect(() => {
     const now = Date.now();
+
+    // Check sync version - if outdated, force a full re-sync
+    const storedVersion = Number(localStorage.getItem(SYNC_VERSION_KEY) || 0);
+    if (storedVersion < SYNC_VERSION) {
+      console.log(`🔄 Sync version updated (${storedVersion} → ${SYNC_VERSION}), forcing full re-sync...`);
+      localStorage.removeItem(INITIAL_SYNC_KEY);
+      localStorage.removeItem(AUTO_SYNC_KEY);
+      localStorage.setItem(SYNC_VERSION_KEY, String(SYNC_VERSION));
+    }
 
     // Check if initial sync was ever done
     const initialSyncDone = localStorage.getItem(INITIAL_SYNC_KEY) === "true";
@@ -27,11 +40,22 @@ export default function AutoSync() {
       // Ignore storage errors; still attempt sync once.
     }
 
-    const runSync = async (cursor?: string | null, run = 0) => {
-      if (run >= AUTO_SYNC_MAX_RUNS) return;
+    // Track total synced across all runs
+    let totalSynced = 0;
 
-      // If initial sync done, only sync last 7 days
-      // If not done, do full sync from 2000
+    const runSync = async (offset = 0, consecutiveEmpty = 0) => {
+      // Stop if we've had 3 consecutive empty pages (sync complete)
+      if (consecutiveEmpty >= 3) {
+        console.log(`✅ Auto-sync complete! Total synced: ${totalSynced} orders`);
+        if (!initialSyncDone) {
+          localStorage.setItem(INITIAL_SYNC_KEY, "true");
+        }
+        runFixPayments();
+        return;
+      }
+
+      // For initial sync: start from beginning, sync ALL orders
+      // For incremental sync: only last 7 days
       const startDate = initialSyncDone
         ? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
         : "2000-01-01T00:00:00Z";
@@ -39,39 +63,61 @@ export default function AutoSync() {
       const params = new URLSearchParams({
         auto: "1",
         limit: "100",
-        maxPages: initialSyncDone ? "3" : "20", // Fewer pages for incremental sync
+        maxPages: "10", // Process 10 pages per request (1000 orders)
         start: startDate,
+        cursor: String(offset), // Use offset as cursor
       });
 
-      // Only reset on first-ever sync, not on subsequent syncs
-      if (run === 0 && !cursor && !initialSyncDone) {
+      // Reset on first-ever sync
+      if (offset === 0 && !initialSyncDone) {
         params.set("reset", "1");
       }
-      if (cursor) params.set("cursor", cursor);
 
-      const response = await fetch(`/api/backfill?${params.toString()}`, {
-        method: "POST",
-        credentials: "include",
-      });
-      if (!response.ok) return;
-      const data = (await response.json()) as { cursor?: string | null };
-      if (data?.cursor) {
-        setTimeout(() => {
-          void runSync(data.cursor ?? null, run + 1);
-        }, AUTO_SYNC_DELAY_MS);
-      } else {
-        // Mark initial sync as done
-        if (!initialSyncDone) {
-          localStorage.setItem(INITIAL_SYNC_KEY, "true");
+      try {
+        const response = await fetch(`/api/backfill?${params.toString()}`, {
+          method: "POST",
+          credentials: "include",
+        });
+
+        if (!response.ok) {
+          console.error("❌ Sync request failed:", response.status);
+          return;
         }
-        // Backfill completed, now fix missing payment data
-        runFixPayments();
+
+        const data = await response.json() as {
+          cursor?: string | null;
+          total?: number;
+          hasMore?: boolean;
+        };
+
+        const synced = data.total ?? 0;
+        totalSynced += synced;
+
+        if (synced > 0) {
+          console.log(`📦 Synced ${synced} orders (total: ${totalSynced})`);
+        }
+
+        // Continue if there's more data
+        if (data.hasMore && data.cursor) {
+          const nextOffset = parseInt(data.cursor, 10) || offset + 1000;
+          setTimeout(() => {
+            void runSync(nextOffset, synced === 0 ? consecutiveEmpty + 1 : 0);
+          }, AUTO_SYNC_DELAY_MS);
+        } else {
+          // No more data - sync complete
+          console.log(`✅ Auto-sync complete! Total synced: ${totalSynced} orders`);
+          if (!initialSyncDone) {
+            localStorage.setItem(INITIAL_SYNC_KEY, "true");
+          }
+          runFixPayments();
+        }
+      } catch (error) {
+        console.error("❌ Sync error:", error);
       }
     };
 
     const runFixPayments = async () => {
       try {
-        // Check if we already ran fix payments recently
         const lastFixRun = Number(localStorage.getItem(FIX_PAYMENTS_KEY) || 0);
         if (lastFixRun && now - lastFixRun < FIX_PAYMENTS_WINDOW_MS) {
           return;
@@ -79,7 +125,6 @@ export default function AutoSync() {
 
         console.log("🔄 Starting payment enrichment for old orders...");
 
-        // Run enrich old orders endpoint
         const response = await fetch("/api/admin/enrich-old-orders?limit=100", {
           method: "POST",
           credentials: "include",
@@ -98,7 +143,6 @@ export default function AutoSync() {
         }
       } catch (error) {
         console.error("❌ Payment enrichment exception:", error);
-        // Background fix is best-effort
       }
     };
 

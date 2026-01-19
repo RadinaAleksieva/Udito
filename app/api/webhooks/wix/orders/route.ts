@@ -125,10 +125,16 @@ async function handleOrderEvent(event: any) {
     event?.timestamp ??
     null;
 
+  // Check if this is an archived event - preserve the flag
+  const eventType = event?.metadata?.eventType ?? "";
+  const isArchivedEvent = eventType.includes("archived");
+
   const baseOrder = {
     ...rawOrder,
     paymentStatus,
     instanceId: event?.metadata?.instanceId ?? raw?.instanceId ?? rawOrder?.instanceId ?? null,
+    // Force archived flag if this is an archived event
+    archived: isArchivedEvent ? true : (rawOrder?.archived ?? raw?.archived ?? false),
   };
   const base = pickOrderFields(baseOrder, "webhook");
   const orderId = base.id;
@@ -140,7 +146,9 @@ async function handleOrderEvent(event: any) {
       instanceId: event?.metadata?.instanceId ?? raw?.instanceId ?? rawOrder?.instanceId ?? null,
     });
     if (enriched) {
-      orderRaw = { ...baseOrder, ...enriched };
+      // Preserve archived flag from baseOrder (don't let enriched data overwrite it)
+      const preservedArchived = baseOrder.archived;
+      orderRaw = { ...baseOrder, ...enriched, archived: preservedArchived };
     }
   }
   let transactionRef = extractTransactionRef(orderRaw);
@@ -613,6 +621,7 @@ async function handleOrderEvent(event: any) {
         businessId: null,
         issuedAt: savedPaidAt ?? mapped.createdAt ?? null,
         siteId: mapped.siteId, // For tenant-specific tables
+        transactionRef: receiptTxRef, // Store transaction ref for refunds to use
       });
       // Track receipt usage for plan limits (legacy)
       await trackReceiptUsage(mapped.siteId, instanceId);

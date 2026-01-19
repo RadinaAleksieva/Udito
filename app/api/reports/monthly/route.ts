@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { sql } from "@/lib/sql";
 import { initDb } from "@/lib/db";
 import { getActiveStore } from "@/lib/auth";
+import { getSchemaForSite } from "@/lib/tenant-db";
 
 export const dynamic = "force-dynamic";
 
@@ -120,8 +121,23 @@ export async function GET(request: Request) {
   const displayCurrency = year >= 2026 ? "EUR" : "BGN";
 
   try {
-    // Get all receipts with order data for the period
-    const receiptsResult = await sql`
+    // Get tenant schema
+    const schema = await getSchemaForSite(siteId!);
+    if (!schema) {
+      return NextResponse.json({
+        ok: true,
+        stats: {
+          year, month, currency: displayCurrency,
+          totalReceipts: 0, totalRevenue: 0, totalTax: 0, totalShipping: 0,
+          totalDiscounts: 0, avgOrderValue: 0, netRevenue: 0,
+          totalRefunds: 0, refundAmount: 0, finalRevenue: 0,
+          paymentMethods: [], receipts: [], refunds: [],
+        },
+      });
+    }
+
+    // Get all receipts with order data for the period from tenant schema
+    const receiptsResult = await sql.query(`
       SELECT
         r.id,
         r.type,
@@ -135,16 +151,17 @@ export async function GET(request: Request) {
         o.discount_total,
         o.currency,
         o.raw
-      FROM receipts r
-      JOIN orders o ON r.order_id = o.id
-      WHERE o.site_id = ${siteId}
-        AND r.issued_at >= ${startDate.toISOString()}
-        AND r.issued_at <= ${endDate.toISOString()}
+      FROM "${schema}".receipts r
+      JOIN "${schema}".orders o ON r.order_id = o.id
+      WHERE r.issued_at >= $1
+        AND r.issued_at <= $2
+        AND (o.status IS NULL OR lower(o.status) NOT LIKE 'archiv%')
       ORDER BY r.issued_at DESC
-    `;
+    `, [startDate.toISOString(), endDate.toISOString()]);
 
     // Process receipts and calculate stats
     let totalReceipts = 0;
+    let totalSales = 0;
     let totalRevenue = 0;
     let totalTax = 0;
     let totalShipping = 0;
@@ -193,8 +210,11 @@ export async function GET(request: Request) {
       // Extract payment method from raw data
       const { method: paymentMethodKey, label: paymentMethodLabel } = extractPaymentMethod(row.raw);
 
+      // Count ALL receipts (sales + refunds)
+      totalReceipts++;
+
       if (row.type === "sale") {
-        totalReceipts++;
+        totalSales++;
         totalRevenue += orderTotal * rate;
         totalTax += orderTax * rate;
         totalShipping += orderShipping * rate;
@@ -229,7 +249,7 @@ export async function GET(request: Request) {
       }
     }
 
-    const avgOrderValue = totalReceipts > 0 ? totalRevenue / totalReceipts : 0;
+    const avgOrderValue = totalSales > 0 ? totalRevenue / totalSales : 0;
 
     return NextResponse.json({
       ok: true,

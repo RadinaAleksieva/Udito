@@ -16,6 +16,7 @@ export async function issueReceipt(params: {
   businessId?: string | null;
   issuedAt?: string | null;
   siteId?: string | null;
+  transactionRef?: string | null;
 }): Promise<{ created: boolean; receiptId: number | null }> {
   const issuedAt = params.issuedAt ? new Date(params.issuedAt).toISOString() : null;
 
@@ -26,15 +27,23 @@ export async function issueReceipt(params: {
     throw new Error("siteId is required for issuing receipts");
   }
 
+  // Extract transactionRef from payload if not explicitly provided
+  const payloadObj = params.payload as any;
+  const transactionRef = params.transactionRef ??
+    payloadObj?.raw?.udito?.transactionRef ??
+    payloadObj?.udito?.transactionRef ??
+    null;
+
   const tenantReceipt: TenantReceipt = {
     orderId: params.orderId,
     payload: params.payload,
     type: 'sale',
     issuedAt: issuedAt,
+    transactionRef,
   };
 
   const result = await issueTenantReceipt(siteId, tenantReceipt);
-  console.log("✅ Receipt saved to tenant table:", params.orderId, "created:", result.created);
+  console.log("✅ Receipt saved to tenant table:", params.orderId, "created:", result.created, "transactionRef:", transactionRef);
 
   return result;
 }
@@ -43,6 +52,7 @@ export async function issueReceipt(params: {
  * Issue a refund receipt (сторно бележка) for an order.
  * This creates a new receipt with the next sequential number,
  * negative amount, and reference to the original receipt.
+ * IMPORTANT: Uses the same transaction_ref as the original sale receipt.
  */
 export async function issueRefundReceipt(params: {
   orderId: string;
@@ -62,8 +72,10 @@ export async function issueRefundReceipt(params: {
   }
 
   // Get the original sale receipt to reference it (from tenant table)
+  // CRITICAL: We use the same transaction_ref as the original sale receipt
   const originalReceipt = await getTenantSaleReceiptByOrderId(siteId, params.orderId);
   const referenceReceiptId = originalReceipt?.id ?? null;
+  const saleTransactionRef = originalReceipt?.transaction_ref ?? null;
 
   // Create the refund receipt with negative amount in payload
   const refundPayload = {
@@ -80,10 +92,11 @@ export async function issueRefundReceipt(params: {
     issuedAt: issuedAt,
     referenceReceiptId: referenceReceiptId,
     refundAmount: -Math.abs(params.refundAmount),
+    transactionRef: saleTransactionRef, // Use the same transaction ref as the sale
   };
 
   const result = await issueTenantReceipt(siteId, tenantReceipt);
-  console.log("✅ Refund receipt saved to tenant table:", params.orderId, "created:", result.created);
+  console.log("✅ Refund receipt saved to tenant table:", params.orderId, "created:", result.created, "transactionRef:", saleTransactionRef);
 
   return result;
 }
@@ -164,7 +177,7 @@ export async function getReceiptByOrderIdAndType(siteId: string, orderId: string
   if (!schema) return null;
 
   const result = await sql.query(`
-    SELECT id, issued_at, payload, type, refund_amount, reference_receipt_id, return_payment_type
+    SELECT id, issued_at, payload, type, refund_amount, reference_receipt_id, return_payment_type, transaction_ref
     FROM "${schema}".receipts
     WHERE order_id = $1
       AND type = $2
@@ -174,46 +187,7 @@ export async function getReceiptByOrderIdAndType(siteId: string, orderId: string
   return result.rows[0] ?? null;
 }
 
-export async function listRecentReceipts(limit = 20) {
-  const result = await sql`
-    select id as receipt_id, order_id, issued_at, status, payload
-    from receipts
-    order by issued_at desc
-    limit ${limit};
-  `;
-  return result.rows;
-}
-
-export async function listReceiptsForPeriod(startIso: string, endIso: string) {
-  const result = await sql`
-    select id as receipt_id, order_id, issued_at, status, payload
-    from receipts
-    where issued_at between ${startIso} and ${endIso}
-    order by issued_at desc;
-  `;
-  return result.rows;
-}
-
-export async function listReceiptsWithOrders(limit = 200) {
-  const result = await sql`
-    select receipts.order_id,
-      receipts.id as receipt_id,
-      receipts.issued_at,
-      receipts.status,
-      receipts.payload,
-      orders.number as order_number,
-      orders.customer_name,
-      orders.total,
-      orders.currency
-    from receipts
-    left join orders on orders.id = receipts.order_id
-    where (orders.status is null
-       or lower(orders.status) not like 'archiv%')
-    order by coalesce(orders.paid_at, receipts.issued_at) desc nulls last
-    limit ${limit};
-  `;
-  return result.rows;
-}
+// Legacy public schema functions removed - use tenant functions instead
 
 export async function listReceiptsWithOrdersForSite(
   siteId: string,
@@ -234,62 +208,15 @@ export async function listReceiptsWithOrdersForSite(
       o.number as order_number,
       o.customer_name,
       o.total,
-      o.currency
+      o.currency,
+      o.raw as order_raw
     FROM "${schema}".receipts r
     LEFT JOIN "${schema}".orders o ON o.id = r.order_id
+    WHERE (o.status IS NULL OR lower(o.status) NOT LIKE 'archiv%')
     ORDER BY r.id DESC
     LIMIT $1
   `, [limit]);
 
-  return result.rows;
-}
-
-export async function listReceiptsWithOrdersForBusiness(
-  businessId: string,
-  limit = 200
-) {
-  const result = await sql`
-    select receipts.order_id,
-      receipts.id as receipt_id,
-      receipts.issued_at,
-      receipts.status,
-      receipts.payload,
-      orders.number as order_number,
-      orders.customer_name,
-      orders.total,
-      orders.currency
-    from receipts
-    left join orders on orders.id = receipts.order_id
-    where orders.business_id = ${businessId}
-      and (orders.status is null
-        or lower(orders.status) not like 'archiv%')
-    order by coalesce(orders.paid_at, receipts.issued_at) desc nulls last
-    limit ${limit};
-  `;
-  return result.rows;
-}
-
-export async function listReceiptsWithOrdersForPeriod(
-  startIso: string,
-  endIso: string
-) {
-  const result = await sql`
-    select receipts.order_id,
-      receipts.id as receipt_id,
-      receipts.issued_at,
-      receipts.status,
-      receipts.payload,
-      orders.number as order_number,
-      orders.customer_name,
-      orders.total,
-      orders.currency
-    from receipts
-    left join orders on orders.id = receipts.order_id
-    where orders.paid_at between ${startIso} and ${endIso}
-      and (orders.status is null
-        or lower(orders.status) not like 'archiv%')
-    order by coalesce(orders.paid_at, receipts.issued_at) desc nulls last;
-  `;
   return result.rows;
 }
 
@@ -318,35 +245,10 @@ export async function listReceiptsWithOrdersForPeriodForSite(
     FROM "${schema}".receipts r
     LEFT JOIN "${schema}".orders o ON o.id = r.order_id
     WHERE r.issued_at BETWEEN $1 AND $2
+      AND (o.status IS NULL OR lower(o.status) NOT LIKE 'archiv%')
     ORDER BY r.id DESC
   `, [startIso, endIso]);
 
-  return result.rows;
-}
-
-export async function listReceiptsWithOrdersForPeriodForBusiness(
-  startIso: string,
-  endIso: string,
-  businessId: string
-) {
-  const result = await sql`
-    select receipts.order_id,
-      receipts.id as receipt_id,
-      receipts.issued_at,
-      receipts.status,
-      receipts.payload,
-      orders.number as order_number,
-      orders.customer_name,
-      orders.total,
-      orders.currency
-    from receipts
-    left join orders on orders.id = receipts.order_id
-    where orders.business_id = ${businessId}
-      and orders.paid_at between ${startIso} and ${endIso}
-      and (orders.status is null
-        or lower(orders.status) not like 'archiv%')
-    order by coalesce(orders.paid_at, receipts.issued_at) desc nulls last;
-  `;
   return result.rows;
 }
 

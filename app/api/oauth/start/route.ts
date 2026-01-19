@@ -44,6 +44,12 @@ export async function GET(request: Request) {
     installerUrl.searchParams.set("token", instanceToken);
     installerUrl.searchParams.set("appId", appId);
     installerUrl.searchParams.set("redirectUrl", redirectUrl);
+    console.log("OAuth start - redirecting to Wix installer:", {
+      appBaseUrl,
+      redirectUrl,
+      appId,
+      installerUrl: installerUrl.toString(),
+    });
     return NextResponse.redirect(installerUrl.toString());
   }
 

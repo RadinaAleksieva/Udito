@@ -6,9 +6,41 @@ import { getActiveStore } from "@/lib/auth";
 import { getReceiptByOrderIdAndType } from "@/lib/receipts";
 import { extractTransactionRef } from "@/lib/wix";
 import { ReceiptPdf, ReceiptPdfData } from "@/lib/receipt-pdf";
+import fs from "fs/promises";
+import path from "path";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
+
+// Fetch logo as base64 data URL for PDF embedding
+async function getLogoAsBase64(logoUrl: string | undefined, baseUrl: string): Promise<string | undefined> {
+  if (!logoUrl) return undefined;
+
+  try {
+    // If it's a local upload, read directly from filesystem
+    if (logoUrl.startsWith('/uploads/')) {
+      const localPath = path.join(process.cwd(), 'public', logoUrl);
+      const buffer = await fs.readFile(localPath);
+      const ext = path.extname(logoUrl).toLowerCase().replace('.', '');
+      const mimeType = ext === 'png' ? 'image/png' : ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 'image/png';
+      return `data:${mimeType};base64,${buffer.toString('base64')}`;
+    }
+
+    // For external URLs, fetch them
+    const absoluteUrl = logoUrl.startsWith('http') ? logoUrl : `${baseUrl}${logoUrl}`;
+    const response = await fetch(absoluteUrl);
+    if (!response.ok) {
+      console.error('Failed to fetch logo:', response.status, absoluteUrl);
+      return undefined;
+    }
+    const buffer = await response.arrayBuffer();
+    const contentType = response.headers.get('content-type') || 'image/png';
+    return `data:${contentType};base64,${Buffer.from(buffer).toString('base64')}`;
+  } catch (error) {
+    console.error('Error loading logo:', error);
+    return undefined;
+  }
+}
 
 // Official EUR/BGN conversion rate
 const BGN_TO_EUR = 0.51129;
@@ -167,10 +199,14 @@ function formatQrDate(date: Date) {
 }
 
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
+  const url = new URL(request.url);
+  const { searchParams } = url;
   const orderId = searchParams.get("orderId");
   const receiptType = (searchParams.get("type") || "sale") as "sale" | "refund";
   const storeParam = searchParams.get("store");
+
+  // Get base URL for converting relative paths to absolute
+  const baseUrl = process.env.APP_BASE_URL || `${url.protocol}//${url.host}`;
 
   if (!orderId) {
     return NextResponse.json({ error: "Missing orderId" }, { status: 400 });
@@ -195,20 +231,25 @@ export async function GET(request: NextRequest) {
     const receiptRecord = await getReceiptByOrderIdAndType(siteId!, orderId, receiptType);
     const company = await getCompanyBySite(siteId, instanceId);
 
-    // Debug: log template being used
-    console.log("PDF Generation - Company template:", company?.receipt_template, "Accent:", company?.accent_color);
+    // Load logo as base64 for reliable PDF embedding
+    const logoBase64 = await getLogoAsBase64(company?.logo_url, baseUrl);
 
     const raw = (record.raw ?? {}) as any;
     const currency = record.currency || "BGN";
     const isRefund = receiptType === "refund";
 
     // Extract data
-    const transactionRef = extractTransactionRef(raw) || "";
+    // IMPORTANT: For refunds, prefer the stored transaction_ref (copied from sale receipt)
+    // This ensures the refund uses the same transaction ref as the original sale
+    const transactionRef = receiptRecord?.transaction_ref || extractTransactionRef(raw) || "";
     const orderNumber = record.number || record.id || "";
     const receiptIssuedAt = receiptRecord?.issued_at ?? null;
     const paidAt = record.paid_at ?? raw?.paymentStatus?.lastUpdated ?? record.created_at ?? null;
     const effectiveIssuedAt = isRefund && receiptIssuedAt ? receiptIssuedAt : paidAt;
     const showEurPrimary = shouldShowEurPrimary(effectiveIssuedAt);
+
+    // Debug logging
+    console.log("PDF Generation - Template:", company?.receipt_template, "HasLogo:", !!logoBase64, "Currency:", currency, "ShowEUR:", showEurPrimary);
 
     const issuedDate = effectiveIssuedAt
       ? new Date(effectiveIssuedAt).toLocaleString("bg-BG", { timeZone: "Europe/Sofia" })
@@ -300,7 +341,8 @@ export async function GET(request: NextRequest) {
       vatNumber: company?.vat_number || "—",
       contactEmail: company?.email || "Липсва",
       contactPhone: company?.phone || "Липсва",
-      logoUrl: company?.logo_url || undefined,
+      // Logo as base64 data URL for reliable PDF embedding
+      logoUrl: logoBase64,
       logoWidth: company?.logo_width ?? null,
       logoHeight: company?.logo_height ?? null,
       customerName: extractCustomerName(record, raw),
@@ -337,11 +379,17 @@ export async function GET(request: NextRequest) {
     // Create filename
     const filename = `belezhka-${receiptRecord?.id || orderId}.pdf`;
 
+    // Support inline viewing (for preview) vs download
+    const inline = searchParams.get("inline") === "true";
+    const disposition = inline
+      ? `inline; filename="${filename}"`
+      : `attachment; filename="${filename}"`;
+
     return new NextResponse(pdfBuffer, {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${filename}"`,
+        "Content-Disposition": disposition,
         "Cache-Control": "no-store",
       },
     });

@@ -437,6 +437,10 @@ export async function initDb() {
   // Add store_name column for user-friendly store naming
   await sql`alter table store_connections add column if not exists store_name text;`;
 
+  // Add schema_name and store_domain columns for proper tenant resolution
+  await sql`alter table store_connections add column if not exists schema_name varchar(100);`;
+  await sql`alter table store_connections add column if not exists store_domain text;`;
+
   // ==========================================
   // Onboarding & Subscription Plans (2026-01)
   // ==========================================
@@ -840,15 +844,14 @@ export async function listRecentOrdersForPeriodForSite(
   const schema = await getSchemaForSite(siteId);
   if (!schema) return []; // No schema = no orders
 
+  // Filter: exclude archived and canceled orders
   const result = await sql.query(`
     SELECT id, number, payment_status, status, created_at, total, currency, source
     FROM "${schema}".orders
     WHERE (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
+      AND (status IS NULL OR UPPER(status) NOT IN ('CANCELED', 'CANCELLED'))
       AND COALESCE(raw->>'archived', 'false') <> 'true'
       AND COALESCE(raw->>'isArchived', 'false') <> 'true'
-      AND raw->>'archivedAt' IS NULL
-      AND raw->>'archivedDate' IS NULL
-      AND raw->>'archiveDate' IS NULL
       AND created_at BETWEEN $1 AND $2
     ORDER BY created_at DESC NULLS LAST
     LIMIT $3
@@ -867,28 +870,21 @@ export async function listPaginatedOrdersForSite(
   const schema = await getSchemaForSite(siteId);
   if (!schema) return { orders: [], total: 0 };
 
+  // Filter: exclude CANCELED orders, but show archived orders that are not canceled
   // Count total
   const countResult = startIso && endIso
     ? await sql.query(`
         SELECT COUNT(*) as total
         FROM "${schema}".orders
-        WHERE (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
-          AND COALESCE(raw->>'archived', 'false') <> 'true'
-          AND COALESCE(raw->>'isArchived', 'false') <> 'true'
-          AND raw->>'archivedAt' IS NULL
-          AND raw->>'archivedDate' IS NULL
-          AND raw->>'archiveDate' IS NULL
+        WHERE (status IS NULL OR UPPER(status) NOT IN ('CANCELED', 'CANCELLED'))
+          AND (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
           AND created_at BETWEEN $1 AND $2
       `, [startIso, endIso])
     : await sql.query(`
         SELECT COUNT(*) as total
         FROM "${schema}".orders
-        WHERE (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
-          AND COALESCE(raw->>'archived', 'false') <> 'true'
-          AND COALESCE(raw->>'isArchived', 'false') <> 'true'
-          AND raw->>'archivedAt' IS NULL
-          AND raw->>'archivedDate' IS NULL
-          AND raw->>'archiveDate' IS NULL
+        WHERE (status IS NULL OR UPPER(status) NOT IN ('CANCELED', 'CANCELLED'))
+          AND (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
       `);
   const total = Number(countResult.rows[0]?.total || 0);
 
@@ -897,12 +893,8 @@ export async function listPaginatedOrdersForSite(
     ? await sql.query(`
         SELECT id, number, payment_status, status, created_at, paid_at, total, currency, customer_name, customer_email, source
         FROM "${schema}".orders
-        WHERE (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
-          AND COALESCE(raw->>'archived', 'false') <> 'true'
-          AND COALESCE(raw->>'isArchived', 'false') <> 'true'
-          AND raw->>'archivedAt' IS NULL
-          AND raw->>'archivedDate' IS NULL
-          AND raw->>'archiveDate' IS NULL
+        WHERE (status IS NULL OR UPPER(status) NOT IN ('CANCELED', 'CANCELLED'))
+          AND (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
           AND created_at BETWEEN $1 AND $2
         ORDER BY created_at DESC NULLS LAST
         LIMIT $3 OFFSET $4
@@ -910,12 +902,8 @@ export async function listPaginatedOrdersForSite(
     : await sql.query(`
         SELECT id, number, payment_status, status, created_at, paid_at, total, currency, customer_name, customer_email, source
         FROM "${schema}".orders
-        WHERE (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
-          AND COALESCE(raw->>'archived', 'false') <> 'true'
-          AND COALESCE(raw->>'isArchived', 'false') <> 'true'
-          AND raw->>'archivedAt' IS NULL
-          AND raw->>'archivedDate' IS NULL
-          AND raw->>'archiveDate' IS NULL
+        WHERE (status IS NULL OR UPPER(status) NOT IN ('CANCELED', 'CANCELLED'))
+          AND (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
         ORDER BY created_at DESC NULLS LAST
         LIMIT $1 OFFSET $2
       `, [limit, offset]);
@@ -927,15 +915,14 @@ export async function countOrdersForSite(siteId: string) {
   const schema = await getSchemaForSite(siteId);
   if (!schema) return 0;
 
+  // Filter: exclude archived and canceled orders (must match list functions)
   const result = await sql.query(`
     SELECT COUNT(*) as total
     FROM "${schema}".orders
     WHERE (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
+      AND (status IS NULL OR UPPER(status) NOT IN ('CANCELED', 'CANCELLED'))
       AND COALESCE(raw->>'archived', 'false') <> 'true'
       AND COALESCE(raw->>'isArchived', 'false') <> 'true'
-      AND raw->>'archivedAt' IS NULL
-      AND raw->>'archivedDate' IS NULL
-      AND raw->>'archiveDate' IS NULL
   `);
 
   return Number(result.rows[0]?.total ?? 0);
@@ -949,15 +936,14 @@ export async function countOrdersForPeriodForSite(
   const schema = await getSchemaForSite(siteId);
   if (!schema) return 0;
 
+  // Filter: exclude archived and canceled orders (must match listRecentOrdersForPeriodForSite exactly)
   const result = await sql.query(`
     SELECT COUNT(*) as total
     FROM "${schema}".orders
     WHERE (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
+      AND (status IS NULL OR UPPER(status) NOT IN ('CANCELED', 'CANCELLED'))
       AND COALESCE(raw->>'archived', 'false') <> 'true'
       AND COALESCE(raw->>'isArchived', 'false') <> 'true'
-      AND raw->>'archivedAt' IS NULL
-      AND raw->>'archivedDate' IS NULL
-      AND raw->>'archiveDate' IS NULL
       AND created_at BETWEEN $1 AND $2
   `, [startIso, endIso]);
 
@@ -1263,10 +1249,38 @@ export async function getOrderById(orderId: string) {
   return result.rows[0] ?? null;
 }
 
-export async function getOrderByIdForSite(orderId: string, siteId: string) {
-  const result = await sql`
-    select id,
-      site_id,
+export type TenantOrder = {
+  id: string;
+  site_id: string;
+  number: string | null;
+  status: string | null;
+  payment_status: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  paid_at: string | null;
+  currency: string | null;
+  subtotal: number | null;
+  tax_total: number | null;
+  shipping_total: number | null;
+  discount_total: number | null;
+  total: number | null;
+  customer_email: string | null;
+  customer_name: string | null;
+  source: "webhook" | "backfill" | null;
+  raw: unknown;
+};
+
+export async function getOrderByIdForSite(orderId: string, siteId: string): Promise<TenantOrder | null> {
+  // Get schema for tenant
+  const schema = await getSchemaForSite(siteId);
+  if (!schema) {
+    console.error(`[getOrderByIdForSite] No schema found for site ${siteId}`);
+    return null;
+  }
+
+  // Query from tenant schema (note: tenant tables don't have site_id column)
+  const result = await sql.query(`
+    SELECT id,
       number,
       status,
       payment_status,
@@ -1281,13 +1295,20 @@ export async function getOrderByIdForSite(orderId: string, siteId: string) {
       total,
       customer_email,
       customer_name,
+      source,
       raw
-    from orders
-    where id = ${orderId}
-      and site_id = ${siteId}
-    limit 1;
-  `;
-  return result.rows[0] ?? null;
+    FROM "${schema}".orders
+    WHERE id = $1
+    LIMIT 1;
+  `, [orderId]);
+
+  if (!result.rows[0]) {
+    return null;
+  }
+
+  // Add site_id to result (tenant tables don't have it, but callers expect it)
+  const row = result.rows[0] as Omit<TenantOrder, 'site_id'>;
+  return { ...row, site_id: siteId };
 }
 
 export async function getOrderByIdForBusiness(

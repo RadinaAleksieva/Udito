@@ -30,6 +30,7 @@ Font.register({
 
 // Official EUR/BGN conversion rate
 const BGN_TO_EUR = 0.51129;
+const EUR_TO_BGN = 1.95583;
 
 function formatMoney(amount: number | null | undefined, currency: string): string {
   if (amount == null) return "—";
@@ -42,6 +43,10 @@ function formatMoney(amount: number | null | undefined, currency: string): strin
 
 function convertToEur(amount: number): number {
   return amount * BGN_TO_EUR;
+}
+
+function convertToBgn(amount: number): number {
+  return amount * EUR_TO_BGN;
 }
 
 // Accent color hex values (pastel/softer versions)
@@ -345,7 +350,25 @@ const modernStyles = StyleSheet.create({
   },
   paymentRow: {
     flexDirection: "row",
-    gap: 20,
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  paymentDate: {
+    fontSize: 9,
+    color: "#6b6b6b",
+    width: "25%",
+  },
+  paymentMethod: {
+    fontSize: 9,
+    color: "#6b6b6b",
+    textAlign: "center",
+    width: "50%",
+  },
+  paymentAmount: {
+    fontSize: 9,
+    color: "#6b6b6b",
+    textAlign: "right",
+    width: "25%",
   },
   paymentText: {
     fontSize: 9,
@@ -389,18 +412,25 @@ const modernStyles = StyleSheet.create({
 
 function ModernTemplate({ data }: { data: ReceiptPdfData }) {
   const isRefund = data.receiptType === "refund";
-  const showEur = data.showEurPrimary && data.currency === "BGN";
+  const showDual = data.showEurPrimary; // Show both EUR and BGN for Jan 2026+
   const accentHex = ACCENT_COLORS[data.accentColor || "green"] || ACCENT_COLORS.green;
 
   const formatAmount = (amount: number) => {
-    if (showEur) {
-      return `${formatMoney(convertToEur(amount), "EUR")} / ${formatMoney(amount, data.currency)}`;
+    if (showDual) {
+      if (data.currency === "BGN") {
+        return `${formatMoney(convertToEur(amount), "EUR")} / ${formatMoney(amount, "BGN")}`;
+      } else if (data.currency === "EUR") {
+        return `${formatMoney(amount, "EUR")} / ${formatMoney(convertToBgn(amount), "BGN")}`;
+      }
     }
     return formatMoney(amount, data.currency);
   };
 
   const formatPrice = (amount: number) => {
-    if (showEur) return formatMoney(convertToEur(amount), "EUR");
+    if (showDual) {
+      if (data.currency === "BGN") return formatMoney(convertToEur(amount), "EUR");
+      return formatMoney(amount, "EUR");
+    }
     return formatMoney(amount, data.currency);
   };
 
@@ -472,7 +502,6 @@ function ModernTemplate({ data }: { data: ReceiptPdfData }) {
 
         {/* Items Table */}
         <View style={modernStyles.itemsSection}>
-          <Text style={modernStyles.sectionTitle}>Артикули</Text>
           <View style={modernStyles.table}>
             <View style={modernStyles.tableHeader}>
               <Text style={[modernStyles.tableHeaderCell, modernStyles.colName]}>Артикул</Text>
@@ -532,7 +561,7 @@ function ModernTemplate({ data }: { data: ReceiptPdfData }) {
             </View>
             <View style={modernStyles.totalRowFinal}>
               <Text style={modernStyles.totalLabelFinal}>Обща сума</Text>
-              <Text style={isRefund ? [modernStyles.totalValueFinal, modernStyles.negativeAmount, { color: "#dc2626" }] : [modernStyles.totalValueFinal, { color: accentHex }]}>
+              <Text style={isRefund ? [modernStyles.totalValueFinal, modernStyles.negativeAmount] : modernStyles.totalValueFinal}>
                 {formatAmount(data.total)}
               </Text>
             </View>
@@ -543,9 +572,9 @@ function ModernTemplate({ data }: { data: ReceiptPdfData }) {
         <View style={modernStyles.paymentSection}>
           <Text style={modernStyles.sectionTitle}>Плащане</Text>
           <View style={modernStyles.paymentRow}>
-            <Text style={modernStyles.paymentText}>{data.paymentDate}</Text>
-            <Text style={modernStyles.paymentText}>{data.paymentLabel}</Text>
-            <Text style={isRefund ? [modernStyles.paymentText, modernStyles.negativeAmount] : modernStyles.paymentText}>
+            <Text style={modernStyles.paymentDate}>{data.paymentDate}</Text>
+            <Text style={modernStyles.paymentMethod}>{data.paymentLabel}</Text>
+            <Text style={isRefund ? [modernStyles.paymentAmount, modernStyles.negativeAmount] : modernStyles.paymentAmount}>
               {formatAmount(data.total)}
             </Text>
           </View>
@@ -713,7 +742,7 @@ function ClassicTemplate({ data }: { data: ReceiptPdfData }) {
 
   const formatAmount = (amount: number) => {
     if (showEur) {
-      return `${formatMoney(convertToEur(amount), "EUR")}`;
+      return `${formatMoney(convertToEur(amount), "EUR")} / ${formatMoney(amount, data.currency)}`;
     }
     return formatMoney(amount, data.currency);
   };
@@ -1163,7 +1192,6 @@ function DarkTemplate({ data }: { data: ReceiptPdfData }) {
 
         {/* Items */}
         <View style={darkStyles.itemsSection}>
-          <Text style={[darkStyles.sectionTitle, { color: accentColor }]}>Артикули</Text>
           <View style={darkStyles.table}>
             <View style={darkStyles.tableHeader}>
               <Text style={[darkStyles.tableHeaderCell, darkStyles.colName, { color: accentColor }]}>Артикул</Text>
@@ -1489,7 +1517,7 @@ function PlayfulTemplate({ data }: { data: ReceiptPdfData }) {
 
   const formatAmount = (amount: number) => {
     if (showEur) {
-      return `${formatMoney(convertToEur(amount), "EUR")}`;
+      return `${formatMoney(convertToEur(amount), "EUR")} / ${formatMoney(amount, data.currency)}`;
     }
     return formatMoney(amount, data.currency);
   };
@@ -1614,7 +1642,7 @@ function PlayfulTemplate({ data }: { data: ReceiptPdfData }) {
           </View>
           <View style={playfulStyles.totalRowFinal}>
             <Text style={playfulStyles.totalLabelFinal}>Обща сума</Text>
-            <Text style={isRefund ? [playfulStyles.totalValueFinal, playfulStyles.negativeAmount] : [playfulStyles.totalValueFinal, { color: gradient.accent }]}>
+            <Text style={isRefund ? [playfulStyles.totalValueFinal, playfulStyles.negativeAmount] : playfulStyles.totalValueFinal}>
               {formatAmount(data.total)}
             </Text>
           </View>

@@ -12,9 +12,49 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { companyName, eik, napStoreNumber } = await request.json();
+    const body = await request.json();
+    const { planId, skipPayment, companyName, eik, napStoreNumber } = body;
 
-    // Validate input
+    // Handle skip payment case (for testing)
+    if (skipPayment && planId) {
+      // Get business for user
+      const businessResult = await sql`
+        SELECT bu.business_id
+        FROM business_users bu
+        WHERE bu.user_id = ${session.user.id}
+        LIMIT 1
+      `;
+
+      if (businessResult.rows.length === 0) {
+        return NextResponse.json(
+          { error: "Бизнесът не е намерен" },
+          { status: 400 }
+        );
+      }
+
+      const businessId = businessResult.rows[0].business_id;
+
+      // Complete onboarding - set to step 3 (completed) and start trial
+      await sql`
+        UPDATE businesses
+        SET
+          onboarding_step = 3,
+          onboarding_completed = true,
+          plan_id = ${planId},
+          selected_plan_id = ${planId},
+          subscription_status = 'trial',
+          trial_ends_at = NOW() + INTERVAL '10 days',
+          updated_at = NOW()
+        WHERE id = ${businessId}
+      `;
+
+      return NextResponse.json({
+        ok: true,
+        message: "Регистрацията е завършена успешно (без плащане)",
+      });
+    }
+
+    // Original flow: Validate company input
     if (!companyName || !companyName.trim()) {
       return NextResponse.json(
         { error: "Името на фирмата е задължително" },

@@ -109,7 +109,7 @@ export default function OnboardingSettingsPage() {
   return (
     <main className="login-page">
       <div className="login-container">
-        <div className="login-card">
+        <div className="login-card login-card--wide">
           <Link href="/" className="login-logo">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/brand/udito-logo.png" alt="UDITO" />
@@ -176,15 +176,29 @@ export default function OnboardingSettingsPage() {
 
             <div className="form-group">
               <label className="form-label">Начален номер на бележка (незадължително)</label>
-              <input
-                type="text"
-                value={initialReceiptNumber}
-                onChange={(e) => setInitialReceiptNumber(e.target.value.replace(/\D/g, ""))}
-                placeholder="Например: 1000"
-                disabled={isSaving}
-              />
+              <div className="receipt-number-input">
+                <input
+                  type="number"
+                  value={initialReceiptNumber}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === "" || (parseInt(val) >= 1 && parseInt(val) <= 9999999999)) {
+                      setInitialReceiptNumber(val);
+                    }
+                  }}
+                  placeholder="1"
+                  min={1}
+                  max={9999999999}
+                  disabled={isSaving}
+                />
+                {initialReceiptNumber && (
+                  <span className="receipt-number-preview">
+                    {String(initialReceiptNumber).padStart(10, "0")}
+                  </span>
+                )}
+              </div>
               <p className="register-hint">
-                Ако имате съществуващи бележки, въведете следващия номер. Иначе започваме от 1.
+                Ако имате съществуващи бележки, въведете следващия номер.
               </p>
             </div>
 

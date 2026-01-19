@@ -319,9 +319,20 @@ export default async function OverviewPage({
     ?.label;
   const hasConnection = Boolean(siteId);
   const hasInstance = Boolean(instanceId);
-  // Prioritize company.store_domain if set (user's preference), then Wix API, then fallback
-  const domainLabel = company?.store_domain || siteLabel || null;
-  const activeStoreLabel = domainLabel || siteId || "Неизбран";
+
+  // Get store name from userStores as fallback (when Wix API fails / app uninstalled)
+  const currentStore = userStores.find((s: any) => s.site_id === siteId || s.instance_id === instanceId);
+  const storeNameFromDb = currentStore?.store_name || currentStore?.store_domain || null;
+
+  // Check if app is DEFINITELY uninstalled by checking if we have a valid access token
+  // If we have an access token in the database, the app is installed
+  // If siteLabel failed but we have store_domain or store_name, app is probably installed (API temporary failure)
+  const hasStoredInfo = Boolean(company?.store_domain || storeNameFromDb);
+  const appMightBeUninstalled = hasConnection && !siteLabel && !hasStoredInfo;
+
+  // Prioritize: company.store_domain > Wix API label > store_name from DB > placeholder
+  const domainLabel = company?.store_domain || siteLabel || storeNameFromDb || null;
+  const activeStoreLabel = domainLabel || "Неизбран";
   // Archive filtering is now done in SQL query - no client-side filter needed
   const displayOrders = orders;
   const lastClosedDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -412,6 +423,11 @@ export default async function OverviewPage({
       <TopNav title="UDITO Табло" />
       <SubscriptionBanner />
       <PlanWarning />
+      {appMightBeUninstalled && (
+        <div className="warning-banner">
+          <span>⚠️ Приложението може да е деинсталирано от Wix. Моля, инсталирайте го отново от Wix App Market.</span>
+        </div>
+      )}
       <div className="container">
         <section className="hero">
           <div>

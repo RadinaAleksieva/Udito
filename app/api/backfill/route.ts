@@ -37,32 +37,19 @@ export async function POST(request: Request) {
     const auto = url.searchParams.get("auto") === "1";
     const syncState = siteId ? await getSyncState(siteId) : null;
 
-    let cursor: string | null = cursorParam ?? (auto ? syncState?.cursor ?? null : null);
-    if (reset) {
-      cursor = null;
+    // Use offset-based pagination (cursor is stored as offset string)
+    let offset: number = reset ? 0 : (cursorParam ? parseInt(cursorParam, 10) : 0);
+    if (!offset && auto && syncState?.cursor) {
+      offset = parseInt(syncState.cursor, 10) || 0;
     }
 
     if (siteId) {
       await upsertSyncState({
         siteId,
-        cursor: reset ? null : cursor,
+        cursor: reset ? null : String(offset),
         status: "running",
         lastError: null,
       });
-    }
-    if (auto && !cursorParam && siteId) {
-      const latest = await syncOrdersForSite({
-        siteId,
-        instanceId,
-        startDateIso,
-        limit,
-        maxPages: 1,
-        paidOnly,
-        cursor: null,
-      });
-      if (latest.cursor && !syncState?.cursor) {
-        cursor = latest.cursor;
-      }
     }
 
     const result = siteId
@@ -73,7 +60,8 @@ export async function POST(request: Request) {
           limit,
           maxPages,
           paidOnly,
-          cursor,
+          cursor: null, // Not used anymore
+          offset,
         })
       : { cursor: null, total: 0, pages: 0, receiptsIssued: 0, receiptsSkipped: 0 };
 
@@ -94,6 +82,8 @@ export async function POST(request: Request) {
       receiptsSkipped: result.receiptsSkipped,
       startDateIso,
       cursor: result.cursor ?? null,
+      // Include offset for clients that want to use offset-based pagination
+      hasMore: result.cursor != null,
     });
   } catch (error) {
     console.error("Backfill failed", error);

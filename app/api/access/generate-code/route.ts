@@ -69,38 +69,75 @@ export async function POST(request: Request) {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 30);
 
-    // Create a placeholder entry for the accountant (without user_id yet)
-    // The accountant will claim this when they use the code
-    await sql`
-      INSERT INTO store_connections (
-        business_id,
-        site_id,
-        instance_id,
-        role,
-        access_code,
-        access_code_expires_at,
-        invited_by,
-        invited_at,
-        provider
-      )
-      SELECT
-        sc.business_id,
-        ${siteId},
-        ${instanceId},
-        'accountant',
-        ${accessCode},
-        ${expiresAt.toISOString()},
-        ${session.user.id},
-        NOW(),
-        'wix'
-      FROM store_connections sc
-      WHERE sc.user_id = ${session.user.id}
+    // Get owner's connection for business_id
+    const ownerConn = await sql`
+      SELECT business_id, schema_name FROM store_connections
+      WHERE user_id = ${session.user.id}
         AND (
-          (${siteId}::text IS NOT NULL AND sc.site_id = ${siteId})
-          OR (${instanceId}::text IS NOT NULL AND sc.instance_id = ${instanceId})
+          (${siteId}::text IS NOT NULL AND site_id = ${siteId})
+          OR (${instanceId}::text IS NOT NULL AND instance_id = ${instanceId})
         )
       LIMIT 1
     `;
+
+    if (ownerConn.rows.length === 0) {
+      return NextResponse.json({ error: "Store connection not found" }, { status: 400 });
+    }
+
+    const businessId = ownerConn.rows[0].business_id;
+    const schemaName = ownerConn.rows[0].schema_name;
+
+    // Check if there's already an unclaimed invitation for this store
+    const existingInvite = await sql`
+      SELECT id FROM store_connections
+      WHERE user_id IS NULL
+        AND access_code IS NOT NULL
+        AND (
+          (${siteId}::text IS NOT NULL AND site_id = ${siteId})
+          OR (${instanceId}::text IS NOT NULL AND instance_id = ${instanceId})
+        )
+      LIMIT 1
+    `;
+
+    if (existingInvite.rows.length > 0) {
+      // Update existing unclaimed invitation
+      await sql`
+        UPDATE store_connections
+        SET
+          access_code = ${accessCode},
+          access_code_expires_at = ${expiresAt.toISOString()},
+          invited_by = ${session.user.id},
+          invited_at = NOW()
+        WHERE id = ${existingInvite.rows[0].id}
+      `;
+    } else {
+      // Create new invitation row (without user_id - will be claimed by accountant)
+      await sql`
+        INSERT INTO store_connections (
+          business_id,
+          site_id,
+          instance_id,
+          role,
+          access_code,
+          access_code_expires_at,
+          invited_by,
+          invited_at,
+          provider,
+          schema_name
+        ) VALUES (
+          ${businessId},
+          ${siteId},
+          ${instanceId},
+          'accountant',
+          ${accessCode},
+          ${expiresAt.toISOString()},
+          ${session.user.id},
+          NOW(),
+          'wix',
+          ${schemaName}
+        )
+      `;
+    }
 
     return NextResponse.json({
       ok: true,

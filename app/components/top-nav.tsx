@@ -42,8 +42,8 @@ export default async function TopNav({ title }: { title: string }) {
             Отвори в нов таб
           </a>
         ) : null}
-        <ThemeToggle />
         {hasAccess ? <LogoutButton /> : null}
+        <ThemeToggle />
       </div>
     </nav>
   );

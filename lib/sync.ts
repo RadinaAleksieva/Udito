@@ -31,21 +31,24 @@ type SyncParams = {
   maxPages: number;
   paidOnly: boolean;
   cursor: string | null;
+  offset?: number | null; // Support offset-based pagination
 };
 
 export async function syncOrdersForSite(params: SyncParams) {
   const { siteId, instanceId, startDateIso, limit, maxPages, paidOnly } = params;
-  let cursor = params.cursor ?? null;
+  // Use offset-based pagination (cursor doesn't work reliably with Wix API)
+  let currentOffset = params.offset ?? (params.cursor ? parseInt(params.cursor, 10) || 0 : 0);
   let total = 0;
   let receiptsIssued = 0;
   let receiptsSkipped = 0;
   let pages = 0;
+  let hasMoreData = true;
 
   const company = await getCompanyBySite(siteId);
   const hasFiscalCode = Boolean(company?.store_id);
 
   await updateTenantSyncState(siteId, {
-    cursor,
+    cursor: String(currentOffset),
     status: "running",
     lastError: null,
   });
@@ -62,10 +65,10 @@ export async function syncOrdersForSite(params: SyncParams) {
     console.warn("Could not fetch batch payments:", e);
   }
 
-  const runPage = async (pageCursor: string | null) => {
+  const runPage = async (offset: number): Promise<{ nextOffset: number; hasMore: boolean }> => {
     const page = await queryOrders({
       startDateIso,
-      cursor: pageCursor,
+      offset,
       limit,
       siteId,
       instanceId,
@@ -282,19 +285,25 @@ export async function syncOrdersForSite(params: SyncParams) {
       }
       total += 1;
     }
-    return page.cursor ?? null;
+    return { nextOffset: page.nextOffset ?? offset + orders.length, hasMore: page.hasMore ?? false };
   };
 
-  do {
-    cursor = await runPage(cursor);
+  // Use offset-based pagination loop
+  while (hasMoreData && pages < maxPages) {
+    const result = await runPage(currentOffset);
+    currentOffset = result.nextOffset;
+    hasMoreData = result.hasMore;
     pages += 1;
-  } while (cursor && pages < maxPages);
+  }
+
+  // Store offset as cursor for backwards compatibility
+  const finalCursor = hasMoreData ? String(currentOffset) : null;
 
   await updateTenantSyncState(siteId, {
-    cursor,
-    status: cursor ? "partial" : "done",
+    cursor: finalCursor,
+    status: finalCursor ? "partial" : "done",
     lastError: null,
   });
 
-  return { cursor, total, pages, receiptsIssued, receiptsSkipped };
+  return { cursor: finalCursor, total, pages, receiptsIssued, receiptsSkipped };
 }
