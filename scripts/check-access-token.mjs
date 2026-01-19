@@ -1,4 +1,4 @@
-import { sql } from '../lib/supabase-sql.js';
+import { sql } from '../lib/sql.js';
 import fs from 'fs';
 
 // Load env

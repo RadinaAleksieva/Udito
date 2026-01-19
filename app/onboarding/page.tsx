@@ -45,7 +45,13 @@ export default function OnboardingPage() {
         return;
       }
 
-      // Redirect to current step
+      // First check if user has connected a store (Step 0)
+      if (!data.hasStoreConnection) {
+        router.push("/onboarding/connect");
+        return;
+      }
+
+      // Redirect to current step (after store connection)
       const stepRoutes = ["/onboarding/company", "/onboarding/settings", "/onboarding/plan"];
       const currentStep = data.onboardingStep || 0;
 

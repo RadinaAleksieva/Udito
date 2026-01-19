@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { stripe, TEST_CHARGE_AMOUNT, TEST_CHARGE_CURRENCY } from "@/lib/stripe";
-import { sql } from "@/lib/supabase-sql";
+import { sql } from "@/lib/sql";
 
 export const dynamic = "force-dynamic";
 

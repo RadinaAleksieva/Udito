@@ -9,11 +9,12 @@ import {
   TENANT_TABLES,
 } from '@/lib/tenant-db';
 
-// Mock @vercel/postgres
-vi.mock('@vercel/postgres', () => ({
+// Mock @/lib/sql
+vi.mock('@/lib/sql', () => ({
   sql: {
     query: vi.fn(),
   },
+  pool: { query: vi.fn() },
 }));
 
 describe('normalizeSiteId', () => {

@@ -2,12 +2,220 @@ import type { NextAuthOptions } from "next-auth";
 import type { Adapter, AdapterUser, AdapterAccount, AdapterSession, VerificationToken } from "next-auth/adapters";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { sql } from "@/lib/supabase-sql";
+import { sql } from "@/lib/sql";
 import bcrypt from "bcryptjs";
 import { getServerSession } from "next-auth";
+import { cookies } from "next/headers";
+import {
+  getSchemaForSite,
+  createTenantTables,
+  createTenantUser,
+  getTenantUser,
+  getTenantUserByEmail,
+  getTenantUserByAccount,
+  updateTenantUser,
+  linkTenantAccount,
+  createTenantSession,
+  getTenantSessionAndUser,
+  updateTenantSession,
+  deleteTenantSession,
+  getTenantCompany,
+  type TenantUser,
+} from "@/lib/tenant-db";
 
-// Custom adapter for our existing database schema
-const customAdapter: Adapter = {
+// =============================================================================
+// SITE ID RESOLUTION
+// =============================================================================
+
+/**
+ * Извлича site_id от различни източници
+ * Приоритет: URL params > cookies > null
+ */
+export async function resolveSiteId(): Promise<string | null> {
+  try {
+    const cookieStore = await cookies();
+
+    // Try wix_site_id cookie first
+    const siteIdCookie = cookieStore.get("wix_site_id");
+    if (siteIdCookie?.value) {
+      return siteIdCookie.value;
+    }
+
+    // Try instance cookie
+    const instanceCookie = cookieStore.get("wix_instance_id");
+    if (instanceCookie?.value) {
+      // Look up site_id from instance_id
+      const result = await sql.query(`
+        SELECT site_id FROM store_connections WHERE instance_id = $1 LIMIT 1
+      `, [instanceCookie.value]);
+      if (result.rows[0]?.site_id) {
+        return result.rows[0].site_id;
+      }
+      return instanceCookie.value; // Use instance_id as fallback
+    }
+
+    return null;
+  } catch (error) {
+    console.error("[resolveSiteId] Error:", error);
+    return null;
+  }
+}
+
+// =============================================================================
+// TENANT-AWARE ADAPTER
+// =============================================================================
+
+/**
+ * Създава tenant-aware NextAuth adapter
+ * Всички операции се извършват в schema на текущия магазин
+ */
+function createTenantAdapter(siteId: string): Adapter {
+  return {
+    async createUser(user: Omit<AdapterUser, "id">) {
+      // Ensure tenant tables exist
+      const schema = await getSchemaForSite(siteId);
+      if (!schema) {
+        console.log(`[createUser] Creating tenant tables for site ${siteId}`);
+        await createTenantTables(siteId);
+      }
+
+      const tenantUser = await createTenantUser(siteId, {
+        email: user.email,
+        name: user.name ?? null,
+        image: user.image ?? null,
+        emailVerified: user.emailVerified ?? null,
+        role: 'owner', // First user is owner
+      });
+
+      return {
+        id: tenantUser.id,
+        email: tenantUser.email,
+        name: tenantUser.name ?? null,
+        image: tenantUser.image ?? null,
+        emailVerified: tenantUser.emailVerified ?? null,
+      } as AdapterUser;
+    },
+
+    async getUser(id: string) {
+      const user = await getTenantUser(siteId, id);
+      if (!user) return null;
+      return {
+        id: user.id,
+        email: user.email,
+        name: user.name ?? null,
+        image: user.image ?? null,
+        emailVerified: user.emailVerified ?? null,
+      } as AdapterUser;
+    },
+
+    async getUserByEmail(email: string) {
+      const user = await getTenantUserByEmail(siteId, email);
+      if (!user) return null;
+      return {
+        id: user.id,
+        email: user.email,
+        name: user.name ?? null,
+        image: user.image ?? null,
+        emailVerified: user.emailVerified ?? null,
+      } as AdapterUser;
+    },
+
+    async getUserByAccount({ provider, providerAccountId }: { provider: string; providerAccountId: string }) {
+      const user = await getTenantUserByAccount(siteId, provider, providerAccountId);
+      if (!user) return null;
+      return {
+        id: user.id,
+        email: user.email,
+        name: user.name ?? null,
+        image: user.image ?? null,
+        emailVerified: user.emailVerified ?? null,
+      } as AdapterUser;
+    },
+
+    async updateUser(user: Partial<AdapterUser> & Pick<AdapterUser, "id">) {
+      const updated = await updateTenantUser(siteId, user.id, {
+        email: user.email,
+        name: user.name,
+        image: user.image,
+        emailVerified: user.emailVerified,
+      });
+      if (!updated) {
+        throw new Error(`User ${user.id} not found`);
+      }
+      return {
+        id: updated.id,
+        email: updated.email,
+        name: updated.name ?? null,
+        image: updated.image ?? null,
+        emailVerified: updated.emailVerified ?? null,
+      } as AdapterUser;
+    },
+
+    async linkAccount(account: AdapterAccount) {
+      await linkTenantAccount(siteId, {
+        id: crypto.randomUUID(),
+        userId: account.userId,
+        type: account.type,
+        provider: account.provider,
+        providerAccountId: account.providerAccountId,
+        refresh_token: account.refresh_token,
+        access_token: account.access_token,
+        expires_at: account.expires_at,
+        token_type: account.token_type,
+        scope: account.scope,
+        id_token: account.id_token,
+        session_state: account.session_state as string | undefined,
+      });
+      return account;
+    },
+
+    async createSession(session: { sessionToken: string; userId: string; expires: Date }) {
+      await createTenantSession(siteId, session);
+      return session as AdapterSession;
+    },
+
+    async getSessionAndUser(sessionToken: string) {
+      const result = await getTenantSessionAndUser(siteId, sessionToken);
+      if (!result) return null;
+      return {
+        session: result.session as AdapterSession,
+        user: {
+          id: result.user.id,
+          email: result.user.email,
+          name: result.user.name ?? null,
+          image: result.user.image ?? null,
+          emailVerified: result.user.emailVerified ?? null,
+        } as AdapterUser,
+      };
+    },
+
+    async updateSession(session: Partial<AdapterSession> & Pick<AdapterSession, "sessionToken">) {
+      if (session.expires) {
+        await updateTenantSession(siteId, session.sessionToken, session.expires);
+      }
+      return session as AdapterSession;
+    },
+
+    async deleteSession(sessionToken: string) {
+      await deleteTenantSession(siteId, sessionToken);
+    },
+
+    // Verification tokens - not used with JWT strategy but required by interface
+    async createVerificationToken(token: VerificationToken) {
+      return token;
+    },
+
+    async useVerificationToken({ identifier, token }: { identifier: string; token: string }) {
+      return null;
+    },
+  };
+}
+
+// =============================================================================
+// FALLBACK PUBLIC ADAPTER (за случаи без site_id)
+// =============================================================================
+
+const publicAdapter: Adapter = {
   async createUser(user: Omit<AdapterUser, "id">) {
     const id = crypto.randomUUID();
     await sql`
@@ -94,7 +302,7 @@ const customAdapter: Adapter = {
               ${account.refresh_token ?? null}, ${account.access_token ?? null}, ${account.expires_at ?? null},
               ${account.token_type ?? null}, ${account.scope ?? null}, ${account.id_token ?? null}, ${account.session_state ?? null})
     `;
-    return account as AdapterAccount;
+    return account;
   },
 
   async createSession(session: { sessionToken: string; userId: string; expires: Date }) {
@@ -145,136 +353,144 @@ const customAdapter: Adapter = {
   },
 
   async createVerificationToken(token: VerificationToken) {
-    await sql`
-      INSERT INTO verification_tokens (identifier, token, expires)
-      VALUES (${token.identifier}, ${token.token}, ${token.expires.toISOString()})
-    `;
-    return token as VerificationToken;
+    return token;
   },
 
   async useVerificationToken({ identifier, token }: { identifier: string; token: string }) {
-    const result = await sql`
-      DELETE FROM verification_tokens
-      WHERE identifier = ${identifier} AND token = ${token}
-      RETURNING *
-    `;
-    if (result.rows.length === 0) return null;
-    const row = result.rows[0];
-    return {
-      identifier: row.identifier,
-      token: row.token,
-      expires: new Date(row.expires),
-    } as VerificationToken;
+    return null;
   },
 };
 
-export const authOptions: NextAuthOptions = {
-  adapter: customAdapter,
-  providers: [
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID || "",
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
-      allowDangerousEmailAccountLinking: true,
-    }),
-    CredentialsProvider({
-      name: "credentials",
-      credentials: {
-        email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" },
-      },
-      async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
-          return null;
-        }
+// =============================================================================
+// AUTH OPTIONS
+// =============================================================================
 
-        const result = await sql`
-          SELECT * FROM users WHERE email = ${credentials.email as string}
-        `;
+/**
+ * Създава NextAuth options за конкретен site_id
+ * Ако няма site_id, използва public adapter
+ */
+export function createAuthOptions(siteId: string | null): NextAuthOptions {
+  const adapter = siteId ? createTenantAdapter(siteId) : publicAdapter;
 
-        if (result.rows.length === 0) {
-          return null;
-        }
+  return {
+    adapter,
+    providers: [
+      GoogleProvider({
+        clientId: process.env.GOOGLE_CLIENT_ID || "",
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
+        allowDangerousEmailAccountLinking: true,
+      }),
+      CredentialsProvider({
+        name: "credentials",
+        credentials: {
+          email: { label: "Email", type: "email" },
+          password: { label: "Password", type: "password" },
+        },
+        async authorize(credentials) {
+          if (!credentials?.email || !credentials?.password) {
+            return null;
+          }
 
-        const user = result.rows[0];
-
-        // If user has no password (OAuth only), can't use credentials
-        if (!user.password_hash || !user.password_salt) {
-          return null;
-        }
-
-        const isValid = await bcrypt.compare(
-          credentials.password as string,
-          user.password_hash
-        );
-
-        if (!isValid) {
-          return null;
-        }
-
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          image: user.image,
-        };
-      },
-    }),
-  ],
-  session: {
-    strategy: "jwt",
-  },
-  pages: {
-    signIn: "/login",
-    error: "/login",
-  },
-  callbacks: {
-    async signIn({ user, account }) {
-      // For OAuth users (Google), ensure they have a business
-      if (account?.provider === "google" && user?.id) {
-        try {
-          // Check if user already has a business
-          const existingBusiness = await sql`
-            SELECT business_id FROM business_users WHERE user_id = ${user.id} LIMIT 1
+          // Platform-agnostic authentication:
+          // Users always authenticate against public.users table.
+          // Store connections (Wix, Shopify, etc.) are separate from user identity.
+          const result = await sql`
+            SELECT * FROM users WHERE email = ${credentials.email}
           `;
 
-          if (existingBusiness.rows.length === 0) {
-            // Create a business for new OAuth users
-            const businessId = crypto.randomUUID();
-            await sql`
-              INSERT INTO businesses (id, name, onboarding_completed, onboarding_step, trial_ends_at, subscription_status, created_at, updated_at)
-              VALUES (${businessId}, ${user.name || 'Моята фирма'}, false, 0, NOW() + INTERVAL '10 days', 'trial', NOW(), NOW())
-            `;
-            await sql`
-              INSERT INTO business_users (business_id, user_id, role, created_at)
-              VALUES (${businessId}, ${user.id}, 'owner', NOW())
-            `;
-            console.log("Created business for new OAuth user:", user.id);
+          if (result.rows.length === 0) {
+            console.log("[authorize] User not found:", credentials.email);
+            return null;
           }
-        } catch (error) {
-          console.error("Error creating business for OAuth user:", error);
-          // Don't block sign in if business creation fails
-        }
-      }
-      return true;
-    },
-    async jwt({ token, user }) {
-      if (user) {
-        token.id = user.id;
-      }
-      return token;
-    },
-    async session({ session, token }) {
-      if (token && session.user) {
-        session.user.id = token.id as string;
-      }
-      return session;
-    },
-  },
-};
 
-// Helper function to get session in server components
+          const user = result.rows[0];
+
+          if (!user.password_hash) {
+            console.log("[authorize] User has no password (OAuth only):", credentials.email);
+            return null;
+          }
+
+          const isValid = await bcrypt.compare(
+            credentials.password,
+            user.password_hash
+          );
+
+          if (!isValid) {
+            console.log("[authorize] Invalid password for:", credentials.email);
+            return null;
+          }
+
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            image: user.image,
+          };
+        },
+      }),
+    ],
+    session: {
+      strategy: "jwt",
+    },
+    pages: {
+      signIn: "/login",
+      error: "/login",
+    },
+    callbacks: {
+      async signIn({ user, account }) {
+        // Store site_id in session for later use
+        if (siteId && user?.id) {
+          try {
+            // Link user to store if not already linked
+            await linkStoreToUser(user.id, siteId);
+          } catch (error) {
+            console.error("[signIn] Error linking store to user:", error);
+          }
+        }
+        return true;
+      },
+      async jwt({ token, user }) {
+        if (user) {
+          token.id = user.id;
+        }
+        // Add site_id to token
+        if (siteId) {
+          token.siteId = siteId;
+        }
+        return token;
+      },
+      async session({ session, token }) {
+        if (token && session.user) {
+          session.user.id = token.id as string;
+          // @ts-ignore
+          session.siteId = token.siteId;
+        }
+        return session;
+      },
+    },
+  };
+}
+
+// Default auth options (uses public adapter)
+export const authOptions: NextAuthOptions = createAuthOptions(null);
+
+// =============================================================================
+// HELPER FUNCTIONS
+// =============================================================================
+
+/**
+ * Get session in server components
+ */
 export async function auth() {
   return getServerSession(authOptions);
+}
+
+/**
+ * Get session with site context
+ */
+export async function authWithSite(siteId: string) {
+  const options = createAuthOptions(siteId);
+  return getServerSession(options);
 }
 
 export type ActiveStore = {
@@ -282,6 +498,7 @@ export type ActiveStore = {
   instanceId: string | null;
   storeName: string | null;
   userId: string | null;
+  schemaName: string | null;
 };
 
 /**
@@ -292,16 +509,13 @@ export type ActiveStore = {
  * 1. requestedStoreId from URL params (ALWAYS takes precedence when provided)
  * 2. NextAuth session -> user's connected stores
  * 3. Wix cookies (legacy fallback)
- *
- * @param requestedStoreId - Optional: select a specific store by ID (from URL params)
- * @returns The active store or null if no store is active.
  */
 export async function getActiveStore(requestedStoreId?: string | null): Promise<ActiveStore | null> {
   const session = await auth();
 
   // Priority 1: If a specific store is requested via URL params
   if (requestedStoreId) {
-    // If user is logged in, validate the store belongs to them
+    const schemaName = await getSchemaForSite(requestedStoreId);
     if (session?.user?.id) {
       const stores = await getUserStores(session.user.id);
       const requestedStore = stores.find(
@@ -313,17 +527,17 @@ export async function getActiveStore(requestedStoreId?: string | null): Promise<
           instanceId: requestedStore.instance_id || null,
           storeName: requestedStore.store_name || null,
           userId: session.user.id,
+          schemaName: requestedStore.schema_name || schemaName || null,
         };
       }
     }
 
-    // Even if not logged in or store not linked, return the requested store
-    // This allows Wix iframe to work before user logs in
     return {
       siteId: requestedStoreId,
       instanceId: requestedStoreId,
       storeName: null,
       userId: session?.user?.id || null,
+      schemaName,
     };
   }
 
@@ -337,6 +551,7 @@ export async function getActiveStore(requestedStoreId?: string | null): Promise<
         instanceId: store.instance_id || null,
         storeName: store.store_name || null,
         userId: session.user.id,
+        schemaName: store.schema_name || null,
       };
     }
   }
@@ -345,21 +560,25 @@ export async function getActiveStore(requestedStoreId?: string | null): Promise<
   const { getActiveWixToken } = await import("@/lib/wix-context");
   const token = await getActiveWixToken();
   if (token) {
+    const schemaName = token.site_id ? await getSchemaForSite(token.site_id) : null;
     return {
       siteId: token.site_id || null,
       instanceId: token.instance_id || null,
       storeName: null,
       userId: null,
+      schemaName,
     };
   }
 
   return null;
 }
 
-// Helper to get current user's connected stores
+/**
+ * Helper to get current user's connected stores
+ */
 export async function getUserStores(userId: string) {
   const result = await sql`
-    SELECT sc.id, sc.site_id, sc.instance_id, sc.user_id, sc.connected_at,
+    SELECT sc.id, sc.site_id, sc.instance_id, sc.user_id, sc.connected_at, sc.schema_name,
            COALESCE(sc.store_name, c.store_name) as store_name,
            c.store_domain
     FROM store_connections sc
@@ -370,13 +589,25 @@ export async function getUserStores(userId: string) {
   return result.rows;
 }
 
-// Helper to link a store to user
+/**
+ * Helper to link a store to user
+ */
 export async function linkStoreToUser(userId: string, siteId: string, instanceId?: string) {
+  // Get user's business_id first
+  const businessResult = await sql`
+    SELECT business_id FROM business_users WHERE user_id = ${userId} LIMIT 1
+  `;
+  const businessId = businessResult.rows[0]?.business_id;
+
+  if (!businessId) {
+    console.error("linkStoreToUser: No business found for user", userId);
+    return;
+  }
+
   // First try to update existing record
-  // Use explicit null checks because SQL NULL = NULL is false
   const updated = await sql`
     UPDATE store_connections
-    SET user_id = ${userId}
+    SET business_id = ${businessId}, user_id = ${userId}, updated_at = NOW()
     WHERE (${siteId}::text IS NOT NULL AND site_id = ${siteId})
        OR (${instanceId}::text IS NOT NULL AND instance_id = ${instanceId})
     RETURNING id
@@ -384,30 +615,42 @@ export async function linkStoreToUser(userId: string, siteId: string, instanceId
 
   // If no record exists, create one
   if (updated.rows.length === 0) {
-    // Get user's business_id or create one
-    const userBusiness = await sql`
-      SELECT business_id FROM business_users WHERE user_id = ${userId} LIMIT 1
-    `;
-    let businessId = userBusiness.rows[0]?.business_id;
-
-    if (!businessId) {
-      // Create a new business for this user
-      businessId = crypto.randomUUID();
-      await sql`
-        INSERT INTO businesses (id, name, created_at, updated_at)
-        VALUES (${businessId}, 'Моята фирма', NOW(), NOW())
-      `;
-      await sql`
-        INSERT INTO business_users (business_id, user_id, role, created_at)
-        VALUES (${businessId}, ${userId}, 'owner', NOW())
-      `;
+    // Ensure tenant tables exist
+    let schemaName = await getSchemaForSite(siteId);
+    if (!schemaName) {
+      await createTenantTables(siteId);
+      schemaName = await getSchemaForSite(siteId);
     }
 
-    // Create store connection with role = 'owner' (first user to connect)
+    // Create store connection
     await sql`
-      INSERT INTO store_connections (business_id, site_id, instance_id, user_id, provider, role, connected_at)
-      VALUES (${businessId}, ${siteId || null}, ${instanceId || null}, ${userId}, 'wix', 'owner', NOW())
-      ON CONFLICT DO NOTHING
+      INSERT INTO store_connections (business_id, site_id, instance_id, user_id, schema_name, provider, role, connected_at)
+      VALUES (${businessId}, ${siteId || null}, ${instanceId || null}, ${userId}, ${schemaName}, 'wix', 'owner', NOW())
+      ON CONFLICT (site_id) WHERE site_id IS NOT NULL DO UPDATE SET business_id = ${businessId}, user_id = ${userId}, updated_at = NOW()
     `;
   }
+
+  console.log("✅ linkStoreToUser completed:", { userId, siteId, businessId });
+}
+
+/**
+ * Check if onboarding is complete for a store
+ */
+export async function isOnboardingComplete(siteId: string): Promise<boolean> {
+  const company = await getTenantCompany(siteId);
+  return company?.onboardingCompleted ?? false;
+}
+
+/**
+ * Check if subscription is active for a store
+ */
+export async function isSubscriptionActiveForStore(siteId: string): Promise<boolean> {
+  const company = await getTenantCompany(siteId);
+  if (!company) return false;
+
+  const status = company.subscriptionStatus;
+  if (status === 'active') return true;
+  if (status === 'trial' && company.trialEndsAt && company.trialEndsAt > new Date()) return true;
+
+  return false;
 }

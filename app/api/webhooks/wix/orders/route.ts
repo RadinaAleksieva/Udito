@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AppStrategy, createClient } from "@wix/sdk";
 import { orders } from "@wix/ecom";
-import { sql } from "@/lib/supabase-sql";
-import { getCompanyBySite, getLatestWixToken, getOrderById, initDb, saveWixTokens, upsertOrder, trackOrderUsage, trackReceiptUsage } from "@/lib/db";
+import { sql } from "@/lib/sql";
+import { getCompanyBySite, getLatestWixToken, initDb, saveWixTokens, trackOrderUsage, trackReceiptUsage } from "@/lib/db";
 import { issueReceipt, issueRefundReceipt, getSaleReceiptByOrderId } from "@/lib/receipts";
 import {
   upsertTenantOrder,
@@ -414,65 +414,49 @@ async function handleOrderEvent(event: any) {
     paymentStatus: mapped.paymentStatus,
   });
 
-  // Save to legacy shared table (for backwards compatibility during migration)
-  await upsertOrder({
-    ...mapped,
-    paidAt: effectivePaidAt,
-    businessId: null,
-    raw: orderRaw,
-  });
-
-  // === NEW: Save to tenant-specific table ===
+  // === SAVE TO TENANT TABLE ONLY ===
   // This is a NEW order from webhook (not synced), so is_synced = false = chargeable
-  if (mapped.siteId) {
-    try {
-      // Ensure tenant tables exist
-      const tablesExist = await tenantTablesExist(mapped.siteId);
-      if (!tablesExist) {
-        console.log("Creating tenant tables for site:", mapped.siteId);
-        await createTenantTables(mapped.siteId);
-      }
-
-      const tenantOrder: TenantOrder = {
-        id: mapped.id,
-        number: mapped.number,
-        status: mapped.status,
-        paymentStatus: mapped.paymentStatus,
-        createdAt: mapped.createdAt,
-        updatedAt: mapped.updatedAt,
-        paidAt: effectivePaidAt,
-        currency: mapped.currency,
-        subtotal: mapped.subtotal,
-        taxTotal: mapped.taxTotal,
-        shippingTotal: mapped.shippingTotal,
-        discountTotal: mapped.discountTotal,
-        total: mapped.total,
-        customerEmail: mapped.customerEmail,
-        customerName: mapped.customerName,
-        source: "webhook",
-        isSynced: false, // ✅ NEW order from webhook - CHARGEABLE
-        raw: orderRaw,
-      };
-
-      await upsertTenantOrder(mapped.siteId, tenantOrder);
-      console.log("✅ Order saved to tenant table:", mapped.number);
-
-      // Increment order count for billing (only for NEW orders)
-      await incrementTenantOrderCount(mapped.siteId);
-    } catch (tenantError) {
-      console.error("Failed to save to tenant table:", tenantError);
-      // Continue - legacy table was saved
-    }
+  if (!mapped.siteId) {
+    console.error("❌ No siteId in order - cannot save to tenant table");
+    return; // Cannot save without siteId
   }
+
+  // Ensure tenant tables exist (will auto-create if not)
+  const tenantOrder: TenantOrder = {
+    id: mapped.id,
+    number: mapped.number,
+    status: mapped.status,
+    paymentStatus: mapped.paymentStatus,
+    createdAt: mapped.createdAt,
+    updatedAt: mapped.updatedAt,
+    paidAt: effectivePaidAt,
+    currency: mapped.currency,
+    subtotal: mapped.subtotal,
+    taxTotal: mapped.taxTotal,
+    shippingTotal: mapped.shippingTotal,
+    discountTotal: mapped.discountTotal,
+    total: mapped.total,
+    customerEmail: mapped.customerEmail,
+    customerName: mapped.customerName,
+    source: "webhook",
+    isSynced: false, // ✅ NEW order from webhook - CHARGEABLE
+    raw: orderRaw,
+  };
+
+  await upsertTenantOrder(mapped.siteId, tenantOrder);
+  console.log("✅ Order saved to tenant table:", mapped.number);
+
+  // Increment order count for billing (only for NEW orders)
+  await incrementTenantOrderCount(mapped.siteId);
 
   console.log("✅ Order saved successfully:", mapped.number);
 
   // Track order usage for plan limits (legacy)
   await trackOrderUsage(mapped.siteId, instanceId);
 
-  // Read the order back from OUR database for receipt logic
+  // Read the order back from TENANT database for receipt logic
   // This ensures we use the enriched data we've already processed
-  const savedOrder = await getOrderById(mapped.id);
+  const savedOrder = await getTenantOrderById(mapped.siteId, mapped.id);
   const savedRaw = savedOrder?.raw ?? orderRaw;
   const statusText = (savedOrder?.status || mapped.status || "").toLowerCase();
 
@@ -654,8 +638,14 @@ async function handleOrderEvent(event: any) {
   // Handle refunds - queue for later processing
   // This ensures reliability: if receipt issuance fails, we can retry via cron
   if ((isRefunded || hasRefundActivity) && company?.store_id && mapped.siteId) {
-    const refundAmount = Number(mapped.total) || 0;
-    const refundReason = statusText.includes("cancel") ? "cancelled" : "refunded";
+    // For partial refunds, use the refund amount from activity; for full refunds use order total
+    const partialRefundAmount = refundActivity?.amount?.value ??
+                                refundActivity?.refundAmount ??
+                                orderRaw?.refundedAmount?.value ??
+                                orderRaw?.refundedAmount;
+    const refundAmount = Number(partialRefundAmount) || Number(mapped.total) || 0;
+    const isPartialRefund = paymentStatusUpper === "PARTIALLY_REFUNDED";
+    const refundReason = statusText.includes("cancel") ? "cancelled" : (isPartialRefund ? "partial_refund" : "refunded");
 
     // Check if we already have a pending refund queued for this order
     const alreadyQueued = await hasPendingRefund(mapped.siteId, mapped.id);

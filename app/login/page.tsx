@@ -39,6 +39,20 @@ function LoginForm() {
   }, []);
 
   useEffect(() => {
+    // Clear potentially corrupted auth cookies on login page load
+    // This prevents issues when NEXTAUTH_SECRET changes
+    const clearAuthCookies = () => {
+      const cookies = document.cookie.split(";");
+      for (const cookie of cookies) {
+        const name = cookie.split("=")[0].trim();
+        if (name.includes("next-auth") || name.includes("nextauth")) {
+          document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+          document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=${window.location.hostname}`;
+        }
+      }
+    };
+    clearAuthCookies();
+
     // Detect if we're in an iframe (embedded in Wix)
     let inIframe = false;
     try {

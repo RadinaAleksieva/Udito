@@ -4,7 +4,7 @@ import { decodeWixInstanceToken } from "@/lib/wix-instance";
 import { getAppInstanceDetails, getTokenInfo, getAccessToken } from "@/lib/wix";
 import { getServerSession } from "next-auth";
 import { authOptions, linkStoreToUser } from "@/lib/auth";
-import { sql } from "@/lib/supabase-sql";
+import { sql } from "@/lib/sql";
 
 const WIX_API_BASE = process.env.WIX_API_BASE || "https://www.wixapis.com";
 
@@ -98,7 +98,7 @@ async function registerWebhooks(instanceId: string, siteId: string | null) {
       : `Bearer ${accessToken}`;
 
     // Register webhook for order events - include instanceId and siteId in URL for identification
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://udito.vercel.app";
+    const baseUrl = process.env.APP_BASE_URL || "https://app.uditodevelopment.website";
     const params = new URLSearchParams();
     params.set("instanceId", instanceId);
     if (siteId) params.set("siteId", siteId);

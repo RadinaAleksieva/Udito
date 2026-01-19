@@ -1,4 +1,4 @@
-import { sql } from '../lib/supabase-sql.js';
+import { sql } from '../lib/sql.js';
 
 // Set env from .env.local manually
 const envContent = await import('fs').then(fs => fs.readFileSync('.env.local', 'utf8'));

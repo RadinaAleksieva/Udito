@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { sql } from "@/lib/supabase-sql";
+import { sql } from "@/lib/sql";
 import { authOptions } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +15,18 @@ export async function GET() {
 
     const userId = session.user.id;
 
+    // Check if user has a store connection (Step 0 requirement)
+    const storeConnectionResult = await sql`
+      SELECT sc.id, sc.site_id, sc.instance_id, sc.role, sc.store_name
+      FROM store_connections sc
+      WHERE sc.user_id = ${userId}
+      LIMIT 1
+    `;
+
+    const hasStoreConnection = storeConnectionResult.rows.length > 0;
+    const storeConnection = storeConnectionResult.rows[0] ?? null;
+    const storeRole = storeConnection?.role ?? null;
+
     // Get user's business and role
     const businessResult = await sql`
       SELECT b.id, b.name, b.onboarding_completed, b.onboarding_step, b.selected_plan_id,
@@ -26,20 +38,12 @@ export async function GET() {
       LIMIT 1
     `;
 
-    // Also check role from store_connections (for users who joined via access code)
-    const storeRoleResult = await sql`
-      SELECT role FROM store_connections
-      WHERE user_id = ${userId}
-      LIMIT 1
-    `;
-
-    const storeRole = storeRoleResult.rows[0]?.role ?? null;
-
     if (businessResult.rows.length === 0) {
       return NextResponse.json({
         error: "Нямате свързан бизнес",
         onboardingCompleted: false,
         onboardingStep: 0,
+        hasStoreConnection,
       });
     }
 
@@ -147,6 +151,12 @@ export async function GET() {
       subscriptionStatus: business.subscription_status,
       userRole,
       canOnboard,
+      hasStoreConnection,
+      storeConnection: storeConnection ? {
+        siteId: storeConnection.site_id,
+        instanceId: storeConnection.instance_id,
+        storeName: storeConnection.store_name,
+      } : null,
       company,
       billingCompany,
       settings,

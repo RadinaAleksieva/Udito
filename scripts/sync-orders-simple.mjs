@@ -1,4 +1,4 @@
-import { sql } from '../lib/supabase-sql.ts';
+import { sql } from '../lib/sql.ts';
 import fs from 'fs';
 
 // Load env

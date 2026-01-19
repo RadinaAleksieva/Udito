@@ -42,13 +42,28 @@ export async function middleware(request: NextRequest) {
 
   // Check for NextAuth JWT token
   let token = null;
+  let tokenError = false;
   try {
     token = await getToken({
       req: request,
       secret: process.env.NEXTAUTH_SECRET,
     });
   } catch {
-    // Token parsing failed
+    // Token parsing failed - need to clear invalid cookies
+    tokenError = true;
+  }
+
+  // If token parsing failed, clear cookies and redirect to login
+  if (tokenError) {
+    const response = NextResponse.redirect(new URL("/login", request.url));
+    // Clear all auth cookies
+    response.cookies.delete("next-auth.session-token");
+    response.cookies.delete("__Secure-next-auth.session-token");
+    response.cookies.delete("next-auth.csrf-token");
+    response.cookies.delete("__Host-next-auth.csrf-token");
+    response.cookies.delete("next-auth.callback-url");
+    response.cookies.delete("__Secure-next-auth.callback-url");
+    return response;
   }
 
   // Check for Wix instance cookies/params (for store identification)

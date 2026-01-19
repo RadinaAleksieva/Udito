@@ -7,7 +7,7 @@ envContent.split('\n').forEach(line => {
   if (match) process.env[match[1]] = match[2];
 });
 
-const { sql } = await import('../lib/supabase-sql.js');
+const { sql } = await import('../lib/sql.js');
 const { queryOrders, pickOrderFields, extractTransactionRef, extractDeliveryMethodFromOrder } = await import('../lib/wix.js');
 const { getSchemaForSite } = await import('../lib/tenant-db.js');
 

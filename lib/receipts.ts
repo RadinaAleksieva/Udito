@@ -1,4 +1,4 @@
-import { sql } from "@/lib/supabase-sql";
+import { sql } from "@/lib/sql";
 import {
   issueTenantReceipt,
   getTenantSaleReceiptByOrderId,
@@ -97,6 +97,7 @@ export async function countReceiptsForPeriodForSite(
   siteId: string
 ): Promise<number> {
   const schema = await getSchemaForSite(siteId);
+  if (!schema) return 0;
 
   const result = await sql.query(`
     SELECT COUNT(*) as total
@@ -113,6 +114,7 @@ export async function countReceiptsForPeriodForSite(
  */
 export async function hasRefundReceipt(siteId: string, orderId: string): Promise<boolean> {
   const schema = await getSchemaForSite(siteId);
+  if (!schema) return false;
 
   const result = await sql.query(`
     SELECT 1 FROM "${schema}".receipts
@@ -130,6 +132,7 @@ export async function hasRefundReceipt(siteId: string, orderId: string): Promise
  */
 export async function getSaleReceiptByOrderId(siteId: string, orderId: string) {
   const schema = await getSchemaForSite(siteId);
+  if (!schema) return null;
 
   const result = await sql.query(`
     SELECT id, issued_at, payload, type
@@ -144,6 +147,7 @@ export async function getSaleReceiptByOrderId(siteId: string, orderId: string) {
 
 export async function getReceiptByOrderId(siteId: string, orderId: string) {
   const schema = await getSchemaForSite(siteId);
+  if (!schema) return null;
 
   const result = await sql.query(`
     SELECT id, issued_at, payload
@@ -157,6 +161,7 @@ export async function getReceiptByOrderId(siteId: string, orderId: string) {
 
 export async function getReceiptByOrderIdAndType(siteId: string, orderId: string, type: string) {
   const schema = await getSchemaForSite(siteId);
+  if (!schema) return null;
 
   const result = await sql.query(`
     SELECT id, issued_at, payload, type, refund_amount, reference_receipt_id, return_payment_type
@@ -215,6 +220,7 @@ export async function listReceiptsWithOrdersForSite(
   limit = 200
 ) {
   const schema = await getSchemaForSite(siteId);
+  if (!schema) return [];
 
   const result = await sql.query(`
     SELECT r.order_id,
@@ -293,6 +299,7 @@ export async function listReceiptsWithOrdersForPeriodForSite(
   siteId: string
 ) {
   const schema = await getSchemaForSite(siteId);
+  if (!schema) return [];
 
   const result = await sql.query(`
     SELECT r.order_id,
@@ -353,6 +360,7 @@ export async function listOrdersWithReceiptsForAudit(
   siteId: string
 ) {
   const schema = await getSchemaForSite(siteId);
+  if (!schema) return [];
 
   const result = await sql.query(`
     SELECT
@@ -389,6 +397,7 @@ export async function listRefundReceiptsForAudit(
   siteId: string
 ) {
   const schema = await getSchemaForSite(siteId);
+  if (!schema) return [];
 
   const result = await sql.query(`
     SELECT

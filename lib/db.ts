@@ -1,5 +1,5 @@
-// Use Supabase-compatible SQL module
-import { sql } from "./supabase-sql";
+// PostgreSQL SQL module
+import { sql } from "./sql";
 import { getSchemaForSite } from "./tenant-db";
 
 // Re-export sql for direct queries in other modules
@@ -672,8 +672,9 @@ export async function saveWixTokens(params: {
     ? new Date(params.expiresAt).toISOString()
     : null;
 
-  // Use UPSERT - update existing token if site_id matches, otherwise insert
+  // Use UPSERT - update existing token if site_id or instance_id matches
   if (params.siteId) {
+    // Primary: upsert by site_id
     await sql`
       INSERT INTO wix_tokens (
         business_id,
@@ -700,8 +701,8 @@ export async function saveWixTokens(params: {
         expires_at = COALESCE(EXCLUDED.expires_at, wix_tokens.expires_at),
         updated_at = NOW();
     `;
-  } else {
-    // Fallback to simple insert if no siteId
+  } else if (params.instanceId) {
+    // Fallback: upsert by instance_id when site_id is not available
     await sql`
       INSERT INTO wix_tokens (
         business_id,
@@ -709,16 +710,28 @@ export async function saveWixTokens(params: {
         site_id,
         access_token,
         refresh_token,
-        expires_at
+        expires_at,
+        updated_at
       ) VALUES (
         ${params.businessId ?? null},
-        ${params.instanceId ?? null},
+        ${params.instanceId},
         ${params.siteId ?? null},
         ${params.accessToken ?? null},
         ${params.refreshToken ?? null},
-        ${expiresAt}
-      );
+        ${expiresAt},
+        NOW()
+      )
+      ON CONFLICT (instance_id) WHERE instance_id IS NOT NULL
+      DO UPDATE SET
+        site_id = COALESCE(EXCLUDED.site_id, wix_tokens.site_id),
+        access_token = COALESCE(EXCLUDED.access_token, wix_tokens.access_token),
+        refresh_token = COALESCE(EXCLUDED.refresh_token, wix_tokens.refresh_token),
+        expires_at = COALESCE(EXCLUDED.expires_at, wix_tokens.expires_at),
+        updated_at = NOW();
     `;
+  } else {
+    // No identifiers - should not happen, but log and skip
+    console.warn("saveWixTokens called without siteId or instanceId - skipping");
   }
 }
 
@@ -825,6 +838,7 @@ export async function listRecentOrdersForPeriodForSite(
   limit = 10
 ) {
   const schema = await getSchemaForSite(siteId);
+  if (!schema) return []; // No schema = no orders
 
   const result = await sql.query(`
     SELECT id, number, payment_status, status, created_at, total, currency, source
@@ -851,6 +865,7 @@ export async function listPaginatedOrdersForSite(
   endIso: string | null = null
 ) {
   const schema = await getSchemaForSite(siteId);
+  if (!schema) return { orders: [], total: 0 };
 
   // Count total
   const countResult = startIso && endIso
@@ -910,6 +925,7 @@ export async function listPaginatedOrdersForSite(
 
 export async function countOrdersForSite(siteId: string) {
   const schema = await getSchemaForSite(siteId);
+  if (!schema) return 0;
 
   const result = await sql.query(`
     SELECT COUNT(*) as total
@@ -931,6 +947,7 @@ export async function countOrdersForPeriodForSite(
   siteId: string
 ) {
   const schema = await getSchemaForSite(siteId);
+  if (!schema) return 0;
 
   const result = await sql.query(`
     SELECT COUNT(*) as total
@@ -1051,6 +1068,7 @@ export async function listAllDetailedOrders() {
 
 export async function listAllDetailedOrdersForSite(siteId: string, limit = 500) {
   const schema = await getSchemaForSite(siteId);
+  if (!schema) return [];
 
   const result = await sql.query(`
     SELECT id,
@@ -1126,6 +1144,7 @@ export async function listDetailedOrdersForPeriodForSite(
 ) {
   // Use schema-qualified table name
   const schema = await getSchemaForSite(siteId);
+  if (!schema) return [];
 
   const result = await sql.query(`
     SELECT id,

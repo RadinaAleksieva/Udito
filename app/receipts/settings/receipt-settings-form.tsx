@@ -195,7 +195,7 @@ export default function ReceiptSettingsForm() {
         return;
       }
 
-      if (form.logoUrl && form.logoUrl.includes("vercel-storage.com")) {
+      if (form.logoUrl && form.logoUrl.includes("/uploads/")) {
         fetch("/api/upload/logo", {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },

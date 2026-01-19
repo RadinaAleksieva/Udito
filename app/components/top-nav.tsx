@@ -5,7 +5,7 @@ import ThemeToggle from "./theme-toggle";
 import NavLinks from "./nav-links";
 
 export default async function TopNav({ title }: { title: string }) {
-  const appUrl = process.env.APP_BASE_URL || "https://udito.vercel.app";
+  const appUrl = process.env.APP_BASE_URL || "https://app.uditodevelopment.website";
   const requestHeaders = headers();
   const jar = cookies();
   const session = await auth();

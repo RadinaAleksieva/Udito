@@ -2,9 +2,12 @@ import { NextResponse } from "next/server";
 import {
   getCompanyBySite,
   initDb,
-  upsertOrder,
 } from "@/lib/db";
 import { issueReceipt } from "@/lib/receipts";
+import {
+  upsertTenantOrder,
+  TenantOrder,
+} from "@/lib/tenant-db";
 import {
   extractTransactionRef,
   extractPaymentId,
@@ -178,7 +181,35 @@ export async function POST(request: Request) {
           }
         }
         const mapped = orderRaw === raw ? base : pickOrderFields(orderRaw, "backfill");
-        await upsertOrder({ ...mapped, businessId: null, raw: orderRaw });
+        const siteIdResolved = mapped.siteId ?? siteIdParam ?? null;
+        if (!siteIdResolved) {
+          console.warn(`⚠️ Skipping order ${mapped.number}: no siteId`);
+          continue;
+        }
+
+        // Save to tenant table - synced orders are marked as isSynced=true (not chargeable)
+        const tenantOrder: TenantOrder = {
+          id: mapped.id,
+          number: mapped.number,
+          status: mapped.status,
+          paymentStatus: mapped.paymentStatus,
+          createdAt: mapped.createdAt,
+          updatedAt: mapped.updatedAt,
+          paidAt: mapped.paidAt,
+          currency: mapped.currency,
+          subtotal: mapped.subtotal,
+          taxTotal: mapped.taxTotal,
+          shippingTotal: mapped.shippingTotal,
+          discountTotal: mapped.discountTotal,
+          total: mapped.total,
+          customerEmail: mapped.customerEmail,
+          customerName: mapped.customerName,
+          source: "backfill",
+          isSynced: true, // ✅ Synced order - NOT chargeable
+          raw: orderRaw,
+        };
+        await upsertTenantOrder(siteIdResolved, tenantOrder);
+
         if ((mapped.paymentStatus || "").toUpperCase() === "PAID") {
           const receiptTxRef = extractTransactionRef(orderRaw);
           if (hasFiscalCode && receiptTxRef) {
@@ -187,6 +218,7 @@ export async function POST(request: Request) {
               payload: mapped,
               businessId: null,
               issuedAt: mapped.paidAt ?? mapped.createdAt ?? null,
+              siteId: siteIdResolved, // Required for tenant tables
             });
             receiptsIssued += 1;
           } else {

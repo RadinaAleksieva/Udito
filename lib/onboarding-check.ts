@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { sql } from "@/lib/supabase-sql";
+import { sql } from "@/lib/sql";
 import { auth } from "@/lib/auth";
 
 /**

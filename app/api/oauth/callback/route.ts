@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { initDb, saveWixTokens } from "@/lib/db";
+import { initDb, saveWixTokens, sql } from "@/lib/db";
 import { linkStoreToUser } from "@/lib/auth";
 import { getAppInstanceDetails } from "@/lib/wix";
 import { getServerSession } from "next-auth";
@@ -228,9 +228,43 @@ export async function GET(request: Request) {
     });
   }
 
-  // Always redirect to our app's overview page after successful OAuth
-  // The Wix close-window URL often shows a blank page
-  const responseRedirect = NextResponse.redirect(`${appBaseUrl}/overview?connected=1&store=${resolvedSiteId || ''}`);
+  // Check if user is logged in and link the store to them
+  let redirectPath = "/register";
+  let redirectParams = `from=wix&store=${resolvedSiteId || ''}`;
+
+  try {
+    const session = await getServerSession(authOptions);
+    if (session?.user?.id) {
+      // Verify user actually exists in database (session might be stale)
+      const userCheck = await sql`
+        SELECT u.id FROM users u
+        JOIN business_users bu ON bu.user_id = u.id
+        WHERE u.id = ${session.user.id}
+        LIMIT 1
+      `;
+
+      if (userCheck.rows.length > 0) {
+        // User exists and has a business - link the store
+        if (resolvedSiteId) {
+          await linkStoreToUser(session.user.id, resolvedSiteId, resolvedInstanceId ?? undefined);
+          console.log("✅ Linked store to user:", session.user.id, resolvedSiteId);
+        }
+        redirectPath = "/onboarding";
+        redirectParams = `connected=1&store=${resolvedSiteId || ''}`;
+      } else {
+        // User doesn't exist or has no business - treat as new user
+        console.log("⚠️ User session exists but user not found in DB, redirecting to register");
+      }
+    } else {
+      // No user logged in - redirect to register with Wix context
+      console.log("📝 No user session, redirecting to register with Wix context");
+    }
+  } catch (error) {
+    console.error("Failed to link store to user:", error);
+  }
+
+  // Redirect after successful OAuth
+  const responseRedirect = NextResponse.redirect(`${appBaseUrl}${redirectPath}?${redirectParams}`);
   if (resolvedInstanceId) {
     responseRedirect.cookies.set("udito_instance_id", resolvedInstanceId, {
       path: "/",

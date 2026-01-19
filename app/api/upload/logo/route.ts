@@ -1,9 +1,15 @@
-import { put, del } from "@vercel/blob";
 import { NextRequest, NextResponse } from "next/server";
 import { getActiveStore } from "@/lib/auth";
 import sizeOf from "image-size";
+import fs from "fs/promises";
+import path from "path";
+import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
+
+// Local storage directory for uploads
+const UPLOAD_DIR = process.env.UPLOAD_DIR || "/var/www/udito-app/public/uploads";
+const PUBLIC_URL_BASE = process.env.PUBLIC_URL_BASE || "/uploads";
 
 export async function POST(request: NextRequest) {
   try {
@@ -42,14 +48,24 @@ export async function POST(request: NextRequest) {
     const width = dimensions.width || 100;
     const height = dimensions.height || 100;
 
-    // Upload to Vercel Blob with store-specific path
-    const blob = await put(`logos/${storeId}/${file.name}`, buffer, {
-      access: "public",
-      addRandomSuffix: true, // Prevent caching issues
-    });
+    // Generate unique filename
+    const ext = path.extname(file.name) || ".png";
+    const randomSuffix = crypto.randomBytes(8).toString("hex");
+    const filename = `logo-${storeId}-${randomSuffix}${ext}`;
+
+    // Ensure upload directory exists
+    const logoDir = path.join(UPLOAD_DIR, "logos");
+    await fs.mkdir(logoDir, { recursive: true });
+
+    // Save file locally
+    const filePath = path.join(logoDir, filename);
+    await fs.writeFile(filePath, buffer);
+
+    // Return public URL
+    const url = `${PUBLIC_URL_BASE}/logos/${filename}`;
 
     return NextResponse.json({
-      url: blob.url,
+      url,
       width,
       height,
     });
@@ -77,12 +93,21 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "No URL provided" }, { status: 400 });
     }
 
-    // Only allow deleting logos from our blob storage
-    if (!url.includes("vercel-storage.com") && !url.includes("blob.vercel-storage.com")) {
+    // Only allow deleting local uploads
+    if (!url.startsWith(PUBLIC_URL_BASE)) {
       return NextResponse.json({ error: "Invalid URL" }, { status: 400 });
     }
 
-    await del(url);
+    // Extract filename from URL
+    const filename = path.basename(url);
+    const filePath = path.join(UPLOAD_DIR, "logos", filename);
+
+    // Delete file
+    try {
+      await fs.unlink(filePath);
+    } catch (e) {
+      // File might not exist, that's ok
+    }
 
     return NextResponse.json({ ok: true });
   } catch (error) {

@@ -48,7 +48,7 @@ main {
 
 .hero {
   display: grid;
-  gap: 36px;
+  gap: 40px;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   align-items: center;
 }
@@ -57,7 +57,7 @@ main {
   background: var(--bg-card);
   backdrop-filter: blur(20px);
   border-radius: 24px;
-  padding: 32px;
+  padding: 36px;
   border: 1px solid var(--border-color);
 }
 
@@ -76,7 +76,7 @@ main {
 
 .status-grid {
   display: grid;
-  gap: 16px;
+  gap: 20px;
   margin-top: 28px;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 }
@@ -85,9 +85,9 @@ main {
   background: var(--bg-card);
   backdrop-filter: blur(20px);
   border-radius: 18px;
-  padding: 20px;
+  padding: 22px;
   display: grid;
-  gap: 8px;
+  gap: 10px;
   border: 1px solid var(--border-color);
   transition: all 0.3s ease;
 }
@@ -246,7 +246,7 @@ main {
   font-size: 14px;
   font-weight: 600;
   color: var(--blue);
-  padding: 6px 12px;
+  padding: 8px 16px;
   border-radius: 999px;
   border: 1px solid var(--border-color);
   background: var(--bg-card);
@@ -296,10 +296,10 @@ main {
   background: var(--bg-card);
   backdrop-filter: blur(20px);
   border-radius: 18px;
-  padding: 24px;
+  padding: 28px;
   border: 1px solid var(--border-color);
   display: grid;
-  gap: 20px;
+  gap: 24px;
 }
 
 .form-header {
@@ -321,14 +321,14 @@ main {
 
 .form-grid {
   display: grid;
-  gap: 16px;
+  gap: 20px;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   font-family: "Source Sans 3", "Segoe UI", sans-serif;
 }
 
 .form-grid label {
   display: grid;
-  gap: 8px;
+  gap: 10px;
   font-size: 13px;
   color: var(--ink-secondary);
 }
@@ -341,8 +341,8 @@ main {
 .form-grid input {
   border-radius: 12px;
   border: 1px solid var(--border-color);
-  padding: 10px 12px;
-  font-size: 14px;
+  padding: 12px 14px;
+  font-size: 15px;
   font-family: "Source Sans 3", "Segoe UI", sans-serif;
   background: var(--bg-secondary);
   color: var(--ink);
@@ -358,7 +358,7 @@ main {
   border: none;
   background: var(--blue);
   color: #ffffff;
-  padding: 10px 18px;
+  padding: 12px 22px;
   border-radius: 999px;
   font-family: "Source Sans 3", "Segoe UI", sans-serif;
   font-weight: 600;
@@ -690,14 +690,14 @@ main {
 
 .order-cards {
   display: grid;
-  gap: 20px;
+  gap: 24px;
 }
 
 .order-card {
   background: var(--bg-card);
   backdrop-filter: blur(20px);
   border-radius: 20px;
-  padding: 22px 24px;
+  padding: 26px 28px;
   border: 1px solid var(--border-color);
 }
 
@@ -705,8 +705,8 @@ main {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 18px;
+  gap: 20px;
+  margin-bottom: 20px;
 }
 
 .order-card__header h3 {
@@ -742,12 +742,12 @@ main {
 .order-card__body {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 18px;
+  gap: 24px;
   font-family: "Source Sans 3", "Segoe UI", sans-serif;
 }
 
 .order-card__items-block {
-  margin-top: 18px;
+  margin-top: 24px;
   font-family: "Source Sans 3", "Segoe UI", sans-serif;
 }
 
@@ -928,7 +928,7 @@ main {
 }
 
 .settings-section {
-  padding: 20px;
+  padding: 24px;
   border-radius: 16px;
   border: 1px solid var(--border-color);
   background: var(--bg-card);
@@ -942,11 +942,11 @@ main {
 }
 
 .settings-section__header {
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .settings-section__header h3 {
-  margin: 0 0 6px;
+  margin: 0 0 8px;
   font-size: 18px;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
 }
@@ -4510,7 +4510,7 @@ main {
   backdrop-filter: blur(20px);
   border: 1px solid var(--border-color);
   border-radius: 24px;
-  padding: 40px;
+  padding: 48px;
   text-align: center;
 }
 
@@ -4582,7 +4582,7 @@ main {
 .login-buttons {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
 .login-btn {
@@ -4652,6 +4652,26 @@ main {
   flex: 1;
   height: 1px;
   background: var(--border-color);
+}
+
+/* Wix badge for register page */
+.register-wix-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(52, 199, 89, 0.15);
+  color: var(--green);
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 16px;
+}
+
+.register-wix-badge svg {
+  width: 18px;
+  height: 18px;
+  stroke: var(--green);
 }
 
 .login-access-toggle {
@@ -4788,17 +4808,17 @@ main {
 .login-email-form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
 .login-email-form input {
   width: 100%;
-  padding: 12px 16px;
+  padding: 14px 18px;
   border-radius: 12px;
   border: 1px solid var(--border-color);
   background: var(--bg-secondary);
   color: var(--ink);
-  font-size: 14px;
+  font-size: 15px;
   font-family: "Source Sans 3", "Segoe UI", sans-serif;
 }
 
@@ -6708,9 +6728,126 @@ main {
   background: var(--green);
 }
 
-/* Wide card variant */
+/* Onboarding connect page */
+.onboarding-connect-options {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin-top: 32px;
+  width: 100%;
+}
+
+.onboarding-connect-option {
+  background: var(--bg-secondary);
+  border-radius: 16px;
+  padding: 28px;
+  text-align: center;
+  border: 1px solid var(--border-color);
+  transition: all 0.2s ease;
+}
+
+.onboarding-connect-option:hover {
+  border-color: var(--border-color-strong);
+}
+
+.onboarding-connect-option--secondary {
+  background: transparent;
+  border: 1px dashed var(--border-color);
+}
+
+.onboarding-connect-option__icon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 16px;
+  background: var(--sky);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.onboarding-connect-option__icon svg {
+  width: 28px;
+  height: 28px;
+  stroke: var(--blue);
+}
+
+.onboarding-connect-option h3 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 8px;
+  color: var(--ink);
+}
+
+.onboarding-connect-option p {
+  font-size: 14px;
+  color: var(--ink-secondary);
+  margin: 0 0 20px;
+  line-height: 1.5;
+}
+
+.onboarding-connect-divider {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  color: var(--ink-secondary);
+  font-size: 13px;
+}
+
+.onboarding-connect-divider::before,
+.onboarding-connect-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border-color);
+}
+
+.onboarding-help {
+  margin-top: 32px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--ink-secondary);
+}
+
+.onboarding-help a {
+  color: var(--blue);
+  text-decoration: underline;
+}
+
+.onboarding-help a:hover {
+  text-decoration: none;
+}
+
+.form-buttons {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.form-buttons .login-btn {
+  flex: 1;
+  max-width: 180px;
+}
+
+.login-spinner--small {
+  width: 16px;
+  height: 16px;
+  border-width: 2px;
+  margin-right: 8px;
+}
+
+/* Wide card variant for onboarding */
 .login-card--wide {
-  max-width: 900px;
+  max-width: 720px;
+  width: 92%;
+}
+
+.login-card--wide .login-email-form {
+  gap: 20px;
+}
+
+.login-card--wide .form-row {
+  gap: 20px;
 }
 
 .login-card--plans {
@@ -6720,39 +6857,40 @@ main {
 
 /* Form sections */
 .form-section {
-  margin: 24px 0;
+  margin: 32px 0;
   text-align: left;
 }
 
 .form-section__title {
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 600;
   color: var(--ink);
-  margin: 0 0 8px;
+  margin: 0 0 12px;
 }
 
 .form-section__subtitle {
   font-size: 14px;
   color: var(--ink-secondary);
-  margin: 0 0 16px;
+  margin: 0 0 20px;
   font-family: "Source Sans 3", "Segoe UI", sans-serif;
+  line-height: 1.5;
 }
 
 .form-section__nested {
-  margin-top: 16px;
-  padding: 16px;
+  margin-top: 20px;
+  padding: 20px;
   background: var(--bg-secondary);
   border-radius: 12px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
 /* Form row for side-by-side inputs */
 .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: 16px;
 }
 
 @media (max-width: 500px) {

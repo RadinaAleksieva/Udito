@@ -1,15 +1,15 @@
 /**
- * PostgreSQL client for Supabase
+ * PostgreSQL client
  *
  * This module provides a `sql` tagged template literal function
- * that mimics @vercel/postgres API but works with Supabase.
+ * for database queries.
  */
 
 import { Pool, QueryResult, QueryResultRow } from 'pg';
 
 // Create a connection pool
 const pool = new Pool({
-  connectionString: process.env.POSTGRES_URL || process.env.DATABASE_URL,
+  connectionString: process.env.DATABASE_URL,
   ssl: {
     rejectUnauthorized: false,
   },
@@ -23,7 +23,7 @@ pool.on('error', (err) => {
   console.error('Unexpected error on idle client', err);
 });
 
-// Type for the sql function result (compatible with @vercel/postgres)
+// Type for the sql function result
 interface SqlResult<T extends QueryResultRow = QueryResultRow> {
   rows: T[];
   rowCount: number | null;
@@ -32,7 +32,7 @@ interface SqlResult<T extends QueryResultRow = QueryResultRow> {
   oid: number;
 }
 
-// Tagged template function that works like @vercel/postgres sql
+// Tagged template function for SQL queries
 export function sql<T extends QueryResultRow = QueryResultRow>(
   strings: TemplateStringsArray,
   ...values: unknown[]
@@ -46,7 +46,7 @@ export function sql<T extends QueryResultRow = QueryResultRow>(
   return pool.query<T>(query, values) as Promise<SqlResult<T>>;
 }
 
-// For backwards compatibility with @vercel/postgres API
+// Query method for parameterized queries
 sql.query = async <T extends QueryResultRow = QueryResultRow>(
   query: string,
   values?: unknown[]
@@ -62,5 +62,5 @@ export async function closeDatabaseConnection(): Promise<void> {
   await pool.end();
 }
 
-// Export types that match @vercel/postgres
+// Export types
 export type { QueryResultRow };

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { sql } from "@/lib/supabase-sql";
+import { sql } from "@/lib/sql";
 import { fetchOrderDetails } from "@/lib/wix";
 
 function isAdmin(email: string | null | undefined): boolean {

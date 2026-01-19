@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sql } from "@/lib/supabase-sql";
+import { sql } from "@/lib/sql";
 import {
   getPendingRefunds,
   markRefundProcessed,
@@ -29,13 +29,8 @@ function verifyCronSecret(request: NextRequest): boolean {
  * Process pending refunds from all tenant queues
  * This endpoint should be called by a cron job (e.g., every 5 minutes)
  *
- * Vercel Cron: Add to vercel.json:
- * {
- *   "crons": [{
- *     "path": "/api/cron/process-refunds",
- *     "schedule": "* /5 * * * *"
- *   }]
- * }
+ * Example crontab entry:
+ * 0,5,10,15,20,25,30,35,40,45,50,55 * * * * curl -H "Authorization: Bearer $CRON_SECRET" https://app.uditodevelopment.website/api/cron/process-refunds
  */
 export async function GET(request: NextRequest) {
   // Verify authorization

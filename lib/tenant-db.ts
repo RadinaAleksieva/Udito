@@ -2,24 +2,30 @@
  * Tenant-based database architecture
  *
  * Всеки магазин (tenant) има собствена PostgreSQL схема:
- * - {schema_name}.orders
- * - {schema_name}.receipts
- * - {schema_name}.audit_logs
- * - {schema_name}.webhook_logs
- * - {schema_name}.sync_state
- * - {schema_name}.monthly_usage
- * - {schema_name}.pending_refunds
+ * - {schema_name}.users         - потребители с достъп до магазина
+ * - {schema_name}.sessions      - активни сесии
+ * - {schema_name}.accounts      - OAuth акаунти (Google)
+ * - {schema_name}.company       - фирмени данни (един ред)
+ * - {schema_name}.orders        - поръчки
+ * - {schema_name}.receipts      - бележки
+ * - {schema_name}.audit_logs    - одит логове
+ * - {schema_name}.webhook_logs  - логове на webhooks
+ * - {schema_name}.sync_state    - състояние на синхронизация
+ * - {schema_name}.monthly_usage - месечна статистика
+ * - {schema_name}.pending_refunds - чакащи рефунди
  *
- * Споделени таблици (в public schema):
- * - companies
- * - wix_tokens
- * - businesses
- * - subscription_plans
- * - billing_companies
- * - store_connections
+ * Споделени таблици (в public schema) - САМО за маршрутизация:
+ * - store_connections (site_id -> schema_name mapping)
+ * - wix_tokens (Wix API токени)
+ *
+ * PRICING:
+ * - €5/месец до 50 поръчки
+ * - €15/месец до 300 поръчки
+ * - €15/месец + €0.10/поръчка (corporate, над 300)
+ * - Trial: 10 дни, изисква карта
  */
 
-import { sql } from "@/lib/supabase-sql";
+import { sql } from "@/lib/sql";
 
 // =============================================================================
 // SCHEMA CACHE & LOOKUP
@@ -30,8 +36,9 @@ const schemaCache = new Map<string, string>();
 
 /**
  * Взима schema name за даден siteId от базата или кеша
+ * Връща null ако schema не е намерена (вместо да хвърля грешка)
  */
-export async function getSchemaForSite(siteId: string): Promise<string> {
+export async function getSchemaForSite(siteId: string): Promise<string | null> {
   // Check cache first
   const cached = schemaCache.get(siteId);
   if (cached) {
@@ -60,8 +67,8 @@ export async function getSchemaForSite(siteId: string): Promise<string> {
     return schemaName;
   }
 
-  // No schema found - throw error
-  throw new Error(`No schema found for site ${siteId}. Please ensure the store is properly configured.`);
+  // No schema found - return null (let caller decide what to do)
+  return null;
 }
 
 /**
@@ -90,8 +97,9 @@ export function normalizeSiteId(siteId: string): string {
 /**
  * Генерира schema-qualified име на таблица
  */
-export async function getTableName(baseName: string, siteId: string): Promise<string> {
+export async function getTableName(baseName: string, siteId: string): Promise<string | null> {
   const schema = await getSchemaForSite(siteId);
+  if (!schema) return null;
   return `"${schema}"."${baseName}"`;
 }
 
@@ -99,13 +107,17 @@ export async function getTableName(baseName: string, siteId: string): Promise<st
  * Списък на всички tenant-specific таблици
  */
 export const TENANT_TABLES = [
+  "users",
+  "sessions",
+  "accounts",
+  "company",
   "orders",
   "receipts",
-  "users",
   "webhook_logs",
   "sync_state",
   "monthly_usage",
   "pending_refunds",
+  "audit_logs",
 ] as const;
 
 // =============================================================================
@@ -124,16 +136,123 @@ export async function createTenantTables(siteId: string, schemaName?: string): P
   // Create the schema
   await sql.query(`CREATE SCHEMA IF NOT EXISTS "${schema}"`);
 
-  // Store schema_name in store_connections and companies
+  // UPSERT store_connections - ако няма запис, създава го
   await sql.query(`
-    UPDATE store_connections SET schema_name = $1 WHERE site_id = $2
-  `, [schema, siteId]);
-  await sql.query(`
-    UPDATE companies SET schema_name = $1 WHERE site_id = $2
-  `, [schema, siteId]);
+    INSERT INTO store_connections (site_id, schema_name, provider, connected_at)
+    VALUES ($1, $2, 'wix', NOW())
+    ON CONFLICT (site_id) DO UPDATE SET schema_name = $2
+  `, [siteId, schema]);
 
   // Cache it
   schemaCache.set(siteId, schema);
+
+  // ==========================================================================
+  // USERS TABLE - потребители с достъп до магазина
+  // ==========================================================================
+  await sql.query(`
+    CREATE TABLE IF NOT EXISTS "${schema}".users (
+      id text PRIMARY KEY,
+      email text UNIQUE NOT NULL,
+      name text,
+      password_hash text,
+      password_salt text,
+      image text,
+      email_verified timestamptz,
+      role text DEFAULT 'member',
+      created_at timestamptz DEFAULT now()
+    )
+  `);
+
+  // ==========================================================================
+  // SESSIONS TABLE - активни сесии
+  // ==========================================================================
+  await sql.query(`
+    CREATE TABLE IF NOT EXISTS "${schema}".sessions (
+      id bigserial PRIMARY KEY,
+      user_id text NOT NULL REFERENCES "${schema}".users(id) ON DELETE CASCADE,
+      session_token text UNIQUE NOT NULL,
+      expires_at timestamptz NOT NULL,
+      created_at timestamptz DEFAULT now()
+    )
+  `);
+
+  await sql.query(`
+    CREATE INDEX IF NOT EXISTS sessions_token_idx ON "${schema}".sessions (session_token)
+  `);
+
+  // ==========================================================================
+  // ACCOUNTS TABLE - OAuth акаунти (Google)
+  // ==========================================================================
+  await sql.query(`
+    CREATE TABLE IF NOT EXISTS "${schema}".accounts (
+      id text PRIMARY KEY,
+      user_id text NOT NULL REFERENCES "${schema}".users(id) ON DELETE CASCADE,
+      type text NOT NULL,
+      provider text NOT NULL,
+      provider_account_id text NOT NULL,
+      refresh_token text,
+      access_token text,
+      expires_at bigint,
+      token_type text,
+      scope text,
+      id_token text,
+      session_state text,
+      UNIQUE(provider, provider_account_id)
+    )
+  `);
+
+  // ==========================================================================
+  // COMPANY TABLE - фирмени данни (един ред на магазин)
+  // ==========================================================================
+  await sql.query(`
+    CREATE TABLE IF NOT EXISTS "${schema}".company (
+      id bigserial PRIMARY KEY,
+      site_id text UNIQUE,
+      instance_id text,
+      store_name text,
+      store_domain text,
+      legal_name text,
+      vat_number text,
+      bulstat text,
+      store_id text,
+      logo_url text,
+      logo_width integer,
+      logo_height integer,
+      address_line1 text,
+      address_line2 text,
+      city text,
+      postal_code text,
+      country text DEFAULT 'BG',
+      email text,
+      phone text,
+      iban text,
+      bank_name text,
+      mol text,
+      receipt_template text,
+      receipt_number_start bigint DEFAULT 1,
+      cod_receipts_enabled boolean DEFAULT false,
+      receipts_start_date timestamptz,
+      accent_color text DEFAULT 'green',
+      trial_ends_at timestamptz,
+      subscription_status text DEFAULT 'trial',
+      plan_id text DEFAULT 'starter',
+      subscription_expires_at timestamptz,
+      stripe_customer_id text,
+      stripe_subscription_id text,
+      stripe_payment_method_id text,
+      onboarding_completed boolean DEFAULT false,
+      onboarding_step integer DEFAULT 0,
+      created_at timestamptz DEFAULT now(),
+      updated_at timestamptz DEFAULT now()
+    )
+  `);
+
+  // Insert initial company row with site_id
+  await sql.query(`
+    INSERT INTO "${schema}".company (site_id, trial_ends_at)
+    VALUES ($1, NOW() + INTERVAL '10 days')
+    ON CONFLICT (site_id) DO NOTHING
+  `, [siteId]);
 
   // orders table
   await sql.query(`
@@ -275,6 +394,10 @@ export async function createTenantTables(siteId: string, schemaName?: string): P
 export async function dropTenantTables(siteId: string): Promise<void> {
   try {
     const schema = await getSchemaForSite(siteId);
+    if (!schema) {
+      console.log(`No schema found for site: ${siteId}, nothing to drop`);
+      return;
+    }
     console.log(`Dropping tenant schema for site: ${siteId} (schema: ${schema})`);
 
     await sql.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
@@ -294,6 +417,7 @@ export async function dropTenantTables(siteId: string): Promise<void> {
 export async function tenantTablesExist(siteId: string): Promise<boolean> {
   try {
     const schema = await getSchemaForSite(siteId);
+    if (!schema) return false;
 
     const result = await sql.query(`
       SELECT EXISTS (
@@ -336,6 +460,15 @@ export interface TenantOrder {
 
 export async function upsertTenantOrder(siteId: string, order: TenantOrder): Promise<void> {
   const schema = await getSchemaForSite(siteId);
+  if (!schema) {
+    console.error(`[upsertTenantOrder] No schema found for site ${siteId}. Creating tenant tables...`);
+    await createTenantTables(siteId);
+    const newSchema = await getSchemaForSite(siteId);
+    if (!newSchema) {
+      throw new Error(`Failed to create tenant schema for site ${siteId}`);
+    }
+    return upsertTenantOrder(siteId, order); // Retry with new schema
+  }
 
   const createdAt = order.createdAt ? new Date(order.createdAt).toISOString() : null;
   const updatedAt = order.updatedAt ? new Date(order.updatedAt).toISOString() : null;
@@ -394,6 +527,7 @@ export async function upsertTenantOrder(siteId: string, order: TenantOrder): Pro
 
 export async function getTenantOrderById(siteId: string, orderId: string): Promise<any | null> {
   const schema = await getSchemaForSite(siteId);
+  if (!schema) return null;
 
   const result = await sql.query(`
     SELECT * FROM "${schema}".orders WHERE id = $1 LIMIT 1
@@ -409,12 +543,19 @@ export async function listTenantOrders(siteId: string, options?: {
   endDate?: string;
 }): Promise<any[]> {
   const schema = await getSchemaForSite(siteId);
+  if (!schema) return [];
   const limit = options?.limit ?? 50;
   const offset = options?.offset ?? 0;
 
   let query = `SELECT * FROM "${schema}".orders`;
   const params: any[] = [];
   const conditions: string[] = [];
+
+  // Exclude archived orders
+  conditions.push(`(status IS NULL OR LOWER(status) NOT LIKE 'archiv%')`);
+  conditions.push(`COALESCE(raw->>'archived', 'false') <> 'true'`);
+  conditions.push(`COALESCE(raw->>'isArchived', 'false') <> 'true'`);
+  conditions.push(`raw->>'archivedAt' IS NULL`);
 
   if (options?.startDate) {
     params.push(options.startDate);
@@ -426,10 +567,7 @@ export async function listTenantOrders(siteId: string, options?: {
     conditions.push(`created_at <= $${params.length}`);
   }
 
-  if (conditions.length > 0) {
-    query += ` WHERE ${conditions.join(' AND ')}`;
-  }
-
+  query += ` WHERE ${conditions.join(' AND ')}`;
   query += ` ORDER BY created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
   params.push(limit, offset);
 
@@ -443,10 +581,17 @@ export async function countTenantOrders(siteId: string, options?: {
   isSynced?: boolean;
 }): Promise<number> {
   const schema = await getSchemaForSite(siteId);
+  if (!schema) return 0;
 
   let query = `SELECT COUNT(*) as count FROM "${schema}".orders`;
   const params: any[] = [];
   const conditions: string[] = [];
+
+  // Exclude archived orders
+  conditions.push(`(status IS NULL OR LOWER(status) NOT LIKE 'archiv%')`);
+  conditions.push(`COALESCE(raw->>'archived', 'false') <> 'true'`);
+  conditions.push(`COALESCE(raw->>'isArchived', 'false') <> 'true'`);
+  conditions.push(`raw->>'archivedAt' IS NULL`);
 
   if (options?.startDate) {
     params.push(options.startDate);
@@ -463,9 +608,7 @@ export async function countTenantOrders(siteId: string, options?: {
     conditions.push(`is_synced = $${params.length}`);
   }
 
-  if (conditions.length > 0) {
-    query += ` WHERE ${conditions.join(' AND ')}`;
-  }
+  query += ` WHERE ${conditions.join(' AND ')}`;
 
   const result = await sql.query(query, params);
   return parseInt(result.rows[0]?.count ?? '0', 10);
@@ -484,14 +627,29 @@ export async function getTenantStats(siteId: string): Promise<{
   currentMonthUsage: { ordersCount: number; receiptsCount: number };
 }> {
   const schema = await getSchemaForSite(siteId);
+  if (!schema) {
+    return {
+      totalOrders: 0,
+      syncedOrders: 0,
+      newOrders: 0,
+      totalReceipts: 0,
+      saleReceipts: 0,
+      refundReceipts: 0,
+      currentMonthUsage: { ordersCount: 0, receiptsCount: 0 },
+    };
+  }
 
-  // Count orders
+  // Count orders (excluding archived)
   const ordersResult = await sql.query(`
     SELECT
       COUNT(*) as total,
       COUNT(*) FILTER (WHERE is_synced = true) as synced,
       COUNT(*) FILTER (WHERE is_synced = false) as new
     FROM "${schema}".orders
+    WHERE (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
+      AND COALESCE(raw->>'archived', 'false') <> 'true'
+      AND COALESCE(raw->>'isArchived', 'false') <> 'true'
+      AND raw->>'archivedAt' IS NULL
   `);
 
   // Count receipts
@@ -533,6 +691,9 @@ export interface TenantReceipt {
 
 export async function getNextTenantReceiptId(siteId: string): Promise<number> {
   const schema = await getSchemaForSite(siteId);
+  if (!schema) {
+    throw new Error(`No schema found for site ${siteId}`);
+  }
 
   const result = await sql.query(`
     SELECT COALESCE(MAX(id), 0) + 1 as next_id FROM "${schema}".receipts
@@ -546,6 +707,9 @@ export async function issueTenantReceipt(siteId: string, receipt: TenantReceipt)
   receiptId: number | null;
 }> {
   const schema = await getSchemaForSite(siteId);
+  if (!schema) {
+    throw new Error(`No schema found for site ${siteId}`);
+  }
   const type = receipt.type ?? 'sale';
   const issuedAt = receipt.issuedAt ? new Date(receipt.issuedAt).toISOString() : new Date().toISOString();
 
@@ -610,6 +774,7 @@ export async function issueTenantReceipt(siteId: string, receipt: TenantReceipt)
 
 export async function getTenantReceiptById(siteId: string, receiptId: number): Promise<any | null> {
   const schema = await getSchemaForSite(siteId);
+  if (!schema) return null;
 
   const result = await sql.query(`
     SELECT * FROM "${schema}".receipts WHERE id = $1 LIMIT 1
@@ -620,6 +785,7 @@ export async function getTenantReceiptById(siteId: string, receiptId: number): P
 
 export async function getTenantSaleReceiptByOrderId(siteId: string, orderId: string): Promise<any | null> {
   const schema = await getSchemaForSite(siteId);
+  if (!schema) return null;
 
   const result = await sql.query(`
     SELECT * FROM "${schema}".receipts
@@ -638,6 +804,7 @@ export async function listTenantReceipts(siteId: string, options?: {
   type?: 'sale' | 'refund';
 }): Promise<any[]> {
   const schema = await getSchemaForSite(siteId);
+  if (!schema) return [];
   const limit = options?.limit ?? 50;
   const offset = options?.offset ?? 0;
 
@@ -677,6 +844,7 @@ export async function countTenantReceipts(siteId: string, options?: {
   type?: 'sale' | 'refund';
 }): Promise<number> {
   const schema = await getSchemaForSite(siteId);
+  if (!schema) return 0;
 
   let query = `SELECT COUNT(*) as count FROM "${schema}".receipts`;
   const params: any[] = [];
@@ -707,6 +875,7 @@ export async function countTenantReceipts(siteId: string, options?: {
 
 export async function deleteTenantReceipt(siteId: string, receiptId: number): Promise<boolean> {
   const schema = await getSchemaForSite(siteId);
+  if (!schema) return false;
 
   const result = await sql.query(`
     DELETE FROM "${schema}".receipts WHERE id = $1 RETURNING id
@@ -729,6 +898,10 @@ export async function logTenantWebhook(siteId: string, params: {
   payloadPreview?: string;
 }): Promise<void> {
   const schema = await getSchemaForSite(siteId);
+  if (!schema) {
+    console.warn(`[logTenantWebhook] No schema for site ${siteId}, skipping log`);
+    return;
+  }
 
   await sql.query(`
     INSERT INTO "${schema}".webhook_logs (
@@ -747,6 +920,7 @@ export async function logTenantWebhook(siteId: string, params: {
 
 export async function webhookAlreadyProcessed(siteId: string, eventId: string): Promise<boolean> {
   const schema = await getSchemaForSite(siteId);
+  if (!schema) return false;
 
   const result = await sql.query(`
     SELECT id FROM "${schema}".webhook_logs
@@ -763,6 +937,7 @@ export async function webhookAlreadyProcessed(siteId: string, eventId: string): 
 
 export async function getTenantSyncState(siteId: string): Promise<any | null> {
   const schema = await getSchemaForSite(siteId);
+  if (!schema) return null;
 
   const result = await sql.query(`
     SELECT * FROM "${schema}".sync_state ORDER BY id DESC LIMIT 1
@@ -777,6 +952,10 @@ export async function updateTenantSyncState(siteId: string, state: {
   lastError?: string | null;
 }): Promise<void> {
   const schema = await getSchemaForSite(siteId);
+  if (!schema) {
+    console.warn(`[updateTenantSyncState] No schema for site ${siteId}`);
+    return;
+  }
 
   await sql.query(`
     INSERT INTO "${schema}".sync_state (cursor, status, last_error, updated_at)
@@ -790,6 +969,10 @@ export async function updateTenantSyncState(siteId: string, state: {
 
 export async function incrementTenantOrderCount(siteId: string): Promise<void> {
   const schema = await getSchemaForSite(siteId);
+  if (!schema) {
+    console.warn(`[incrementTenantOrderCount] No schema for site ${siteId}`);
+    return;
+  }
   const yearMonth = new Date().toISOString().slice(0, 7);
 
   await sql.query(`
@@ -803,6 +986,10 @@ export async function incrementTenantOrderCount(siteId: string): Promise<void> {
 
 export async function incrementTenantReceiptCount(siteId: string): Promise<void> {
   const schema = await getSchemaForSite(siteId);
+  if (!schema) {
+    console.warn(`[incrementTenantReceiptCount] No schema for site ${siteId}`);
+    return;
+  }
   const yearMonth = new Date().toISOString().slice(0, 7);
 
   await sql.query(`
@@ -819,6 +1006,9 @@ export async function getTenantMonthlyUsage(siteId: string, yearMonth?: string):
   receiptsCount: number;
 }> {
   const schema = await getSchemaForSite(siteId);
+  if (!schema) {
+    return { ordersCount: 0, receiptsCount: 0 };
+  }
   const ym = yearMonth ?? new Date().toISOString().slice(0, 7);
 
   const result = await sql.query(`
@@ -849,6 +1039,9 @@ export interface PendingRefund {
  */
 export async function queuePendingRefund(siteId: string, refund: PendingRefund): Promise<number> {
   const schema = await getSchemaForSite(siteId);
+  if (!schema) {
+    throw new Error(`No schema found for site ${siteId}`);
+  }
 
   const result = await sql.query(`
     INSERT INTO "${schema}".pending_refunds (order_id, refund_amount, reason, event_payload)
@@ -893,6 +1086,7 @@ export async function getPendingRefunds(siteId: string, limit = 10): Promise<Arr
   createdAt: string;
 }>> {
   const schema = await getSchemaForSite(siteId);
+  if (!schema) return [];
 
   const result = await sql.query(`
     SELECT id, order_id, refund_amount, reason, event_payload, attempts, created_at
@@ -919,6 +1113,7 @@ export async function getPendingRefunds(siteId: string, limit = 10): Promise<Arr
  */
 export async function markRefundProcessed(siteId: string, refundId: number): Promise<void> {
   const schema = await getSchemaForSite(siteId);
+  if (!schema) return;
 
   await sql.query(`
     UPDATE "${schema}".pending_refunds
@@ -932,6 +1127,7 @@ export async function markRefundProcessed(siteId: string, refundId: number): Pro
  */
 export async function markRefundFailed(siteId: string, refundId: number, error: string): Promise<void> {
   const schema = await getSchemaForSite(siteId);
+  if (!schema) return;
 
   await sql.query(`
     UPDATE "${schema}".pending_refunds
@@ -946,6 +1142,7 @@ export async function markRefundFailed(siteId: string, refundId: number, error: 
  */
 export async function hasPendingRefund(siteId: string, orderId: string): Promise<boolean> {
   const schema = await getSchemaForSite(siteId);
+  if (!schema) return false;
 
   const result = await sql.query(`
     SELECT 1 FROM "${schema}".pending_refunds
@@ -986,6 +1183,10 @@ export interface AuditLogEntry {
  */
 export async function logAuditEvent(siteId: string, entry: AuditLogEntry): Promise<void> {
   const schema = await getSchemaForSite(siteId);
+  if (!schema) {
+    console.warn(`[logAuditEvent] No schema for site ${siteId}, skipping audit log`);
+    return;
+  }
 
   await sql.query(`
     INSERT INTO "${schema}".audit_logs (action, user_id, order_id, receipt_id, details, ip_address)
@@ -1020,6 +1221,7 @@ export async function getAuditLogs(siteId: string, options?: {
   createdAt: string;
 }>> {
   const schema = await getSchemaForSite(siteId);
+  if (!schema) return [];
   const limit = options?.limit ?? 50;
   const offset = options?.offset ?? 0;
 
@@ -1064,4 +1266,502 @@ export async function getAuditLogs(siteId: string, options?: {
     ipAddress: row.ip_address,
     createdAt: row.created_at,
   }));
+}
+
+// =============================================================================
+// TENANT USERS (за NextAuth)
+// =============================================================================
+
+export interface TenantUser {
+  id: string;
+  email: string;
+  name?: string | null;
+  image?: string | null;
+  emailVerified?: Date | null;
+  role?: string;
+}
+
+export async function createTenantUser(siteId: string, user: Omit<TenantUser, 'id'>): Promise<TenantUser> {
+  const schema = await getSchemaForSite(siteId);
+  if (!schema) {
+    throw new Error(`No schema found for site ${siteId}`);
+  }
+
+  const id = crypto.randomUUID();
+  await sql.query(`
+    INSERT INTO "${schema}".users (id, email, name, image, email_verified, role)
+    VALUES ($1, $2, $3, $4, $5, $6)
+  `, [id, user.email, user.name ?? null, user.image ?? null, user.emailVerified?.toISOString() ?? null, user.role ?? 'member']);
+
+  return {
+    id,
+    email: user.email,
+    name: user.name ?? null,
+    image: user.image ?? null,
+    emailVerified: user.emailVerified ?? null,
+    role: user.role ?? 'member',
+  };
+}
+
+export async function getTenantUser(siteId: string, userId: string): Promise<TenantUser | null> {
+  const schema = await getSchemaForSite(siteId);
+  if (!schema) return null;
+
+  const result = await sql.query(`
+    SELECT * FROM "${schema}".users WHERE id = $1
+  `, [userId]);
+
+  if (result.rows.length === 0) return null;
+  const user = result.rows[0];
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name ?? null,
+    image: user.image ?? null,
+    emailVerified: user.email_verified ? new Date(user.email_verified) : null,
+    role: user.role ?? 'member',
+  };
+}
+
+export async function getTenantUserByEmail(siteId: string, email: string): Promise<TenantUser | null> {
+  const schema = await getSchemaForSite(siteId);
+  if (!schema) return null;
+
+  const result = await sql.query(`
+    SELECT * FROM "${schema}".users WHERE email = $1
+  `, [email]);
+
+  if (result.rows.length === 0) return null;
+  const user = result.rows[0];
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name ?? null,
+    image: user.image ?? null,
+    emailVerified: user.email_verified ? new Date(user.email_verified) : null,
+    role: user.role ?? 'member',
+  };
+}
+
+export async function updateTenantUser(siteId: string, userId: string, data: Partial<TenantUser>): Promise<TenantUser | null> {
+  const schema = await getSchemaForSite(siteId);
+  if (!schema) return null;
+
+  const result = await sql.query(`
+    UPDATE "${schema}".users
+    SET email = COALESCE($2, email),
+        name = COALESCE($3, name),
+        image = COALESCE($4, image),
+        email_verified = COALESCE($5, email_verified),
+        role = COALESCE($6, role)
+    WHERE id = $1
+    RETURNING *
+  `, [userId, data.email ?? null, data.name ?? null, data.image ?? null, data.emailVerified?.toISOString() ?? null, data.role ?? null]);
+
+  if (result.rows.length === 0) return null;
+  const user = result.rows[0];
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name ?? null,
+    image: user.image ?? null,
+    emailVerified: user.email_verified ? new Date(user.email_verified) : null,
+    role: user.role ?? 'member',
+  };
+}
+
+// =============================================================================
+// TENANT ACCOUNTS (OAuth - Google)
+// =============================================================================
+
+export interface TenantAccount {
+  id: string;
+  userId: string;
+  type: string;
+  provider: string;
+  providerAccountId: string;
+  refresh_token?: string | null;
+  access_token?: string | null;
+  expires_at?: number | null;
+  token_type?: string | null;
+  scope?: string | null;
+  id_token?: string | null;
+  session_state?: string | null;
+}
+
+export async function linkTenantAccount(siteId: string, account: TenantAccount): Promise<TenantAccount> {
+  const schema = await getSchemaForSite(siteId);
+  if (!schema) {
+    throw new Error(`No schema found for site ${siteId}`);
+  }
+
+  await sql.query(`
+    INSERT INTO "${schema}".accounts (id, user_id, type, provider, provider_account_id, refresh_token, access_token, expires_at, token_type, scope, id_token, session_state)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+    ON CONFLICT (provider, provider_account_id) DO UPDATE SET
+      access_token = EXCLUDED.access_token,
+      refresh_token = EXCLUDED.refresh_token,
+      expires_at = EXCLUDED.expires_at
+  `, [
+    account.id,
+    account.userId,
+    account.type,
+    account.provider,
+    account.providerAccountId,
+    account.refresh_token ?? null,
+    account.access_token ?? null,
+    account.expires_at ?? null,
+    account.token_type ?? null,
+    account.scope ?? null,
+    account.id_token ?? null,
+    account.session_state ?? null,
+  ]);
+
+  return account;
+}
+
+export async function getTenantUserByAccount(siteId: string, provider: string, providerAccountId: string): Promise<TenantUser | null> {
+  const schema = await getSchemaForSite(siteId);
+  if (!schema) return null;
+
+  const result = await sql.query(`
+    SELECT u.* FROM "${schema}".users u
+    JOIN "${schema}".accounts a ON u.id = a.user_id
+    WHERE a.provider = $1 AND a.provider_account_id = $2
+  `, [provider, providerAccountId]);
+
+  if (result.rows.length === 0) return null;
+  const user = result.rows[0];
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name ?? null,
+    image: user.image ?? null,
+    emailVerified: user.email_verified ? new Date(user.email_verified) : null,
+    role: user.role ?? 'member',
+  };
+}
+
+// =============================================================================
+// TENANT SESSIONS
+// =============================================================================
+
+export interface TenantSession {
+  sessionToken: string;
+  userId: string;
+  expires: Date;
+}
+
+export async function createTenantSession(siteId: string, session: TenantSession): Promise<TenantSession> {
+  const schema = await getSchemaForSite(siteId);
+  if (!schema) {
+    throw new Error(`No schema found for site ${siteId}`);
+  }
+
+  await sql.query(`
+    INSERT INTO "${schema}".sessions (user_id, session_token, expires_at)
+    VALUES ($1, $2, $3)
+  `, [session.userId, session.sessionToken, session.expires.toISOString()]);
+
+  return session;
+}
+
+export async function getTenantSessionAndUser(siteId: string, sessionToken: string): Promise<{ session: TenantSession; user: TenantUser } | null> {
+  const schema = await getSchemaForSite(siteId);
+  if (!schema) return null;
+
+  const result = await sql.query(`
+    SELECT s.*, u.id as user_id, u.email, u.name, u.image, u.email_verified, u.role
+    FROM "${schema}".sessions s
+    JOIN "${schema}".users u ON s.user_id = u.id
+    WHERE s.session_token = $1 AND s.expires_at > NOW()
+  `, [sessionToken]);
+
+  if (result.rows.length === 0) return null;
+  const row = result.rows[0];
+  return {
+    session: {
+      sessionToken: row.session_token,
+      userId: row.user_id,
+      expires: new Date(row.expires_at),
+    },
+    user: {
+      id: row.user_id,
+      email: row.email,
+      name: row.name ?? null,
+      image: row.image ?? null,
+      emailVerified: row.email_verified ? new Date(row.email_verified) : null,
+      role: row.role ?? 'member',
+    },
+  };
+}
+
+export async function updateTenantSession(siteId: string, sessionToken: string, expires: Date): Promise<TenantSession | null> {
+  const schema = await getSchemaForSite(siteId);
+  if (!schema) return null;
+
+  const result = await sql.query(`
+    UPDATE "${schema}".sessions SET expires_at = $2
+    WHERE session_token = $1
+    RETURNING *
+  `, [sessionToken, expires.toISOString()]);
+
+  if (result.rows.length === 0) return null;
+  return {
+    sessionToken: result.rows[0].session_token,
+    userId: result.rows[0].user_id,
+    expires: new Date(result.rows[0].expires_at),
+  };
+}
+
+export async function deleteTenantSession(siteId: string, sessionToken: string): Promise<void> {
+  const schema = await getSchemaForSite(siteId);
+  if (!schema) return;
+
+  await sql.query(`DELETE FROM "${schema}".sessions WHERE session_token = $1`, [sessionToken]);
+}
+
+// =============================================================================
+// TENANT COMPANY (фирмени данни)
+// =============================================================================
+
+export interface TenantCompany {
+  siteId: string;
+  instanceId?: string | null;
+  storeName?: string | null;
+  storeDomain?: string | null;
+  legalName?: string | null;
+  vatNumber?: string | null;
+  bulstat?: string | null;
+  storeId?: string | null;  // Фискален код - ЗАДЪЛЖИТЕЛЕН
+  logoUrl?: string | null;
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  city?: string | null;
+  postalCode?: string | null;
+  country?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  iban?: string | null;
+  bankName?: string | null;
+  mol?: string | null;
+  receiptTemplate?: string | null;
+  receiptNumberStart?: number | null;
+  codReceiptsEnabled?: boolean | null;
+  receiptsStartDate?: Date | null;
+  accentColor?: string | null;
+  // Billing
+  trialEndsAt?: Date | null;
+  subscriptionStatus?: string | null;  // trial, active, past_due, expired, cancelled
+  planId?: string | null;  // starter, business, corporate
+  subscriptionExpiresAt?: Date | null;
+  stripeCustomerId?: string | null;
+  stripeSubscriptionId?: string | null;
+  stripePaymentMethodId?: string | null;
+  // Onboarding
+  onboardingCompleted?: boolean | null;
+  onboardingStep?: number | null;
+}
+
+export async function getTenantCompany(siteId: string): Promise<TenantCompany | null> {
+  const schema = await getSchemaForSite(siteId);
+  if (!schema) return null;
+
+  const result = await sql.query(`
+    SELECT * FROM "${schema}".company WHERE site_id = $1 LIMIT 1
+  `, [siteId]);
+
+  if (result.rows.length === 0) return null;
+  const c = result.rows[0];
+  return {
+    siteId: c.site_id,
+    instanceId: c.instance_id,
+    storeName: c.store_name,
+    storeDomain: c.store_domain,
+    legalName: c.legal_name,
+    vatNumber: c.vat_number,
+    bulstat: c.bulstat,
+    storeId: c.store_id,
+    logoUrl: c.logo_url,
+    addressLine1: c.address_line1,
+    addressLine2: c.address_line2,
+    city: c.city,
+    postalCode: c.postal_code,
+    country: c.country,
+    email: c.email,
+    phone: c.phone,
+    iban: c.iban,
+    bankName: c.bank_name,
+    mol: c.mol,
+    receiptTemplate: c.receipt_template,
+    receiptNumberStart: c.receipt_number_start,
+    codReceiptsEnabled: c.cod_receipts_enabled,
+    receiptsStartDate: c.receipts_start_date ? new Date(c.receipts_start_date) : null,
+    accentColor: c.accent_color,
+    trialEndsAt: c.trial_ends_at ? new Date(c.trial_ends_at) : null,
+    subscriptionStatus: c.subscription_status,
+    planId: c.plan_id,
+    subscriptionExpiresAt: c.subscription_expires_at ? new Date(c.subscription_expires_at) : null,
+    stripeCustomerId: c.stripe_customer_id,
+    stripeSubscriptionId: c.stripe_subscription_id,
+    stripePaymentMethodId: c.stripe_payment_method_id,
+    onboardingCompleted: c.onboarding_completed,
+    onboardingStep: c.onboarding_step,
+  };
+}
+
+export async function updateTenantCompany(siteId: string, data: Partial<TenantCompany>): Promise<TenantCompany | null> {
+  const schema = await getSchemaForSite(siteId);
+  if (!schema) return null;
+
+  const result = await sql.query(`
+    UPDATE "${schema}".company
+    SET
+      instance_id = COALESCE($2, instance_id),
+      store_name = COALESCE($3, store_name),
+      store_domain = COALESCE($4, store_domain),
+      legal_name = COALESCE($5, legal_name),
+      vat_number = COALESCE($6, vat_number),
+      bulstat = COALESCE($7, bulstat),
+      store_id = COALESCE($8, store_id),
+      logo_url = COALESCE($9, logo_url),
+      address_line1 = COALESCE($10, address_line1),
+      address_line2 = COALESCE($11, address_line2),
+      city = COALESCE($12, city),
+      postal_code = COALESCE($13, postal_code),
+      country = COALESCE($14, country),
+      email = COALESCE($15, email),
+      phone = COALESCE($16, phone),
+      iban = COALESCE($17, iban),
+      bank_name = COALESCE($18, bank_name),
+      mol = COALESCE($19, mol),
+      receipt_template = COALESCE($20, receipt_template),
+      receipt_number_start = COALESCE($21, receipt_number_start),
+      cod_receipts_enabled = COALESCE($22, cod_receipts_enabled),
+      receipts_start_date = COALESCE($23, receipts_start_date),
+      accent_color = COALESCE($24, accent_color),
+      trial_ends_at = COALESCE($25, trial_ends_at),
+      subscription_status = COALESCE($26, subscription_status),
+      plan_id = COALESCE($27, plan_id),
+      subscription_expires_at = COALESCE($28, subscription_expires_at),
+      stripe_customer_id = COALESCE($29, stripe_customer_id),
+      stripe_subscription_id = COALESCE($30, stripe_subscription_id),
+      stripe_payment_method_id = COALESCE($31, stripe_payment_method_id),
+      onboarding_completed = COALESCE($32, onboarding_completed),
+      onboarding_step = COALESCE($33, onboarding_step),
+      updated_at = NOW()
+    WHERE site_id = $1
+    RETURNING *
+  `, [
+    siteId,
+    data.instanceId ?? null,
+    data.storeName ?? null,
+    data.storeDomain ?? null,
+    data.legalName ?? null,
+    data.vatNumber ?? null,
+    data.bulstat ?? null,
+    data.storeId ?? null,
+    data.logoUrl ?? null,
+    data.addressLine1 ?? null,
+    data.addressLine2 ?? null,
+    data.city ?? null,
+    data.postalCode ?? null,
+    data.country ?? null,
+    data.email ?? null,
+    data.phone ?? null,
+    data.iban ?? null,
+    data.bankName ?? null,
+    data.mol ?? null,
+    data.receiptTemplate ?? null,
+    data.receiptNumberStart ?? null,
+    data.codReceiptsEnabled ?? null,
+    data.receiptsStartDate?.toISOString() ?? null,
+    data.accentColor ?? null,
+    data.trialEndsAt?.toISOString() ?? null,
+    data.subscriptionStatus ?? null,
+    data.planId ?? null,
+    data.subscriptionExpiresAt?.toISOString() ?? null,
+    data.stripeCustomerId ?? null,
+    data.stripeSubscriptionId ?? null,
+    data.stripePaymentMethodId ?? null,
+    data.onboardingCompleted ?? null,
+    data.onboardingStep ?? null,
+  ]);
+
+  if (result.rows.length === 0) return null;
+  return getTenantCompany(siteId);
+}
+
+// =============================================================================
+// BILLING HELPERS
+// =============================================================================
+
+/**
+ * Pricing:
+ * - Starter: €5/месец до 50 поръчки
+ * - Business: €15/месец до 300 поръчки
+ * - Corporate: €15/месец + €0.10/поръчка (над 300)
+ */
+export const PRICING = {
+  starter: { price: 5, maxOrders: 50 },
+  business: { price: 15, maxOrders: 300 },
+  corporate: { basePrice: 15, perOrderPrice: 0.10 },
+  trialDays: 10,
+} as const;
+
+export async function checkAndUpgradePlan(siteId: string): Promise<{ upgraded: boolean; newPlan: string | null }> {
+  const schema = await getSchemaForSite(siteId);
+  if (!schema) return { upgraded: false, newPlan: null };
+
+  const company = await getTenantCompany(siteId);
+  if (!company) return { upgraded: false, newPlan: null };
+
+  const usage = await getTenantMonthlyUsage(siteId);
+  const currentPlan = company.planId ?? 'starter';
+
+  let newPlan: string | null = null;
+
+  if (currentPlan === 'starter' && usage.ordersCount > PRICING.starter.maxOrders) {
+    newPlan = 'business';
+  } else if (currentPlan === 'business' && usage.ordersCount > PRICING.business.maxOrders) {
+    newPlan = 'corporate';
+  }
+
+  if (newPlan) {
+    await updateTenantCompany(siteId, { planId: newPlan });
+    return { upgraded: true, newPlan };
+  }
+
+  return { upgraded: false, newPlan: null };
+}
+
+export async function isSubscriptionActive(siteId: string): Promise<boolean> {
+  const company = await getTenantCompany(siteId);
+  if (!company) return false;
+
+  const status = company.subscriptionStatus;
+  if (status === 'active') return true;
+  if (status === 'trial' && company.trialEndsAt && company.trialEndsAt > new Date()) return true;
+
+  return false;
+}
+
+export async function canIssueReceipts(siteId: string): Promise<{ allowed: boolean; reason?: string }> {
+  const company = await getTenantCompany(siteId);
+  if (!company) return { allowed: false, reason: 'Магазинът не е конфигуриран' };
+
+  if (!company.onboardingCompleted) {
+    return { allowed: false, reason: 'Моля, завършете onboarding процеса' };
+  }
+
+  if (!company.storeId) {
+    return { allowed: false, reason: 'Липсва код на търговски обект (store_id)' };
+  }
+
+  const isActive = await isSubscriptionActive(siteId);
+  if (!isActive) {
+    return { allowed: false, reason: 'Абонаментът е изтекъл. Моля, подновете плащането.' };
+  }
+
+  return { allowed: true };
 }

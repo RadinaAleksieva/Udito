@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
-import { initDb, upsertOrder, upsertSyncState, getSyncState } from "@/lib/db";
+import { initDb } from "@/lib/db";
 import { queryOrders, pickOrderFields, extractTransactionRef, extractDeliveryMethodFromOrder } from "@/lib/wix";
 import { getActiveStore } from "@/lib/auth";
+import {
+  upsertTenantOrder,
+  updateTenantSyncState,
+  getTenantSyncState,
+  TenantOrder,
+} from "@/lib/tenant-db";
 
 /**
  * Fast Sync API - Bulk imports orders WITHOUT per-order enrichment API calls.
@@ -64,8 +70,8 @@ export async function POST(request: Request) {
     const reset = url.searchParams.get("reset") === "1";
     const paidOnly = url.searchParams.get("paidOnly") === "1";
 
-    // Get existing sync state
-    const syncState = siteId ? await getSyncState(siteId) : null;
+    // Get existing sync state from tenant table
+    const syncState = siteId ? await getTenantSyncState(siteId) : null;
     // Use offset-based pagination (cursor doesn't work reliably with Wix API)
     const offsetParam = url.searchParams.get("offset");
     let currentOffset: number = offsetParam != null
@@ -73,8 +79,7 @@ export async function POST(request: Request) {
       : (reset ? 0 : (syncState?.cursor ? Number(syncState.cursor) : 0) || 0);
 
     if (siteId) {
-      await upsertSyncState({
-        siteId,
+      await updateTenantSyncState(siteId, {
         cursor: reset ? null : String(currentOffset),
         status: "running",
         lastError: null,
@@ -133,14 +138,33 @@ export async function POST(request: Request) {
         if (!mapped.id) continue;
 
         const siteIdResolved = mapped.siteId ?? siteId ?? null;
+        if (!siteIdResolved) {
+          console.warn(`⚠️ Skipping order ${mapped.number}: no siteId`);
+          continue;
+        }
 
-        // Store order immediately - no additional API calls
-        await upsertOrder({
-          ...mapped,
-          siteId: siteIdResolved,
-          businessId: null,
+        // Store order to tenant table - synced orders are marked as isSynced=true (not chargeable)
+        const tenantOrder: TenantOrder = {
+          id: mapped.id,
+          number: mapped.number,
+          status: mapped.status,
+          paymentStatus: mapped.paymentStatus,
+          createdAt: mapped.createdAt,
+          updatedAt: mapped.updatedAt,
+          paidAt: mapped.paidAt,
+          currency: mapped.currency,
+          subtotal: mapped.subtotal,
+          taxTotal: mapped.taxTotal,
+          shippingTotal: mapped.shippingTotal,
+          discountTotal: mapped.discountTotal,
+          total: mapped.total,
+          customerEmail: mapped.customerEmail,
+          customerName: mapped.customerName,
+          source: "backfill",
+          isSynced: true, // ✅ Synced order - NOT chargeable
           raw: orderRaw,
-        });
+        };
+        await upsertTenantOrder(siteIdResolved, tenantOrder);
 
         total += 1;
       }
@@ -156,10 +180,9 @@ export async function POST(request: Request) {
     // Determine if sync is complete
     const syncComplete = wixTotal != null ? currentOffset >= wixTotal : !moreDataAvailable;
 
-    // Update sync state
+    // Update sync state in tenant table
     if (siteId) {
-      await upsertSyncState({
-        siteId,
+      await updateTenantSyncState(siteId, {
         cursor: syncComplete ? null : String(currentOffset),
         status: syncComplete ? "done" : "partial",
         lastError: null,
@@ -181,8 +204,7 @@ export async function POST(request: Request) {
     const errorSiteId = store?.siteId ?? store?.instanceId ?? null;
 
     if (errorSiteId) {
-      await upsertSyncState({
-        siteId: errorSiteId,
+      await updateTenantSyncState(errorSiteId, {
         cursor: null,
         status: "error",
         lastError: (error as Error).message,

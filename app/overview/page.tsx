@@ -115,16 +115,51 @@ async function fetchSiteLabel(siteId: string | null, instanceId: string | null) 
 export default async function OverviewPage({
   searchParams,
 }: {
-  searchParams?: { debug?: string; month?: string; store?: string; instanceId?: string; instance_id?: string; siteId?: string; site_id?: string; instance?: string; loginBroadcast?: string; authorizationCode?: string };
+  searchParams?: { debug?: string; month?: string; store?: string; instanceId?: string; instance_id?: string; siteId?: string; site_id?: string; instance?: string; loginBroadcast?: string; authorizationCode?: string; token?: string };
 }) {
   await initDb();
 
   const session = await auth();
 
+  // Server-side check for Wix installation token
+  // If there's a token param and no valid session, redirect to OAuth flow
+  const tokenParam = searchParams?.token;
+  if (tokenParam && !tokenParam.includes(".")) {
+    // This is a Wix instance token - redirect to OAuth start
+    const { redirect } = await import("next/navigation");
+    const baseUrl = process.env.APP_BASE_URL || "https://app.uditodevelopment.website";
+    const instanceId = searchParams?.instanceId || searchParams?.instance_id || null;
+    const siteId = searchParams?.siteId || searchParams?.site_id || null;
+
+    let oauthUrl = `${baseUrl}/api/oauth/start?instance=${encodeURIComponent(tokenParam)}`;
+    if (instanceId) oauthUrl += `&instanceId=${encodeURIComponent(instanceId)}`;
+    if (siteId) oauthUrl += `&siteId=${encodeURIComponent(siteId)}`;
+
+    redirect(oauthUrl);
+  }
+
   // Check if user needs onboarding (has logged in but hasn't completed onboarding flow)
   if (session?.user?.id) {
     const { redirect } = await import("next/navigation");
-    const { sql } = await import("@/lib/supabase-sql");
+    const { sql } = await import("@/lib/sql");
+
+    // FIRST: Verify the user actually exists in the database
+    // This handles stale sessions from deleted users
+    const userExists = await sql`
+      SELECT id FROM users WHERE id = ${session.user.id} LIMIT 1
+    `;
+
+    if (userExists.rows.length === 0) {
+      // User doesn't exist in database - session is stale
+      // Redirect to register page with Wix context if available
+      console.log("⚠️ Stale session detected - user not found in DB:", session.user.id);
+      const wixContext = await getActiveWixContext();
+      const registerUrl = new URL("/register", process.env.APP_BASE_URL || "https://app.uditodevelopment.website");
+      if (wixContext.siteId) registerUrl.searchParams.set("store", wixContext.siteId);
+      if (wixContext.instanceId) registerUrl.searchParams.set("instanceId", wixContext.instanceId);
+      registerUrl.searchParams.set("from", "wix");
+      redirect(registerUrl.pathname + registerUrl.search);
+    }
 
     // Check if user has completed onboarding via businesses table
     const businessResult = await sql`
@@ -149,8 +184,11 @@ export default async function OverviewPage({
           redirect("/onboarding");
         }
       }
+    } else {
+      // User exists but has no business - redirect to onboarding to create one
+      console.log("User has no business, redirecting to onboarding:", session.user.id);
+      redirect("/onboarding");
     }
-    // If no business found, user might be Wix-only - allow access
   }
 
   let userStores = session?.user?.id ? await getUserStores(session.user.id) : [];

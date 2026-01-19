@@ -1,5 +1,10 @@
-import { getCompanyBySite, upsertOrder, upsertSyncState } from "@/lib/db";
+import { getCompanyBySite } from "@/lib/db";
 import { issueReceipt } from "@/lib/receipts";
+import {
+  upsertTenantOrder,
+  updateTenantSyncState,
+  TenantOrder,
+} from "@/lib/tenant-db";
 import {
   extractDeliveryMethodFromOrder,
   extractPaidAtFromPayment,
@@ -39,8 +44,7 @@ export async function syncOrdersForSite(params: SyncParams) {
   const company = await getCompanyBySite(siteId);
   const hasFiscalCode = Boolean(company?.store_id);
 
-  await upsertSyncState({
-    siteId,
+  await updateTenantSyncState(siteId, {
     cursor,
     status: "running",
     lastError: null,
@@ -202,12 +206,33 @@ export async function syncOrdersForSite(params: SyncParams) {
       const mapped = orderRaw === raw ? base : pickOrderFields(orderRaw, "backfill");
       if (!mapped.id) continue;
       const siteIdResolved = mapped.siteId ?? siteId ?? null;
-      await upsertOrder({
-        ...mapped,
-        siteId: siteIdResolved,
-        businessId: null,
+      if (!siteIdResolved) {
+        console.warn(`⚠️ Skipping order ${mapped.number}: no siteId`);
+        continue;
+      }
+
+      // Save to tenant table - synced orders are marked as isSynced=true (not chargeable)
+      const tenantOrder: TenantOrder = {
+        id: mapped.id,
+        number: mapped.number,
+        status: mapped.status,
+        paymentStatus: mapped.paymentStatus,
+        createdAt: mapped.createdAt,
+        updatedAt: mapped.updatedAt,
+        paidAt: mapped.paidAt,
+        currency: mapped.currency,
+        subtotal: mapped.subtotal,
+        taxTotal: mapped.taxTotal,
+        shippingTotal: mapped.shippingTotal,
+        discountTotal: mapped.discountTotal,
+        total: mapped.total,
+        customerEmail: mapped.customerEmail,
+        customerName: mapped.customerName,
+        source: "backfill",
+        isSynced: true, // ✅ Synced order - NOT chargeable
         raw: orderRaw,
-      });
+      };
+      await upsertTenantOrder(siteIdResolved, tenantOrder);
       const statusText = (mapped.status || "").toLowerCase();
       if (
         (mapped.paymentStatus || "").toUpperCase() === "PAID" &&
@@ -248,6 +273,7 @@ export async function syncOrdersForSite(params: SyncParams) {
             payload: mapped,
             businessId: null,
             issuedAt: new Date().toISOString(), // Use CURRENT time, not order's paid_at
+            siteId: siteIdResolved, // Required for tenant tables
           });
           receiptsIssued += 1;
         } else {
@@ -264,8 +290,7 @@ export async function syncOrdersForSite(params: SyncParams) {
     pages += 1;
   } while (cursor && pages < maxPages);
 
-  await upsertSyncState({
-    siteId,
+  await updateTenantSyncState(siteId, {
     cursor,
     status: cursor ? "partial" : "done",
     lastError: null,

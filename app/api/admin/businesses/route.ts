@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { sql } from "@/lib/supabase-sql";
+import { sql } from "@/lib/sql";
 import { authOptions } from "@/lib/auth";
 import { initDb } from "@/lib/db";
 

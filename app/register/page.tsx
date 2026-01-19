@@ -14,6 +14,10 @@ function RegisterForm() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [storeName, setStoreName] = useState("");
 
+  // Check if coming from Wix installation
+  const fromWix = searchParams.get("from") === "wix";
+  const wixStoreId = searchParams.get("store") || "";
+
   // Pre-fill email from URL params
   useEffect(() => {
     const emailParam = searchParams.get("email");
@@ -39,7 +43,8 @@ function RegisterForm() {
       return;
     }
 
-    if (!storeName.trim()) {
+    // Store name is required only if NOT from Wix
+    if (!fromWix && !storeName.trim()) {
       setStatus("Моля въведете име на магазина");
       return;
     }
@@ -52,7 +57,10 @@ function RegisterForm() {
         body: JSON.stringify({
           email,
           password,
-          storeName: storeName.trim(),
+          storeName: fromWix ? "Wix Store" : storeName.trim(),
+          // Pass Wix store info for automatic linking
+          fromWix,
+          wixSiteId: wixStoreId || undefined,
         }),
       });
 
@@ -73,8 +81,13 @@ function RegisterForm() {
       if (result?.error) {
         router.push("/login");
       } else {
-        // Redirect to onboarding to complete profile
-        router.push("/onboarding");
+        // If from Wix, the store is already linked - go directly to company step
+        // Otherwise, go to onboarding (which will redirect to connect step)
+        if (fromWix && wixStoreId) {
+          router.push("/onboarding/company");
+        } else {
+          router.push("/onboarding");
+        }
       }
     } catch (err) {
       setStatus(
@@ -94,17 +107,39 @@ function RegisterForm() {
             <img src="/brand/udito-logo.png" alt="UDITO" />
           </Link>
 
-          <h1>Създайте акаунт</h1>
-          <p className="login-subtitle">
-            Регистрирайте се, за да управлявате електронните бележки
-          </p>
+          {fromWix ? (
+            <>
+              <h1>Добре дошли в UDITO!</h1>
+              <p className="login-subtitle">
+                UDITO е инсталиран успешно. Създайте акаунт, за да продължите настройката.
+              </p>
+              <div className="register-wix-badge">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M9 12l2 2 4-4" />
+                  <circle cx="12" cy="12" r="10" />
+                </svg>
+                <span>Wix магазин свързан</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <h1>Създайте акаунт</h1>
+              <p className="login-subtitle">
+                Регистрирайте се, за да управлявате електронните бележки
+              </p>
+            </>
+          )}
 
           <button
             type="button"
             className="login-btn login-btn--google"
             onClick={() => {
               setIsLoading(true);
-              signIn("google", { callbackUrl: "/onboarding" });
+              // Pass Wix context to Google auth callback
+              const callbackUrl = fromWix && wixStoreId
+                ? `/onboarding/company?from=wix&store=${wixStoreId}`
+                : "/onboarding";
+              signIn("google", { callbackUrl });
             }}
             disabled={isLoading}
           >
@@ -162,14 +197,16 @@ function RegisterForm() {
               disabled={isLoading}
               autoComplete="new-password"
             />
-            <input
-              type="text"
-              value={storeName}
-              onChange={(e) => setStoreName(e.target.value)}
-              placeholder="Име на магазина"
-              required
-              disabled={isLoading}
-            />
+            {!fromWix && (
+              <input
+                type="text"
+                value={storeName}
+                onChange={(e) => setStoreName(e.target.value)}
+                placeholder="Име на магазина"
+                required
+                disabled={isLoading}
+              />
+            )}
             {status && (
               <p className={`login-status ${status.includes("Успешна") ? "login-status--success" : "login-status--error"}`}>
                 {status}
