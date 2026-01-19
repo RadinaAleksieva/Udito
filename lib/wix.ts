@@ -345,7 +345,10 @@ export async function getAppInstanceDetails(params: {
     };
   };
 
-  return {
+  // Log the raw response to understand the structure
+  console.log("getAppInstanceDetails - raw Wix response:", JSON.stringify(data, null, 2));
+
+  const result = {
     instanceId: data.instance?.instanceId ?? instanceId ?? null,
     siteId:
       data.instance?.site?.siteId ??
@@ -353,6 +356,10 @@ export async function getAppInstanceDetails(params: {
       data.site?.siteId ??
       null,
   };
+
+  console.log("getAppInstanceDetails - extracted:", result);
+
+  return result;
 }
 
 const STRIPE_PREFIXES = ["pi_", "ch_", "pay_"];

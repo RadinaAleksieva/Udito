@@ -252,6 +252,8 @@ export async function GET(request: Request) {
   let redirectPath = "/register";
   let redirectParams = `from=wix&store=${resolvedSiteId || ''}`;
 
+  console.log("OAuth callback - redirect will use:", { redirectPath, redirectParams, resolvedSiteId });
+
   try {
     const session = await getServerSession(authOptions);
     if (session?.user?.id) {
