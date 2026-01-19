@@ -1,10 +1,37 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/sql";
 import bcrypt from "bcryptjs";
+import { cookies } from "next/headers";
 
 export async function POST(request: Request) {
   try {
-    const { email, password, storeName, fromWix, wixSiteId } = await request.json();
+    const { email, password, storeName, fromWix, wixSiteId: providedSiteId } = await request.json();
+
+    // Try to get store ID from various sources
+    let wixSiteId = providedSiteId;
+
+    // Fallback: try to get from cookies if not provided
+    if (!wixSiteId && fromWix) {
+      const cookieStore = await cookies();
+      const siteIdCookie = cookieStore.get("udito_site_id")?.value;
+      const instanceIdCookie = cookieStore.get("udito_instance_id")?.value;
+
+      if (siteIdCookie) {
+        wixSiteId = siteIdCookie;
+        console.log("Using site_id from cookie:", wixSiteId);
+      } else if (instanceIdCookie) {
+        // Try to get site_id from wix_tokens using instance_id
+        const tokenResult = await sql`
+          SELECT site_id FROM wix_tokens WHERE instance_id = ${instanceIdCookie} LIMIT 1
+        `;
+        if (tokenResult.rows[0]?.site_id) {
+          wixSiteId = tokenResult.rows[0].site_id;
+          console.log("Resolved site_id from instance_id:", wixSiteId);
+        }
+      }
+    }
+
+    console.log("Register API - fromWix:", fromWix, "wixSiteId:", wixSiteId);
 
     // Validate input
     if (!email || !password) {
