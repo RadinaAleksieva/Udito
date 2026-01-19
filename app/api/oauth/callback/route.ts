@@ -171,17 +171,37 @@ export async function GET(request: Request) {
 
   let resolvedInstanceId = instanceId ?? data.instance_id ?? null;
   let resolvedSiteId = data.site_id ?? null;
-  if (data.access_token && (!resolvedInstanceId || !resolvedSiteId)) {
+
+  console.log("OAuth callback - initial values:", {
+    instanceIdFromUrl: instanceId,
+    instanceIdFromData: data.instance_id,
+    siteIdFromData: data.site_id,
+    hasAccessToken: !!data.access_token,
+  });
+
+  // ALWAYS try to get site details if we have an access token
+  if (data.access_token) {
     try {
       const appInstance = await getAppInstanceDetails({
         instanceId: resolvedInstanceId,
         accessToken: data.access_token,
       });
+      console.log("getAppInstanceDetails result:", appInstance);
       resolvedInstanceId = appInstance?.instanceId ?? resolvedInstanceId;
       resolvedSiteId = appInstance?.siteId ?? resolvedSiteId;
     } catch (error) {
-      console.warn("Wix app instance lookup failed", error);
+      console.error("Wix app instance lookup failed:", error);
     }
+  }
+
+  console.log("OAuth callback - resolved values:", {
+    resolvedInstanceId,
+    resolvedSiteId,
+  });
+
+  // If we still don't have site_id, this is a problem
+  if (!resolvedSiteId) {
+    console.error("❌ OAuth callback: Could not resolve site_id!");
   }
 
   await saveWixTokens({
