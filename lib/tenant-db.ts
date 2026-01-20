@@ -484,6 +484,69 @@ export async function dropTenantTables(siteId: string): Promise<void> {
 }
 
 /**
+ * Run migrations on ALL existing tenant schemas.
+ * This ensures all schemas have the latest columns/indexes.
+ * Called from initDb() on app startup.
+ */
+export async function runAllTenantMigrations(): Promise<void> {
+  try {
+    // Get all existing tenant schemas
+    const result = await sql`
+      SELECT DISTINCT schema_name FROM store_connections WHERE schema_name IS NOT NULL
+    `;
+
+    const schemas = result.rows.map((r: any) => r.schema_name).filter(Boolean);
+
+    if (schemas.length === 0) {
+      return;
+    }
+
+    console.log(`[Migrations] Running migrations for ${schemas.length} tenant schemas...`);
+
+    for (const schema of schemas) {
+      try {
+        // receipts.transaction_ref
+        await sql.query(`
+          ALTER TABLE "${schema}".receipts
+          ADD COLUMN IF NOT EXISTS transaction_ref text
+        `).catch(() => {});
+
+        // receipts.return_payment_type
+        await sql.query(`
+          ALTER TABLE "${schema}".receipts
+          ADD COLUMN IF NOT EXISTS return_payment_type integer DEFAULT 2
+        `).catch(() => {});
+
+        // orders.is_synced
+        await sql.query(`
+          ALTER TABLE "${schema}".orders
+          ADD COLUMN IF NOT EXISTS is_synced boolean DEFAULT false
+        `).catch(() => {});
+
+        // company.store_domain
+        await sql.query(`
+          ALTER TABLE "${schema}".company
+          ADD COLUMN IF NOT EXISTS store_domain text
+        `).catch(() => {});
+
+        // company.store_name
+        await sql.query(`
+          ALTER TABLE "${schema}".company
+          ADD COLUMN IF NOT EXISTS store_name text
+        `).catch(() => {});
+
+      } catch (err) {
+        console.warn(`[Migrations] Error migrating schema ${schema}:`, err);
+      }
+    }
+
+    console.log(`[Migrations] Completed for ${schemas.length} schemas`);
+  } catch (error) {
+    console.warn("[Migrations] Failed to run tenant migrations:", error);
+  }
+}
+
+/**
  * Проверява дали tenant schema съществува
  */
 export async function tenantTablesExist(siteId: string): Promise<boolean> {
@@ -531,6 +594,17 @@ export interface TenantOrder {
 }
 
 export async function upsertTenantOrder(siteId: string, order: TenantOrder): Promise<void> {
+  // CRITICAL LOGGING: Track every upsert
+  console.log(`📝 [upsertTenantOrder] Saving order:`, {
+    id: order.id,
+    number: order.number,
+    paymentStatus: order.paymentStatus,
+    siteId,
+    hasRaw: !!order.raw,
+    rawNumber: order.raw?.number,
+    rawPaymentStatus: order.raw?.paymentStatus,
+  });
+
   const schema = await getSchemaForSite(siteId);
   if (!schema) {
     console.error(`[upsertTenantOrder] No schema found for site ${siteId}. Creating tenant tables...`);
@@ -542,14 +616,21 @@ export async function upsertTenantOrder(siteId: string, order: TenantOrder): Pro
     return upsertTenantOrder(siteId, order); // Retry with new schema
   }
 
-  const createdAt = order.createdAt ? new Date(order.createdAt).toISOString() : null;
+  const raw = order.raw || {};
+
+  // Extract createdAt with fallback to raw JSON
+  const rawCreatedDate = raw?.createdDate ?? raw?.createdAt ?? raw?._createdDate ?? raw?.purchasedDate ?? null;
+  const createdAt = order.createdAt
+    ? new Date(order.createdAt).toISOString()
+    : rawCreatedDate
+      ? new Date(rawCreatedDate).toISOString()
+      : null;
   const updatedAt = order.updatedAt ? new Date(order.updatedAt).toISOString() : null;
   const paidAt = order.paidAt ? new Date(order.paidAt).toISOString() : null;
   const isSynced = order.isSynced ?? false;
 
   // CRITICAL FIX: Extract totals from raw JSON as fallback when direct values are null
   // This ensures we never lose financial data even if the webhook payload structure varies
-  const raw = order.raw || {};
   const priceSummary = raw?.priceSummary || raw?.totals || raw?.payNow || raw?.balanceSummary || {};
 
   const extractAmount = (value: any): number | null => {
@@ -595,9 +676,15 @@ export async function upsertTenantOrder(siteId: string, order: TenantOrder): Pro
       customer_email, customer_name, source, is_synced, raw
     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
     ON CONFLICT (id) DO UPDATE SET
-      number = EXCLUDED.number,
-      status = EXCLUDED.status,
-      payment_status = EXCLUDED.payment_status,
+      -- Never overwrite a valid number with 0 or null
+      number = CASE
+        WHEN EXCLUDED.number IS NOT NULL AND EXCLUDED.number != '0' THEN EXCLUDED.number
+        WHEN "${schema}".orders.number IS NOT NULL AND "${schema}".orders.number != '0' THEN "${schema}".orders.number
+        ELSE COALESCE(EXCLUDED.number, "${schema}".orders.number)
+      END,
+      status = COALESCE(EXCLUDED.status, "${schema}".orders.status),
+      -- Always update payment_status to latest
+      payment_status = COALESCE(EXCLUDED.payment_status, "${schema}".orders.payment_status),
       created_at = EXCLUDED.created_at,
       updated_at = EXCLUDED.updated_at,
       paid_at = CASE
@@ -664,9 +751,10 @@ export async function listTenantOrders(siteId: string, options?: {
   const params: any[] = [];
   const conditions: string[] = [];
 
-  // Filter: exclude CANCELED orders, but show archived orders that are not canceled
-  conditions.push(`(status IS NULL OR UPPER(status) NOT IN ('CANCELED', 'CANCELLED'))`);
+  // Filter: exclude only archived orders (show canceled orders)
   conditions.push(`(status IS NULL OR LOWER(status) NOT LIKE 'archiv%')`);
+  conditions.push(`COALESCE(raw->>'archived', 'false') <> 'true'`);
+  conditions.push(`COALESCE(raw->>'isArchived', 'false') <> 'true'`);
 
   if (options?.startDate) {
     params.push(options.startDate);
@@ -698,9 +786,10 @@ export async function countTenantOrders(siteId: string, options?: {
   const params: any[] = [];
   const conditions: string[] = [];
 
-  // Filter: exclude CANCELED orders, but show archived orders that are not canceled
-  conditions.push(`(status IS NULL OR UPPER(status) NOT IN ('CANCELED', 'CANCELLED'))`);
+  // Filter: exclude only archived orders (show canceled orders)
   conditions.push(`(status IS NULL OR LOWER(status) NOT LIKE 'archiv%')`);
+  conditions.push(`COALESCE(raw->>'archived', 'false') <> 'true'`);
+  conditions.push(`COALESCE(raw->>'isArchived', 'false') <> 'true'`);
 
   if (options?.startDate) {
     params.push(options.startDate);
@@ -748,15 +837,16 @@ export async function getTenantStats(siteId: string): Promise<{
     };
   }
 
-  // Count orders (exclude CANCELED, but show archived non-canceled orders)
+  // Count orders (exclude only archived orders, show canceled orders)
   const ordersResult = await sql.query(`
     SELECT
       COUNT(*) as total,
       COUNT(*) FILTER (WHERE is_synced = true) as synced,
       COUNT(*) FILTER (WHERE is_synced = false) as new
     FROM "${schema}".orders
-    WHERE (status IS NULL OR UPPER(status) NOT IN ('CANCELED', 'CANCELLED'))
-      AND (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
+    WHERE (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
+      AND COALESCE(raw->>'archived', 'false') <> 'true'
+      AND COALESCE(raw->>'isArchived', 'false') <> 'true'
   `);
 
   // Count receipts

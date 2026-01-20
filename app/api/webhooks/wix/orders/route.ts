@@ -114,6 +114,26 @@ async function handleOrderEvent(event: any) {
     console.log("Event data keys:", Object.keys(event?.data ?? {}));
     console.log("Event metadata:", JSON.stringify(event?.metadata ?? {}, null, 2));
 
+    // CRITICAL: Log order number and ID immediately to track updates
+    const immediateOrderData = event?.data ?? {};
+    const immediateOrder = immediateOrderData?.order ?? immediateOrderData;
+    console.log("📦 Immediate order data:", {
+      id: immediateOrder?.id ?? immediateOrder?._id ?? "NO_ID",
+      number: immediateOrder?.number ?? "NO_NUMBER",
+      paymentStatus: immediateOrder?.paymentStatus ?? "NO_STATUS",
+      source: "handleOrderEvent entry",
+    });
+
+    // CRITICAL: Log payment data presence in incoming event
+    const incomingPayments = event?.data?.orderTransactions?.payments ??
+                              event?.data?.order?.orderTransactions?.payments ??
+                              event?.data?.payments ?? [];
+    console.log("📥 Incoming payment data:", {
+      hasPayments: Array.isArray(incomingPayments) && incomingPayments.length > 0,
+      paymentsCount: Array.isArray(incomingPayments) ? incomingPayments.length : 0,
+      paymentStatus: event?.data?.paymentStatus ?? event?.data?.order?.paymentStatus ?? "unknown",
+    });
+
     const raw = event?.data ?? {};
     const rawOrder = raw?.order ?? raw;
     const paymentStatus = raw?.paymentStatus ?? rawOrder?.paymentStatus ?? null;
@@ -198,29 +218,68 @@ async function handleOrderEvent(event: any) {
       orderRaw = { ...orderRaw, payment: record.payment };
     }
     // Fetch full orderTransactions for card details
-    // ALWAYS fetch for payment_status_updated events (when order becomes paid)
+    // ALWAYS fetch for:
+    // 1. payment_status_updated events (when order becomes paid)
+    // 2. order.created events where order is already PAID (card payment completed at checkout)
     const isPaymentStatusUpdate = event?.metadata?.eventType?.includes('payment_status');
-    const needsOrderTransactions = !orderRaw?.orderTransactions || isPaymentStatusUpdate;
+    const isOrderCreated = event?.metadata?.eventType?.includes('created') || event?.metadata?.eventType === 'order.created';
+    const orderIsPaid = (base.paymentStatus || '').toUpperCase() === 'PAID';
+    const hasEmptyPayments = !orderRaw?.orderTransactions?.payments?.length;
+
+    // For card payments, when order.created fires, the order is already PAID
+    // We MUST fetch the payment data immediately
+    const needsOrderTransactions = !orderRaw?.orderTransactions ||
+                                    isPaymentStatusUpdate ||
+                                    (isOrderCreated && orderIsPaid && hasEmptyPayments);
+
+    if (isOrderCreated && orderIsPaid) {
+      console.log(`💳 Order ${base.number} created as PAID - this is a card payment, fetching payment data...`);
+    }
 
     if (needsOrderTransactions) {
       console.log(`🔍 Fetching orderTransactions for order ${orderId} (paymentStatusUpdate: ${isPaymentStatusUpdate})`);
-      const orderTx = await fetchOrderTransactionsForOrder({
-        orderId,
-        siteId: base.siteId ?? raw?.siteId ?? rawOrder?.siteId ?? null,
-        instanceId:
-          event?.metadata?.instanceId ??
-          raw?.instanceId ??
-          rawOrder?.instanceId ??
-          null,
-      });
+
+      // Helper function to fetch with retry
+      const fetchWithRetry = async (attempt: number = 1): Promise<any> => {
+        const orderTx = await fetchOrderTransactionsForOrder({
+          orderId,
+          siteId: base.siteId ?? raw?.siteId ?? rawOrder?.siteId ?? null,
+          instanceId:
+            event?.metadata?.instanceId ??
+            raw?.instanceId ??
+            rawOrder?.instanceId ??
+            null,
+        });
+
+        const hasPayments = orderTx?.orderTransactions?.payments?.length > 0 || orderTx?.payments?.length > 0;
+
+        if (hasPayments) {
+          return orderTx;
+        }
+
+        // If no payments and we haven't exhausted retries, wait and try again
+        // Wix often needs a few seconds to process payment data
+        if (attempt < 3) {
+          const delayMs = attempt * 2000; // 2s, 4s delays
+          console.log(`⏳ No payment data on attempt ${attempt}, waiting ${delayMs}ms before retry...`);
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+          return fetchWithRetry(attempt + 1);
+        }
+
+        return orderTx; // Return whatever we have after all retries
+      };
+
+      const orderTx = await fetchWithRetry();
+
       if (orderTx?.orderTransactions || orderTx?.payments) {
         orderRaw = {
           ...orderRaw,
           orderTransactions: orderTx.orderTransactions ?? { payments: orderTx.payments },
         };
-        console.log(`✅ OrderTransactions fetched for order ${orderId}`);
+        const paymentCount = orderTx?.orderTransactions?.payments?.length || orderTx?.payments?.length || 0;
+        console.log(`✅ OrderTransactions fetched for order ${orderId}, payments: ${paymentCount}`);
       } else {
-        console.log(`⚠️ No orderTransactions found for order ${orderId}`);
+        console.log(`⚠️ No orderTransactions found for order ${orderId} after retries`);
       }
     }
     // Extract paymentSummary from orderTransactions if we have them but no paymentSummary
@@ -861,8 +920,12 @@ export async function POST(request: NextRequest) {
 
         // Check if this is a v1 Order event (wix.ecom.v1.order)
         if (entityFqdn === "wix.ecom.v1.order") {
-          console.log("🆕 Detected v1 Order event");
+          console.log("🆕 Detected v1 Order event - slug:", slug);
           console.log("📋 Full eventData structure:", JSON.stringify({
+            slug,
+            hasUpdatedEvent: !!eventData.updatedEvent,
+            hasCurrentEntity: !!eventData.updatedEvent?.currentEntity,
+            currentEntityNumber: eventData.updatedEvent?.currentEntity?.number,
             hasEntity: !!eventData.entity,
             hasData: !!eventData.data,
             hasCreatedEvent: !!eventData.createdEvent,
@@ -915,32 +978,122 @@ export async function POST(request: NextRequest) {
                 .join(", "));
             }
           }
-          // For order.updated events, data is in .updatedEvent.currentEntity
+          // For order.updated events, data can be in many different locations
           else if (slug === "updated") {
+            console.log("📦 Processing UPDATED event...");
+            console.log("📦 Full eventData structure for updated event:", JSON.stringify({
+              hasUpdatedEvent: !!eventData.updatedEvent,
+              hasCurrentEntity: !!eventData.updatedEvent?.currentEntity,
+              hasPreviousEntity: !!eventData.updatedEvent?.previousEntity,
+              hasEntity: !!eventData.entity,
+              hasOrder: !!eventData.order,
+              hasData: !!eventData.data,
+              hasActionEvent: !!eventData.actionEvent,
+              entityId: eventData.entityId,
+              topLevelKeys: Object.keys(eventData || {}),
+              updatedEventKeys: eventData.updatedEvent ? Object.keys(eventData.updatedEvent) : [],
+            }));
+
+            // Try all possible paths for updated event data
+            // Path 1: updatedEvent.currentEntity (most common for v1)
             if (eventData.updatedEvent?.currentEntity) {
               orderData = eventData.updatedEvent.currentEntity;
-              console.log("📦 Extracted order from updatedEvent.currentEntity");
-              console.log("📦 Order fields:", JSON.stringify({
+              console.log("📦 Extracted order from updatedEvent.currentEntity, number:", orderData.number);
+            }
+            // Path 2: updatedEvent.entity
+            else if (eventData.updatedEvent?.entity) {
+              orderData = eventData.updatedEvent.entity;
+              console.log("📦 Extracted order from updatedEvent.entity, number:", orderData.number);
+            }
+            // Path 3: entity at root
+            else if (eventData.entity && (eventData.entity.id || eventData.entity._id)) {
+              orderData = eventData.entity;
+              console.log("📦 Extracted order from entity (updated), number:", orderData.number);
+            }
+            // Path 4: order at root
+            else if (eventData.order && (eventData.order.id || eventData.order._id)) {
+              orderData = eventData.order;
+              console.log("📦 Extracted order from order (updated), number:", orderData.number);
+            }
+            // Path 5: data at root
+            else if (eventData.data && (eventData.data.id || eventData.data._id)) {
+              orderData = eventData.data;
+              console.log("📦 Extracted order from data (updated), number:", orderData.number);
+            }
+            // Path 6: actionEvent.body.order
+            else if (eventData.actionEvent?.body?.order) {
+              orderData = eventData.actionEvent.body.order;
+              console.log("📦 Extracted order from actionEvent.body.order (updated), number:", orderData.number);
+            }
+            // Path 7: Check if eventData itself looks like an order
+            else if (eventData.id && (eventData.lineItems || eventData.buyerInfo || eventData.priceSummary || eventData.number)) {
+              orderData = eventData;
+              console.log("📦 Extracted order from eventData root (updated), number:", orderData.number);
+            }
+
+            if (orderData) {
+              console.log("📦 Updated event order fields:", JSON.stringify({
                 id: orderData.id,
                 _id: orderData._id,
                 number: orderData.number,
                 orderNumber: orderData.orderNumber,
+                paymentStatus: orderData.paymentStatus,
+                status: orderData.status,
                 hasLineItems: !!orderData.lineItems,
                 keys: Object.keys(orderData || {}).slice(0, 15),
               }));
-            }
-            // Fallback for updated events
-            else if (eventData.entity) {
-              orderData = eventData.entity;
-              console.log("📦 Extracted order from entity (updated fallback)");
+            } else {
+              console.log("⚠️ Could not find order data in updated event. Full eventData:", JSON.stringify(eventData, null, 2).substring(0, 3000));
             }
           }
           // For payment_status_updated events, data is in .actionEvent.body.order or .order
+          // Payment data might also be in actionEvent.body.payments or entity.orderTransactions
           else if (slug === "payment_status_updated") {
-            orderData = eventData.actionEvent?.body?.order ?? eventData.order ?? null;
-            console.log("💳 Extracted order from payment_status_updated event");
+            orderData = eventData.actionEvent?.body?.order ?? eventData.order ?? eventData.entity ?? null;
+            console.log("💳 Processing payment_status_updated event");
+
+            // Try to extract payment data from the event itself
+            const eventPayments = eventData.actionEvent?.body?.payments ??
+                                   eventData.payments ??
+                                   eventData.entity?.orderTransactions?.payments ??
+                                   eventData.orderTransactions?.payments ??
+                                   null;
+
+            // Also check for transaction data
+            const eventTransactions = eventData.actionEvent?.body?.orderTransactions ??
+                                       eventData.orderTransactions ??
+                                       eventData.entity?.orderTransactions ??
+                                       null;
+
+            console.log("💳 Event payment data check:", {
+              hasEventPayments: !!eventPayments,
+              paymentsCount: Array.isArray(eventPayments) ? eventPayments.length : 0,
+              hasEventTransactions: !!eventTransactions,
+              orderDataKeys: orderData ? Object.keys(orderData).slice(0, 10) : [],
+            });
+
             if (orderData) {
-              console.log("💳 Order #" + orderData.number + " payment status changed");
+              // Enrich order data with payment info from event
+              if (eventPayments && Array.isArray(eventPayments) && eventPayments.length > 0) {
+                orderData = {
+                  ...orderData,
+                  orderTransactions: {
+                    ...(orderData.orderTransactions || {}),
+                    payments: eventPayments,
+                  },
+                };
+                console.log("💳 Enriched order with payments from event");
+              }
+
+              if (eventTransactions) {
+                orderData = {
+                  ...orderData,
+                  orderTransactions: eventTransactions,
+                };
+                console.log("💳 Enriched order with orderTransactions from event");
+              }
+
+              console.log("💳 Order #" + orderData.number + " payment status changed to " + (orderData.paymentStatus || "unknown"));
             }
           }
           // For order.canceled events, data is likely in .entity or similar
@@ -982,7 +1135,10 @@ export async function POST(request: NextRequest) {
           }
 
           if (orderData) {
-            console.log("✅ Found order data, ID:", orderData.id);
+            console.log("✅ Found order data for slug:", slug);
+            console.log("✅ Order ID:", orderData.id ?? orderData._id);
+            console.log("✅ Order number:", orderData.number);
+            console.log("✅ Order paymentStatus:", orderData.paymentStatus);
             const v1Event = {
               data: orderData,
               metadata: {
@@ -993,6 +1149,7 @@ export async function POST(request: NextRequest) {
                 eventTime: eventData.eventTime ?? new Date().toISOString(),
               }
             };
+            console.log("🚀 Calling handleOrderEvent for", `order.${slug}`, "with order number:", orderData.number);
             await handleOrderEvent(v1Event);
             console.log("✅ v1 event handled successfully");
             // Extract order number from various possible locations
