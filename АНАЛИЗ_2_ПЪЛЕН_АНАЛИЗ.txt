@@ -1,0 +1,415 @@
+================================================================================
+                    UDITO - ПЪЛЕН АНАЛИЗ НА ПРИЛОЖЕНИЕТО
+                         Senior Developer Code Review
+================================================================================
+
+ДАТА НА АНАЛИЗ: 2026-01-19
+ТЕХНОЛОГИЧЕН STACK:
+  - Frontend: Next.js 15 (App Router), React 18, TypeScript
+  - Backend: Next.js API Routes
+  - Database: PostgreSQL (Neon)
+  - Auth: NextAuth.js v4
+  - Deployment: PM2 на VPS (78.47.173.82)
+  - External APIs: Wix eCommerce, Stripe (планирано)
+
+
+================================================================================
+                        1. КАКВО ПРАВИ ПРИЛОЖЕНИЕТО
+================================================================================
+
+UDITO е SaaS приложение за автоматично издаване на електронни бележки
+за онлайн магазини в България. Интегрира се с Wix eCommerce.
+
+ОСНОВНИ ФУНКЦИИ:
+  1. Синхронизация на поръчки от Wix
+  2. Автоматично издаване на електронни бележки при плащане
+  3. Генериране на месечен одиторски XML файл (изискване на НАП)
+  4. Multi-tenant архитектура (много магазини, един потребител)
+  5. Достъп за счетоводители чрез код
+
+БИЗНЕС МОДЕЛ:
+  - Starter: 5 EUR/месец до 50 поръчки
+  - Business: 15 EUR/месец до 300 поръчки
+  - Corporate: 15 EUR + 0.10 EUR/поръчка над 300
+  - Trial: 10 дни
+
+
+================================================================================
+                         2. СТРУКТУРА НА СТРАНИЦИТЕ
+================================================================================
+
+ПУБЛИЧНИ СТРАНИЦИ (без auth):
+  /                     - Landing page
+  /login                - Вход (email, Google, access code)
+  /register             - Регистрация
+  /add-store            - Потвърждение за добавяне на магазин
+  /help                 - Помощ
+  /privacy-policy       - Политика за поверителност (redirect)
+  /policies/terms       - Условия за ползване
+  /policies/privacy     - Политика за поверителност
+  /policies/data        - Обработка на лични данни
+  /access               - Вход с access code (алтернативен)
+
+ЗАЩИТЕНИ СТРАНИЦИ (изискват auth):
+  /overview             - Dashboard (поръчки, бележки, статистики)
+  /orders               - Списък на поръчки
+  /receipts             - Списък на бележки
+  /receipts/[orderId]   - Детайли на бележка за поръчка
+  /receipts/settings    - Настройки на бележки (шаблон)
+  /audit                - Одиторски файл (XML download)
+  /reports              - Отчети
+  /settings             - Настройки на магазина
+  /billing              - Фактуриране и абонамент
+  /admin                - Admin panel (само за админи)
+  /debug                - Debug информация (само за dev)
+  /onboarding/*         - Onboarding flow:
+    /onboarding         - Entry point
+    /onboarding/connect - Свързване с Wix
+    /onboarding/company - Фирмени данни
+    /onboarding/settings- Настройки
+    /onboarding/plan    - Избор на план
+
+
+================================================================================
+                        3. API ENDPOINTS
+================================================================================
+
+AUTH:
+  POST /api/auth/register         - Регистрация
+  POST /api/auth/check-email      - Проверка дали email съществува
+  POST /api/auth/check-wix-store  - Проверка за съществуващ store user
+  GET  /api/auth/[...nextauth]    - NextAuth handlers
+
+OAUTH:
+  GET  /api/oauth/callback        - Wix OAuth callback (token exchange)
+  POST /api/oauth/callback        - Popup flow token handler
+
+STORES:
+  GET  /api/stores/info           - Информация за магазин
+  POST /api/stores/link           - Свързване на магазин с user
+  POST /api/stores/join           - Вход с access code
+
+ORDERS:
+  GET  /api/orders                - Списък на поръчки
+  GET  /api/orders/[orderId]      - Детайли на поръчка
+  GET  /api/orders/sync           - Синхронизация (manual trigger)
+
+RECEIPTS:
+  GET  /api/receipts              - Списък на бележки
+  GET  /api/receipts/[id]         - Детайли на бележка
+  POST /api/receipts/issue        - Издаване на бележка
+  GET  /api/receipts/pending      - Чакащи за издаване
+
+AUDIT:
+  GET  /api/audit/xml             - Download XML файл
+  GET  /api/audit/status          - Статус на одиторски файл
+
+WEBHOOKS:
+  POST /api/webhooks/wix/orders   - Wix order webhooks (created, updated, cancelled)
+
+SYNC:
+  POST /api/sync/initial          - Initial sync на всички поръчки
+  POST /api/sync/recent           - Sync на последните N дни
+
+SETTINGS:
+  GET  /api/settings              - Настройки на магазина
+  POST /api/settings              - Обновяване на настройки
+  GET  /api/onboarding/status     - Статус на onboarding
+
+ADMIN:
+  GET  /api/admin/dashboard       - Admin статистики
+  GET  /api/admin/businesses      - Списък на бизнеси
+  PATCH/api/admin/businesses      - Управление на бизнес
+  DELETE/api/admin/businesses     - Изтриване на бизнес
+  GET  /api/admin/access          - Списък на access codes
+  POST /api/admin/access          - Създаване на access code
+  POST /api/admin/sync-recent     - Ръчна синхронизация
+  POST /api/admin/fix-archived    - Fix archived orders
+  GET  /api/admin/database/schemas- Списък на схеми
+  GET  /api/admin/database/tables - Таблици в схема
+  GET  /api/admin/database/data   - Данни от таблица
+  PUT  /api/admin/database/data   - Update ред
+  DELETE/api/admin/database/data  - Delete ред
+  GET  /api/admin/fix-stores      - Диагностика на store_connections
+  POST /api/admin/fix-stores      - Fix store_connections
+
+
+================================================================================
+                         4. DATABASE ARCHITECTURE
+================================================================================
+
+MULTI-TENANT MODEL:
+  Всеки магазин има собствена PostgreSQL схема
+
+PUBLIC SCHEMA (споделена):
+  - users                 - Всички потребители
+  - businesses            - Бизнеси (companies)
+  - business_users        - Връзка user <-> business
+  - store_connections     - Магазини свързани с users
+  - wix_tokens            - Wix API tokens
+  - access_codes          - Кодове за счетоводители
+  - webhook_logs          - Global webhook logs
+
+TENANT SCHEMAS (per store):
+  Схема: site_{normalized_site_id} или custom name
+  Таблици:
+  - company               - Фирмени данни (1 ред)
+  - orders                - Поръчки
+  - receipts              - Бележки
+  - webhook_logs          - Tenant webhook logs
+  - sync_state            - Състояние на синхронизация
+  - monthly_usage         - Месечна статистика
+  - pending_refunds       - Чакащи рефунди
+  - audit_logs            - Одит логове
+  - users                 - Tenant users (не се използва активно)
+  - sessions              - Tenant sessions (не се използва активно)
+  - accounts              - OAuth accounts (не се използва активно)
+
+
+================================================================================
+                       5. GLOBALS.CSS АНАЛИЗ
+================================================================================
+
+РАЗМЕР: ~3000+ реда
+ПРОБЛЕМИ:
+
+1. [CRITICAL] Footer positioning
+   main { min-height: 100vh; display: flex; flex-direction: column; }
+   .footer { margin-top: auto; }
+   ПРОБЛЕМ: Работи само ако content wrapper има flex: 1
+
+2. [MEDIUM] Много дублиран код за responsive design
+   Трябва да се използват CSS custom properties за breakpoints
+
+3. [LOW] Няма CSS modules или scoped styles
+   Всичко е глобален CSS, което може да доведе до конфликти
+
+4. [LOW] Някои стилове са hardcoded за dark theme
+   Няма пълна support за light theme
+
+
+================================================================================
+                         6. КОМПОНЕНТИ
+================================================================================
+
+/app/components/
+  - footer.tsx            - Footer с credits
+  - header.tsx            - Navigation header
+  - sidebar.tsx           - Sidebar (ако има)
+  - store-selector.tsx    - Dropdown за избор на магазин
+  - theme-toggle.tsx      - Dark/light mode toggle
+  - winking-face.tsx      - Animated emoji за счетоводители
+
+ПРОБЛЕМ в store-selector.tsx:
+  Показва: store.store_name || store.store_domain || site_id
+  Ако store_name = "Wix Store" и store_domain = null, показва "Wix Store"
+
+
+================================================================================
+                         7. ГРЕШКИ И БЪГОВЕ
+================================================================================
+
+КРИТИЧНИ (блокиращи работата):
+──────────────────────────────
+
+[C1] store_connections липсва schema_name
+     РЕЗУЛТАТ: getSchemaForSite() връща null -> 0 поръчки се показват
+     ФАЙЛ: /app/api/auth/register/route.ts
+     РЕШЕНИЕ: При регистрация да се попълва schema_name
+
+[C2] store_connections липсва store_domain
+     РЕЗУЛТАТ: Показва се "Wix Store" вместо домейна
+     ФАЙЛ: /app/api/auth/register/route.ts
+     РЕШЕНИЕ: Взимай domain от wix_tokens или companies table
+
+[C3] Нулев одиторски файл не се download-ва
+     РЕЗУЛТАТ: Потребителят не може да свали файл за месец без бележки
+     ФАЙЛ: /app/api/audit/xml/route.ts (трябва проверка)
+     РЕШЕНИЕ: Генерирай празен XML ако няма бележки
+
+
+ВИСОКИ (важни за UX):
+─────────────────────
+
+[H1] Footer в средата на страницата
+     РЕЗУЛТАТ: Лош визуален вид на страници с малко съдържание
+     ФАЙЛ: /app/globals.css
+     РЕШЕНИЕ: Ensure content wrapper has flex: 1
+
+[H2] "Приложението може да е деинсталирано" показва се грешно
+     РЕЗУЛТАТ: User confusion
+     ФАЙЛ: /app/overview/page.tsx
+     РЕШЕНИЕ: Проверка за stored info преди warning
+
+[H3] Logout бутон не работи
+     ФАЙЛ: /app/components/header.tsx или signOut handler
+     РЕШЕНИЕ: Debug signOut() call
+
+
+СРЕДНИ (неудобства):
+────────────────────
+
+[M1] Wix params naming inconsistency
+     instance, instanceId, instance_id, siteId, site_id
+     РЕШЕНИЕ: Utility function за нормализация
+
+[M2] No loading states на някои страници
+     РЕШЕНИЕ: Add Suspense boundaries
+
+[M3] Error messages не са user-friendly
+     РЕШЕНИЕ: Translate technical errors
+
+
+НИСКИ (nice to have):
+─────────────────────
+
+[L1] No unit tests
+[L2] No E2E tests
+[L3] Console.log statements в production
+[L4] Hardcoded strings (трябва i18n)
+
+
+================================================================================
+                      8. КАК СЕ ДОБАВЯ ЛОГО
+================================================================================
+
+1. UPLOAD
+   Логото се качва в /public/brand/ директорията
+   ИЛИ се upload-ва към cloud storage
+
+2. DATABASE
+   В tenant schema, company таблицата има:
+   - logo_url (text)
+   - logo_width (integer)
+   - logo_height (integer)
+
+3. SETTINGS PAGE
+   /app/settings/page.tsx има форма за:
+   - Upload на лого
+   - URL на лого
+
+4. USAGE
+   Логото се използва в:
+   - Бележки (receipts)
+   - PDF генериране
+   - Email templates (ако има)
+
+5. CODE
+   const company = await getTenantCompany(siteId);
+   const logoUrl = company?.logoUrl || "/brand/udito-logo.png";
+
+
+================================================================================
+                       9. DEPLOYMENT
+================================================================================
+
+СЪРВЪР: 78.47.173.82 (Hetzner VPS)
+ПРОЦЕС МЕНИДЖЪР: PM2
+БАЗА ДАННИ: Neon PostgreSQL (cloud)
+
+DEPLOYMENT СТЪПКИ:
+1. rsync -avz --exclude 'node_modules' --exclude '.next' --exclude '.git' \
+   /Users/mac/udito-app/ root@78.47.173.82:/var/www/udito-app/
+2. ssh root@78.47.173.82 "cd /var/www/udito-app && npm run build"
+3. ssh root@78.47.173.82 "pm2 restart udito"
+
+ВАЖНО: Да НЕ се използва IP 46.249.100.119 (стар/грешен)
+
+
+================================================================================
+                     10. SECURITY CONSIDERATIONS
+================================================================================
+
+POSITIVE:
+  + Password hashing с bcrypt
+  + Middleware защитава routes
+  + Explicit confirmation за store linking
+  + CSRF protection от NextAuth
+  + Wix webhook signature validation
+
+NEEDS IMPROVEMENT:
+  - Wix tokens може да не са encrypted в DB
+  - Няма rate limiting на auth endpoints
+  - Console.log може да leak sensitive data
+  - Admin check е само по email, не по database flag
+
+
+================================================================================
+                       11. ОЦЕНКА ПО КАТЕГОРИИ
+================================================================================
+
+ФУНКЦИОНАЛНОСТ:        7/10 - Работи, но има бъгове
+СИГУРНОСТ:             7/10 - Добра база, needs hardening
+UI/UX:                 6/10 - Footer issues, inconsistent states
+ПРОИЗВОДИТЕЛНОСТ:      7/10 - Добра, но schema cache issues
+ПОДДЪРЖАЕМОСТ:         6/10 - Много CSS, no tests
+ДОКУМЕНТАЦИЯ:          4/10 - Липсва вътрешна документация
+SCALABILITY:           8/10 - Multi-tenant е добре направен
+
+
+================================================================================
+                      12. ПРЕПОРЪКИ ЗА ПОДОБРЕНИЕ
+================================================================================
+
+КРАТКОСРОЧНИ (1-2 дни):
+  1. Fix store_connections schema_name и store_domain
+  2. Fix footer positioning
+  3. Fix logout button
+  4. Fix audit file download за празни месеци
+
+СРЕДНОСРОЧНИ (1-2 седмици):
+  1. Add rate limiting
+  2. Encrypt sensitive data в DB
+  3. Add unit tests за auth flows
+  4. Refactor CSS в modules
+
+ДЪЛГОСРОЧНИ:
+  1. Add Shopify integration
+  2. Add WooCommerce integration
+  3. Full i18n support
+  4. E2E test suite
+
+
+================================================================================
+                       13. ФАЙЛОВА СТРУКТУРА
+================================================================================
+
+/Users/mac/udito-app/
+  /app/                   - Next.js App Router pages
+    /api/                 - API routes
+      /admin/             - Admin endpoints
+      /auth/              - Auth endpoints
+      /oauth/             - OAuth callbacks
+      /webhooks/          - Webhook handlers
+    /components/          - React components
+    /overview/            - Overview page
+    /orders/              - Orders pages
+    /receipts/            - Receipts pages
+    /settings/            - Settings page
+    /admin/               - Admin page
+    /onboarding/          - Onboarding flow
+    layout.tsx            - Root layout
+    globals.css           - Global styles
+    page.tsx              - Landing page
+
+  /lib/                   - Shared libraries
+    auth.ts               - NextAuth config
+    db.ts                 - Database functions
+    tenant-db.ts          - Multi-tenant DB functions
+    sql.ts                - PostgreSQL client
+    wix.ts                - Wix API helpers
+    utils.ts              - Utilities
+
+  /public/                - Static files
+    /brand/               - Logos and branding
+
+  middleware.ts           - Next.js middleware
+  next.config.js          - Next.js config
+  package.json            - Dependencies
+  tsconfig.json           - TypeScript config
+  DEPLOYMENT.md           - Deployment instructions
+
+
+================================================================================
+                            КРАЙ НА ФАЙЛ 2
+================================================================================

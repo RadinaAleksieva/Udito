@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { queryOrders, pickOrderFields, extractTransactionRef, extractDeliveryMethodFromOrder } from "@/lib/wix";
-import { initDb, upsertOrder, sql } from "@/lib/db";
+import { initDb } from "@/lib/db";
 import { upsertTenantOrder, TenantOrder, tenantTablesExist, createTenantTables } from "@/lib/tenant-db";
 
 // Check if user is admin
@@ -105,14 +105,7 @@ export async function POST(request: NextRequest) {
           archivedCount++;
         }
 
-        // Upsert to legacy shared table
-        await upsertOrder({
-          ...mapped,
-          businessId: null,
-          raw: orderRaw,
-        });
-
-        // Also upsert to tenant-specific table
+        // Upsert to tenant-specific table
         const tenantOrder: TenantOrder = {
           id: mapped.id,
           number: mapped.number,

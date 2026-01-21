@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/sql";
-import { initDb, upsertOrder } from "@/lib/db";
+import { initDb } from "@/lib/db";
+import { upsertTenantOrder, TenantOrder, tenantTablesExist, createTenantTables } from "@/lib/tenant-db";
 import { issueReceipt } from "@/lib/receipts";
 
 function requireSecret(request: Request) {
@@ -42,10 +43,16 @@ export async function POST(request: Request) {
     await initDb();
     const now = new Date();
     const orderId = `test_${now.getTime()}`;
-    const orderPayload = {
+    const siteId = "test-site";
+
+    // Ensure tenant tables exist
+    const tablesExist = await tenantTablesExist(siteId);
+    if (!tablesExist) {
+      await createTenantTables(siteId);
+    }
+
+    const tenantOrder: TenantOrder = {
       id: orderId,
-      businessId: null,
-      siteId: "test-site",
       number: `TEST-${now.getTime()}`,
       status: "CREATED",
       paymentStatus: "PAID",
@@ -53,18 +60,18 @@ export async function POST(request: Request) {
       updatedAt: now.toISOString(),
       paidAt: now.toISOString(),
       currency: "BGN",
-      subtotal: "100",
-      taxTotal: "20",
-      shippingTotal: "0",
-      discountTotal: "0",
-      total: "120",
+      subtotal: 100,
+      taxTotal: 20,
+      shippingTotal: 0,
+      discountTotal: 0,
+      total: 120,
       customerEmail: "test@example.com",
       customerName: "Test Customer",
-      source: "backfill" as const,
+      source: "backfill",
       raw: { test: true },
     };
-    await upsertOrder(orderPayload);
-    await issueReceipt({ orderId, payload: orderPayload, businessId: null });
+    await upsertTenantOrder(siteId, tenantOrder);
+    await issueReceipt({ orderId, payload: { ...tenantOrder, siteId }, businessId: null });
 
     return NextResponse.json({ ok: true, orderId });
   } catch (error) {

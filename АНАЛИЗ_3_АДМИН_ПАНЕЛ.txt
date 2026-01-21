@@ -1,0 +1,482 @@
+================================================================================
+                    UDITO - АНАЛИЗ НА АДМИН ПАНЕЛ
+                         Senior Developer Code Review
+================================================================================
+
+ДАТА НА АНАЛИЗ: 2026-01-19
+ФАЙЛ: /app/admin/page.tsx (1322 реда)
+ДОСТЪП: Само за потребители с email в ADMIN_EMAILS env variable
+
+
+================================================================================
+                      1. ДОСТЪП ДО АДМИН ПАНЕЛА
+================================================================================
+
+ЗАЩИТА:
+  - /admin е в protectedRoutes в middleware.ts
+  - Изисква NextAuth сесия
+  - Проверка на isAdmin(email) във всеки API endpoint
+
+isAdmin ФУНКЦИЯ:
+  function isAdmin(email: string | null | undefined): boolean {
+    if (!email) return false;
+    const adminEmails = process.env.ADMIN_EMAILS?.split(",")
+      .map(e => e.trim().toLowerCase()) || [];
+    return adminEmails.includes(email.toLowerCase());
+  }
+
+ENV VARIABLE:
+  ADMIN_EMAILS=admin@example.com,another@admin.com
+
+
+================================================================================
+                         2. ТАБОВЕ В АДМИН ПАНЕЛА
+================================================================================
+
+TAB 1: ПРЕГЛЕД (Overview)
+─────────────────────────
+Показва обща статистика:
+  - Общо бизнеси
+  - Общо потребители
+  - Общо поръчки
+  - Общо бележки
+  - Активни абонаменти
+  - Потребители в пробен период
+
+Таблица "Поръчки по сайт":
+  - Магазин (store_name)
+  - Бизнес (business_name)
+  - Домейн (store_domain)
+  - Поръчки (order_count)
+  - Бележки (receipt_count)
+  - Site ID
+  - Действия:
+    - Sync 7d (синхронизира последните 7 дни)
+
+
+TAB 2: БИЗНЕСИ (Businesses)
+───────────────────────────
+Таблица с всички бизнеси:
+  - Бизнес (name, store_name)
+  - Статус (trial, active, expired, cancelled)
+  - План (starter, business, corporate)
+  - Бележки този месец (used / limit, remaining)
+  - Trial/Expires (дни до изтичане)
+  - Потребители (count, first email)
+
+Действия за всеки бизнес:
+  - +10 дни (удължи trial)
+  - Активирай (1 месец активен абонамент)
+  - +Код (създай access code за счетоводител)
+  - X (изтрий бизнеса)
+
+
+TAB 3: ПОТРЕБИТЕЛИ (Users)
+──────────────────────────
+Таблица с всички потребители:
+  - Email
+  - Име
+  - Дата на регистрация
+
+
+TAB 4: ДОСТЪП (Access)
+──────────────────────
+Таблица с access codes:
+  - Код (6-символен)
+  - Бизнес (business_name или store_name)
+  - Роля (accountant)
+  - Изтича (дата)
+  - Използван от (email или "—")
+  - Създаден (дата)
+
+
+TAB 5: БАЗА ДАННИ (Database)
+────────────────────────────
+Три нива на навигация:
+
+Ниво 1 - Схеми:
+  - Списък на всички PostgreSQL схеми
+  - Брой таблици във всяка
+  - Бутон "Виж таблици"
+  - Бутон "Оправи архивирани поръчки"
+
+Ниво 2 - Таблици:
+  - Списък на таблици в избраната схема
+  - Брой редове
+  - Бутон "Виж данни"
+  - Бутон "Назад"
+
+Ниво 3 - Данни:
+  - Таблица с първите 6 колони
+  - Бутон за редакция на всеки ред
+  - Pagination (50 реда на страница)
+  - Бутон "Назад"
+
+Модал за редакция:
+  - Показва всички колони
+  - Primary key е readonly
+  - JSON/JSONB полета се показват като textarea
+  - Бутони: Запази, Изтрий, Отказ
+
+
+================================================================================
+                         3. API ENDPOINTS
+================================================================================
+
+GET /api/admin/dashboard
+  ОТГОВОР: { stats, users, ordersBySite }
+  stats: {
+    totalBusinesses, totalUsers, totalOrders, totalReceipts,
+    activeSubscriptions, trialUsers
+  }
+
+GET /api/admin/businesses
+  ОТГОВОР: { businesses: Business[] }
+  Business: {
+    id, name, subscription_status, plan_id, trial_ends_at,
+    subscription_expires_at, onboarding_completed, onboarding_step,
+    created_at, total_receipts, receipts_this_month, total_orders,
+    user_emails, user_count, store_name, site_id
+  }
+
+PATCH /api/admin/businesses
+  BODY: { businessId, action, ...data }
+  ACTIONS:
+    - extend_trial: { days: number } - удължава trial
+    - activate: { months: number } - активира абонамент
+    - change_plan: { planId: string } - сменя план
+
+DELETE /api/admin/businesses?id={businessId}
+  Изтрива бизнеса и свързаните данни
+
+GET /api/admin/access
+  ОТГОВОР: { accessCodes: AccessCode[] }
+
+POST /api/admin/access
+  BODY: { siteId, role, expiresInDays }
+  Създава нов access code
+
+POST /api/admin/sync-recent
+  BODY: { siteId, days }
+  Синхронизира поръчки за последните N дни
+
+POST /api/admin/fix-archived
+  Оправя статуса на архивирани поръчки
+
+GET /api/admin/database/schemas
+  ОТГОВОР: { schemas: [{ name, tableCount }] }
+
+GET /api/admin/database/tables?schema=X
+  ОТГОВОР: { tables: [{ name, rowCount }] }
+
+GET /api/admin/database/data?schema=X&table=Y&page=1&limit=50
+  ОТГОВОР: {
+    columns: [{ name, type, nullable, default }],
+    primaryKeys: string[],
+    rows: object[],
+    total, page, totalPages
+  }
+
+PUT /api/admin/database/data
+  BODY: { schema, table, id, data }
+  Обновява ред в таблицата
+
+DELETE /api/admin/database/data
+  BODY: { schema, table, id }
+  Изтрива ред от таблицата
+
+GET /api/admin/fix-stores
+  ОТГОВОР: { connections, schemas, issues }
+  Диагностика на store_connections проблеми
+
+POST /api/admin/fix-stores
+  BODY: { action, connectionId, schemaName, storeDomain }
+  ACTIONS:
+    - fix_schema: Попълва schema_name
+    - fix_domain: Попълва store_domain
+    - auto_fix: Автоматично оправя всички
+
+
+================================================================================
+                     4. CSS СТИЛОВЕ (inline)
+================================================================================
+
+Админ панелът използва inline CSS с styled-jsx (1319 реда).
+Основни класове:
+
+.admin-page         - Основен контейнер (dark theme)
+.admin-container    - Max-width wrapper
+.admin-header       - Header с заглавие и back link
+.admin-tabs         - Tab navigation
+.admin-stats        - Grid с статистики
+.admin-stat         - Единична статистика (card)
+.admin-table-wrapper- Scroll container за таблици
+.admin-table        - Таблица
+.admin-badge        - Status badges (trial, active, etc.)
+.admin-btn          - Бутони (с variants: small, success, danger)
+.admin-modal        - Модални прозорци
+.admin-modal-overlay- Overlay за модали
+
+Database-specific:
+.db-loading         - Loading indicator
+.db-header          - Header с breadcrumb
+.db-data-wrapper    - Data table container
+.db-data-table      - Data table
+.db-cell            - Table cell (truncated)
+.db-pagination      - Pagination controls
+.edit-modal         - Edit modal
+.edit-form          - Form в edit modal
+.edit-field         - Form field
+.edit-input         - Input field
+.edit-textarea      - Textarea (за JSON)
+
+
+================================================================================
+                       5. ПЛАН ЛИМИТИ
+================================================================================
+
+PLAN_LIMITS обект:
+  starter: 50      - до 50 поръчки на месец
+  business: 300    - до 300 поръчки на месец
+  corporate: -1    - неограничено
+
+Показване в UI:
+  "45 / 50" - използвани / лимит
+  "Остават: 5"
+
+
+================================================================================
+                        6. БЪГОВЕ И ПРОБЛЕМИ
+================================================================================
+
+[B1] Sync бутон не показва грешки ясно
+     При неуспешен sync, съобщението не е достатъчно информативно
+
+[B2] Delete business е опасно
+     Изтрива всичко без възможност за recovery
+     РЕШЕНИЕ: Добави soft delete или backup
+
+[B3] Edit modal не валидира данни
+     Може да се въведат невалидни стойности
+     РЕШЕНИЕ: Добави validation по тип на колоната
+
+[B4] Pagination memory
+     При превключване между таблици, page се запазва
+     РЕШЕНИЕ: Reset page при смяна на table
+
+[B5] Няма search/filter
+     При много бизнеси/users, трудно се намира конкретен
+     РЕШЕНИЕ: Добави search input
+
+
+================================================================================
+                     7. SECURITY CONSIDERATIONS
+================================================================================
+
+POSITIVE:
+  + isAdmin() проверка на всеки endpoint
+  + ADMIN_EMAILS е env variable (не hardcoded)
+  + Confirmation при delete
+
+NEEDS IMPROVEMENT:
+  - Database access е пълен (READ/WRITE/DELETE на всичко)
+  - Няма audit log за admin действия
+  - Няма rate limiting
+
+ПРЕПОРЪКИ:
+  1. Добави audit log за всички admin действия
+  2. Ограничи кои таблици могат да се редактират
+  3. Добави 2FA за admin достъп
+  4. IP whitelist за admin panel
+
+
+================================================================================
+                    8. ИЗПОЛЗВАНИ ИНТЕРФЕЙСИ
+================================================================================
+
+interface Business {
+  id: string;
+  name: string;
+  subscription_status: string;
+  plan_id: string;
+  trial_ends_at: string;
+  subscription_expires_at: string;
+  onboarding_completed: boolean;
+  onboarding_step: number;
+  created_at: string;
+  total_receipts: number;
+  receipts_this_month: number;
+  total_orders: number;
+  user_emails: string;
+  user_count: number;
+  store_name: string;
+  site_id: string;
+}
+
+interface User {
+  id: string;
+  email: string;
+  name: string;
+  created_at: string;
+}
+
+interface AccessCode {
+  id: string;
+  code: string;
+  site_id: string;
+  role: string;
+  expires_at: string;
+  created_at: string;
+  used_at: string | null;
+  used_by_email: string | null;
+  store_name: string;
+  business_name: string;
+}
+
+interface Stats {
+  totalBusinesses: number;
+  totalUsers: number;
+  totalOrders: number;
+  totalReceipts: number;
+  activeSubscriptions: number;
+  trialUsers: number;
+}
+
+interface DbSchema {
+  name: string;
+  tableCount: number;
+}
+
+interface DbTable {
+  name: string;
+  rowCount: number;
+}
+
+interface DbColumn {
+  name: string;
+  type: string;
+  nullable: boolean;
+  default: string | null;
+}
+
+
+================================================================================
+                      9. ФУНКЦИИ В КОМПОНЕНТА
+================================================================================
+
+loadData()
+  - Зарежда dashboard, businesses и access codes
+  - Parallel fetch с Promise.all
+  - Error handling за всеки endpoint поотделно
+
+handleBusinessAction(businessId, action, data)
+  - Изпълнява PATCH към /api/admin/businesses
+  - Презарежда данните след успех
+
+handleDeleteBusiness(businessId)
+  - Confirmation dialog
+  - DELETE към /api/admin/businesses
+  - Презарежда данните
+
+handleCreateAccessCode(siteId)
+  - POST към /api/admin/access
+  - Показва генерирания код
+
+handleSyncOrders(siteId, days)
+  - POST към /api/admin/sync-recent
+  - Показва брой синхронизирани поръчки
+
+loadSchemas()
+  - GET /api/admin/database/schemas
+
+loadTables(schema)
+  - GET /api/admin/database/tables?schema=X
+
+loadTableData(schema, table, page)
+  - GET /api/admin/database/data?schema=X&table=Y&page=Z
+
+handleUpdateRow()
+  - PUT /api/admin/database/data
+  - Презарежда данните
+
+handleDeleteRow(row)
+  - DELETE /api/admin/database/data
+  - Презарежда данните
+
+startEditRow(row)
+  - Отваря edit modal с данните
+
+formatDate(dateStr)
+  - Форматира дата за BG locale
+
+formatCellValue(value)
+  - Truncate на дълги стойности
+  - JSON stringify за обекти
+
+getDaysRemaining(dateStr)
+  - Изчислява дни до изтичане
+
+getPlanLimit(planId)
+  - Връща лимита за плана
+
+
+================================================================================
+                      10. ПРЕПОРЪКИ ЗА ПОДОБРЕНИЕ
+================================================================================
+
+КРАТКОСРОЧНИ:
+  1. Добави search за businesses и users
+  2. Добави export to CSV
+  3. Добави bulk actions (extend trial за няколко)
+  4. Подобри error messages
+
+СРЕДНОСРОЧНИ:
+  1. Audit log за admin действия
+  2. Soft delete вместо hard delete
+  3. Role-based access (super admin, admin, viewer)
+  4. Dashboard graphs (charts.js или recharts)
+
+ДЪЛГОСРОЧНИ:
+  1. Отделен admin subdomain
+  2. 2FA за admin
+  3. IP whitelist
+  4. Real-time updates (WebSocket)
+
+
+================================================================================
+                      11. КАК ДА СЕ ИЗПОЛЗВА
+================================================================================
+
+1. ПРЕГЛЕД НА СТАТИСТИКИ
+   - Отвори /admin
+   - Tab "Преглед" показва общи числа
+
+2. УПРАВЛЕНИЕ НА БИЗНЕС
+   - Tab "Бизнеси"
+   - Намери бизнеса в таблицата
+   - +10 дни = удължи trial
+   - Активирай = 1 месец платен
+   - +Код = код за счетоводител
+   - X = изтрий (ВНИМАНИЕ!)
+
+3. ПРЕГЛЕД НА БАЗА ДАННИ
+   - Tab "База данни"
+   - Кликни на схема
+   - Кликни на таблица
+   - Виж данните
+   - Кликни на молива за редакция
+
+4. FIX STORE CONNECTIONS
+   - Отвори /api/admin/fix-stores в browser (GET)
+   - Виж issues
+   - POST с action=auto_fix за автоматично оправяне
+
+5. РЪЧНА СИНХРОНИЗАЦИЯ
+   - Tab "Преглед"
+   - Намери сайта в таблицата
+   - Кликни "Sync 7d"
+
+
+================================================================================
+                            КРАЙ НА ФАЙЛ 3
+================================================================================

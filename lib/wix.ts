@@ -342,6 +342,8 @@ export async function getAppInstanceDetails(params: {
     };
     site?: {
       siteId?: string;
+      url?: string;
+      siteDisplayName?: string;
     };
   };
 
@@ -355,6 +357,8 @@ export async function getAppInstanceDetails(params: {
       data.instance?.siteId ??
       data.site?.siteId ??
       null,
+    siteUrl: data.site?.url ?? null,
+    siteDisplayName: data.site?.siteDisplayName ?? null,
   };
 
   console.log("getAppInstanceDetails - extracted:", result);

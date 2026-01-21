@@ -79,6 +79,11 @@ export async function middleware(request: NextRequest) {
   // Full authentication requires NextAuth session
   const isFullyAuthenticated = !!token?.id;
 
+  // Access code authentication (for accountants without registration)
+  const accessCode = request.cookies.get("udito_access_code")?.value;
+  const accessRole = request.cookies.get("udito_access_role")?.value;
+  const hasAccessCodeAuth = !!accessCode && !!accessRole;
+
   // Legacy auth: allow access with Wix params for backward compatibility
   const hasLegacyAuth = !!hasWixParams;
 
@@ -88,8 +93,8 @@ export async function middleware(request: NextRequest) {
     route === "/" ? pathname === "/" : pathname.startsWith(route)
   );
 
-  // Protected routes require authentication (NextAuth or legacy Wix)
-  if (isProtectedRoute && !isFullyAuthenticated && !hasLegacyAuth) {
+  // Protected routes require authentication (NextAuth, access code, or legacy Wix)
+  if (isProtectedRoute && !isFullyAuthenticated && !hasAccessCodeAuth && !hasLegacyAuth) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("callbackUrl", pathname);
 

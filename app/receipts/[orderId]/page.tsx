@@ -1,4 +1,5 @@
-import { initDb, getCompanyBySite, getOrderByIdForSite, upsertOrder } from "@/lib/db";
+import { initDb, getCompanyBySite, getOrderByIdForSite } from "@/lib/db";
+import { upsertTenantOrder } from "@/lib/tenant-db";
 import { getActiveStore } from "@/lib/auth";
 import {
   extractTransactionRef,
@@ -55,17 +56,21 @@ export default async function ReceiptPage({
   const orderSiteId = record.site_id ?? siteId;
   let shouldUpdate = false;
 
-  // Enrich order data if needed
-  if (needsOrderEnrichment(orderRaw)) {
-    const enriched = await fetchOrderDetails({
-      orderId,
-      siteId: orderSiteId,
-      instanceId,
-    });
-    if (enriched) {
-      orderRaw = { ...(orderRaw || {}), ...(enriched as any) };
-      shouldUpdate = true;
+  // Enrich order data if needed (wrapped in try-catch to handle Wix API failures)
+  try {
+    if (needsOrderEnrichment(orderRaw)) {
+      const enriched = await fetchOrderDetails({
+        orderId,
+        siteId: orderSiteId,
+        instanceId,
+      });
+      if (enriched) {
+        orderRaw = { ...(orderRaw || {}), ...(enriched as any) };
+        shouldUpdate = true;
+      }
     }
+  } catch (error) {
+    console.warn("Failed to enrich order from Wix (continuing with local data):", error);
   }
 
   // Fetch transaction reference if missing
@@ -73,20 +78,24 @@ export default async function ReceiptPage({
   let transactionRef = extractTransactionRef(orderRaw);
   let paymentSummary = orderRaw?.udito?.paymentSummary ?? null;
 
-  if (!transactionRef) {
-    const fetchedRef = await fetchTransactionRefForOrder({
-      orderId,
-      siteId: orderSiteId,
-      instanceId,
-    });
-    if (fetchedRef) {
-      transactionRef = fetchedRef;
-      orderRaw = {
-        ...orderRaw,
-        udito: { ...(orderRaw.udito ?? {}), transactionRef: fetchedRef },
-      };
-      shouldUpdate = true;
+  try {
+    if (!transactionRef) {
+      const fetchedRef = await fetchTransactionRefForOrder({
+        orderId,
+        siteId: orderSiteId,
+        instanceId,
+      });
+      if (fetchedRef) {
+        transactionRef = fetchedRef;
+        orderRaw = {
+          ...orderRaw,
+          udito: { ...(orderRaw.udito ?? {}), transactionRef: fetchedRef },
+        };
+        shouldUpdate = true;
+      }
     }
+  } catch (error) {
+    console.warn("Failed to fetch transaction ref from Wix (continuing with local data):", error);
   }
 
   // Fetch payment details if missing
@@ -168,10 +177,8 @@ export default async function ReceiptPage({
   if (shouldUpdate) {
     const existingSource = (record.source === "webhook" ? "webhook" : "backfill") as "webhook" | "backfill";
     const mapped = pickOrderFields(orderRaw, existingSource);
-    await upsertOrder({
+    await upsertTenantOrder(orderSiteId, {
       ...mapped,
-      siteId: orderSiteId,
-      businessId: null,
       raw: orderRaw,
     });
   }

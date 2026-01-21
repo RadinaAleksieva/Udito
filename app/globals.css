@@ -45,6 +45,7 @@ main {
 }
 
 .container {
+  width: 100%;
   max-width: 1100px;
   margin: 0 auto;
   padding: 56px 24px 80px;
@@ -710,6 +711,7 @@ main > .container {
 .orders-table {
   display: grid;
   gap: 10px;
+  width: 100%;
 }
 
 .order-cards {
@@ -934,17 +936,13 @@ main > .container {
   color: #8e8e93;
 }
 
-.orders-head--receipts,
-.orders-row--receipts {
-  grid-template-columns: 1.2fr 1.4fr 1.4fr 1fr 1.3fr 1fr 1fr;
-}
-
 .section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 16px;
   margin-bottom: 16px;
+  width: 100%;
 }
 
 .section-header h2 {

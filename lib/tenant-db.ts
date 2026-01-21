@@ -702,7 +702,36 @@ export async function upsertTenantOrder(siteId: string, order: TenantOrder): Pro
       customer_name = EXCLUDED.customer_name,
       source = CASE WHEN "${schema}".orders.source = 'webhook' THEN 'webhook' ELSE EXCLUDED.source END,
       is_synced = "${schema}".orders.is_synced,
-      raw = EXCLUDED.raw
+      -- CRITICAL: Merge raw JSON, preserving existing payment data if new data is empty
+      raw = CASE
+        -- If existing has transactionRef and new doesn't, preserve existing udito
+        WHEN "${schema}".orders.raw->'udito'->>'transactionRef' IS NOT NULL
+             AND (EXCLUDED.raw->'udito'->>'transactionRef' IS NULL OR EXCLUDED.raw->'udito'->>'transactionRef' = '')
+        THEN jsonb_set(
+          jsonb_set(
+            EXCLUDED.raw::jsonb,
+            '{udito}',
+            COALESCE("${schema}".orders.raw->'udito', '{}'::jsonb) || COALESCE(EXCLUDED.raw::jsonb->'udito', '{}'::jsonb)
+          ),
+          '{orderTransactions}',
+          CASE
+            WHEN jsonb_array_length(COALESCE("${schema}".orders.raw->'orderTransactions'->'payments', '[]'::jsonb)) > 0
+                 AND jsonb_array_length(COALESCE(EXCLUDED.raw::jsonb->'orderTransactions'->'payments', '[]'::jsonb)) = 0
+            THEN COALESCE("${schema}".orders.raw->'orderTransactions', '{}'::jsonb)
+            ELSE COALESCE(EXCLUDED.raw::jsonb->'orderTransactions', "${schema}".orders.raw->'orderTransactions', '{}'::jsonb)
+          END
+        )
+        -- If existing has payments and new doesn't, preserve existing orderTransactions
+        WHEN jsonb_array_length(COALESCE("${schema}".orders.raw->'orderTransactions'->'payments', '[]'::jsonb)) > 0
+             AND jsonb_array_length(COALESCE(EXCLUDED.raw::jsonb->'orderTransactions'->'payments', '[]'::jsonb)) = 0
+        THEN jsonb_set(
+          EXCLUDED.raw::jsonb,
+          '{orderTransactions}',
+          "${schema}".orders.raw->'orderTransactions'
+        )
+        -- Otherwise use new data
+        ELSE EXCLUDED.raw::jsonb
+      END
   `, [
     order.id,
     order.number,

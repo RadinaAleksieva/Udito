@@ -193,9 +193,116 @@ export default function PdfViewer({
         .receipt-cancel-section {
           margin-top: 24px;
           padding: 20px;
-          background: #f9fafb;
+          background: var(--bg-secondary, #1a1a2e);
+          border-radius: 12px;
+          border: 1px solid var(--border-color, #2d2d44);
+        }
+
+        .receipt-cancel-section :global(.cancel-section) {
+          display: flex;
+          justify-content: flex-start;
+        }
+
+        .receipt-cancel-section :global(.receipt-button.danger) {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 10px 20px;
           border-radius: 8px;
-          border: 1px solid #e5e7eb;
+          font-weight: 500;
+          font-size: 14px;
+          border: 1px solid rgba(239, 68, 68, 0.3);
+          background: rgba(239, 68, 68, 0.1);
+          color: #ef4444;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .receipt-cancel-section :global(.receipt-button.danger:hover) {
+          background: rgba(239, 68, 68, 0.2);
+          border-color: rgba(239, 68, 68, 0.5);
+        }
+
+        .receipt-cancel-section :global(.receipt-button.danger:disabled) {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        .receipt-cancel-section :global(.confirm-overlay) {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.7);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 1000;
+        }
+
+        .receipt-cancel-section :global(.confirm-dialog) {
+          background: var(--bg-secondary, #1a1a2e);
+          border: 1px solid var(--border-color, #2d2d44);
+          border-radius: 16px;
+          padding: 24px;
+          max-width: 400px;
+          width: 90%;
+        }
+
+        .receipt-cancel-section :global(.confirm-dialog h3) {
+          margin: 0 0 12px;
+          font-size: 18px;
+          color: var(--text-primary, #fff);
+        }
+
+        .receipt-cancel-section :global(.confirm-dialog p) {
+          margin: 0 0 16px;
+          color: var(--text-secondary, #a0a0b0);
+          font-size: 14px;
+          line-height: 1.5;
+        }
+
+        .receipt-cancel-section :global(.confirm-warning) {
+          color: #f59e0b !important;
+          background: rgba(245, 158, 11, 0.1);
+          padding: 12px;
+          border-radius: 8px;
+          border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+
+        .receipt-cancel-section :global(.confirm-actions) {
+          display: flex;
+          gap: 12px;
+          justify-content: flex-end;
+          margin-top: 20px;
+        }
+
+        .receipt-cancel-section :global(.confirm-actions .receipt-button) {
+          padding: 10px 20px;
+          border-radius: 8px;
+          font-weight: 500;
+          font-size: 14px;
+          cursor: pointer;
+          transition: all 0.2s;
+          border: 1px solid var(--border-color, #2d2d44);
+          background: var(--bg-tertiary, #252540);
+          color: var(--text-primary, #fff);
+        }
+
+        .receipt-cancel-section :global(.confirm-actions .receipt-button:hover) {
+          background: var(--bg-hover, #2d2d50);
+        }
+
+        .receipt-cancel-section :global(.confirm-actions .receipt-button.danger) {
+          background: #ef4444;
+          border-color: #ef4444;
+          color: white;
+        }
+
+        .receipt-cancel-section :global(.confirm-actions .receipt-button.danger:hover) {
+          background: #dc2626;
+          border-color: #dc2626;
         }
       `}</style>
     </div>

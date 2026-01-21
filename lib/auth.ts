@@ -600,9 +600,13 @@ export async function linkStoreToUser(userId: string, siteId: string, instanceId
   }
 
   // First try to update existing record
+  // If user_id was NULL, this is the first user linking the store - make them owner
   const updated = await sql`
     UPDATE store_connections
-    SET business_id = ${businessId}, user_id = ${userId}, updated_at = NOW()
+    SET business_id = ${businessId},
+        user_id = ${userId},
+        role = CASE WHEN user_id IS NULL THEN 'owner' ELSE COALESCE(role, 'owner') END,
+        updated_at = NOW()
     WHERE (${siteId}::text IS NOT NULL AND site_id = ${siteId})
        OR (${instanceId}::text IS NOT NULL AND instance_id = ${instanceId})
     RETURNING id

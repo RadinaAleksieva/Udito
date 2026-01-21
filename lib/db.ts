@@ -1,6 +1,6 @@
 // PostgreSQL SQL module
 import { sql } from "./sql";
-import { getSchemaForSite } from "./tenant-db";
+import { getSchemaForSite, runAllTenantMigrations } from "./tenant-db";
 
 // Re-export sql for direct queries in other modules
 export { sql };
@@ -79,35 +79,8 @@ export type CompanyProfile = {
 };
 
 export async function initDb() {
-  await sql`
-    create table if not exists orders (
-      id text primary key,
-      business_id text,
-      site_id text,
-      number text,
-      status text,
-      payment_status text,
-      created_at timestamptz,
-      updated_at timestamptz,
-      paid_at timestamptz,
-      currency text,
-      subtotal numeric,
-      tax_total numeric,
-      shipping_total numeric,
-      discount_total numeric,
-      total numeric,
-      customer_email text,
-      customer_name text,
-      source text,
-      raw jsonb,
-      inserted_at timestamptz default now()
-    );
-  `;
-
-  // Add transaction_ref column if it doesn't exist (migration)
-  await sql`
-    alter table orders add column if not exists transaction_ref text;
-  `;
+  // NOTE: orders table is now per-tenant (see lib/tenant-db.ts)
+  // Public orders table is deprecated and no longer created here
 
   await sql`
     create table if not exists backfill_runs (
@@ -143,34 +116,8 @@ export async function initDb() {
     );
   `;
 
-  await sql`
-    create table if not exists receipts (
-      id bigserial primary key,
-      business_id text,
-      order_id text,
-      issued_at timestamptz default now(),
-      status text,
-      payload jsonb
-    );
-  `;
-
-  // Add refund support columns
-  await sql`alter table receipts add column if not exists type text default 'sale';`;
-  await sql`alter table receipts add column if not exists reference_receipt_id bigint;`;
-  await sql`alter table receipts add column if not exists refund_amount numeric;`;
-  await sql`alter table receipts add column if not exists return_payment_type integer default 2;`; // 1=cash, 2=bank, 3=other form, 4=other
-
-  // Drop old unique constraint on order_id (if exists) to allow both sale and refund for same order
-  await sql`
-    alter table receipts drop constraint if exists receipts_order_id_key;
-  `;
-
-  // Create unique index on (order_id, type) to allow one sale and one refund per order
-  await sql`
-    create unique index if not exists receipts_order_type_idx
-    on receipts (order_id, type)
-    where type is not null;
-  `;
+  // NOTE: receipts table is now per-tenant (see lib/tenant-db.ts)
+  // Public receipts table is deprecated and no longer created here
 
   await sql`
     create table if not exists companies (
@@ -289,14 +236,16 @@ export async function initDb() {
     );
   `;
 
-  await sql`alter table orders add column if not exists business_id text;`;
-  await sql`create index if not exists orders_business_id_idx on orders (business_id);`;
+  // NOTE: public.orders and public.receipts tables are deprecated
+  // Orders and receipts are now in tenant-specific schemas
+  // The following migrations are no longer needed:
+  // await sql`alter table orders add column if not exists business_id text;`;
+  // await sql`create index if not exists orders_business_id_idx on orders (business_id);`;
+  // await sql`alter table receipts add column if not exists business_id text;`;
+  // await sql`create index if not exists receipts_business_id_idx on receipts (business_id);`;
 
   await sql`alter table wix_tokens add column if not exists business_id text;`;
   await sql`create index if not exists wix_tokens_business_id_idx on wix_tokens (business_id);`;
-
-  await sql`alter table receipts add column if not exists business_id text;`;
-  await sql`create index if not exists receipts_business_id_idx on receipts (business_id);`;
 
   // Migration: ensure store_id column exists
   await sql`alter table companies add column if not exists store_id text;`;
@@ -568,101 +517,13 @@ export async function initDb() {
   await sql`
     create index if not exists webhook_logs_created_at_idx on webhook_logs (created_at desc);
   `;
+
+  // Run migrations on all existing tenant schemas
+  await runAllTenantMigrations();
 }
 
-export async function upsertOrder(order: StoredOrder) {
-  const normalizeNumber = (value: string | number | null) => {
-    if (value == null) return null;
-    const parsed = typeof value === "number" ? value : Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  };
-  const createdAt = order.createdAt
-    ? new Date(order.createdAt).toISOString()
-    : null;
-  const updatedAt = order.updatedAt
-    ? new Date(order.updatedAt).toISOString()
-    : null;
-  const paidAt = order.paidAt ? new Date(order.paidAt).toISOString() : null;
-  const subtotal = normalizeNumber(order.subtotal);
-  const taxTotal = normalizeNumber(order.taxTotal);
-  const shippingTotal = normalizeNumber(order.shippingTotal);
-  const discountTotal = normalizeNumber(order.discountTotal);
-  const total = normalizeNumber(order.total);
-
-  await sql`
-    insert into orders (
-      id,
-      business_id,
-      site_id,
-      number,
-      status,
-      payment_status,
-      created_at,
-      updated_at,
-      paid_at,
-      currency,
-      subtotal,
-      tax_total,
-      shipping_total,
-      discount_total,
-      total,
-      customer_email,
-      customer_name,
-      source,
-      raw
-    ) values (
-      ${order.id},
-      ${order.businessId},
-      ${order.siteId},
-      ${order.number},
-      ${order.status},
-      ${order.paymentStatus},
-      ${createdAt},
-      ${updatedAt},
-      ${paidAt},
-      ${order.currency},
-      ${subtotal},
-      ${taxTotal},
-      ${shippingTotal},
-      ${discountTotal},
-      ${total},
-      ${order.customerEmail},
-      ${order.customerName},
-      ${order.source},
-      ${JSON.stringify(order.raw)}
-    )
-    on conflict (id) do update set
-      business_id = excluded.business_id,
-      site_id = excluded.site_id,
-      number = excluded.number,
-      status = excluded.status,
-      payment_status = excluded.payment_status,
-      created_at = excluded.created_at,
-      updated_at = excluded.updated_at,
-      paid_at = CASE
-        -- If payment just changed to PAID and we have a new paid_at, use it
-        WHEN excluded.payment_status = 'PAID' AND excluded.paid_at IS NOT NULL THEN excluded.paid_at
-        -- If payment just changed to PAID but no paid_at, use current time
-        WHEN excluded.payment_status = 'PAID' AND orders.paid_at IS NULL THEN NOW()
-        -- Otherwise keep existing paid_at
-        ELSE COALESCE(excluded.paid_at, orders.paid_at)
-      END,
-      currency = excluded.currency,
-      subtotal = excluded.subtotal,
-      tax_total = excluded.tax_total,
-      shipping_total = excluded.shipping_total,
-      discount_total = excluded.discount_total,
-      total = excluded.total,
-      customer_email = excluded.customer_email,
-      customer_name = excluded.customer_name,
-      source = CASE
-        -- Preserve "webhook" source - don't let backfill overwrite it
-        WHEN orders.source = 'webhook' THEN 'webhook'
-        ELSE excluded.source
-      END,
-      raw = excluded.raw
-  `;
-}
+// NOTE: upsertOrder is DEPRECATED - use upsertTenantOrder from lib/tenant-db.ts instead
+// The public.orders table is no longer used; all orders go to tenant-specific schemas
 
 export async function saveWixTokens(params: {
   businessId?: string | null;
@@ -813,25 +674,25 @@ export async function listSyncSites(limit = 50) {
   return result.rows.map((row) => row.site_id as string);
 }
 
+// DEPRECATED: Use listRecentOrdersForSite instead - public.orders no longer used
 export async function listRecentOrders(limit = 10) {
-  const result = await sql`
-    select id, number, payment_status, created_at, total, currency, source, raw
-    from orders
-    order by created_at desc nulls last
-    limit ${limit};
-  `;
-  return result.rows;
+  console.warn("DEPRECATED: listRecentOrders called - use listRecentOrdersForSite");
+  return [];
 }
 
 export async function listRecentOrdersForSite(siteId: string, limit = 10) {
-  const result = await sql`
-    select id, number, payment_status, created_at, total, currency, source, raw
-    from orders
-    where site_id = ${siteId}
-      and (status is null or lower(status) not like 'archiv%')
-    order by created_at desc nulls last
-    limit ${limit};
-  `;
+  const schema = await getSchemaForSite(siteId);
+  if (!schema) return [];
+
+  const result = await sql.query(`
+    SELECT id, number, payment_status, created_at, total, currency, source, raw
+    FROM "${schema}".orders
+    WHERE (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
+      AND COALESCE(raw->>'archived', 'false') <> 'true'
+      AND COALESCE(raw->>'isArchived', 'false') <> 'true'
+    ORDER BY created_at DESC NULLS LAST
+    LIMIT $1
+  `, [limit]);
   return result.rows;
 }
 
@@ -844,12 +705,11 @@ export async function listRecentOrdersForPeriodForSite(
   const schema = await getSchemaForSite(siteId);
   if (!schema) return []; // No schema = no orders
 
-  // Filter: exclude archived and canceled orders
+  // Filter: exclude only archived orders (show canceled orders)
   const result = await sql.query(`
     SELECT id, number, payment_status, status, created_at, total, currency, source
     FROM "${schema}".orders
     WHERE (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
-      AND (status IS NULL OR UPPER(status) NOT IN ('CANCELED', 'CANCELLED'))
       AND COALESCE(raw->>'archived', 'false') <> 'true'
       AND COALESCE(raw->>'isArchived', 'false') <> 'true'
       AND created_at BETWEEN $1 AND $2
@@ -870,21 +730,23 @@ export async function listPaginatedOrdersForSite(
   const schema = await getSchemaForSite(siteId);
   if (!schema) return { orders: [], total: 0 };
 
-  // Filter: exclude CANCELED orders, but show archived orders that are not canceled
+  // Filter: exclude only archived orders (show canceled orders)
   // Count total
   const countResult = startIso && endIso
     ? await sql.query(`
         SELECT COUNT(*) as total
         FROM "${schema}".orders
-        WHERE (status IS NULL OR UPPER(status) NOT IN ('CANCELED', 'CANCELLED'))
-          AND (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
+        WHERE (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
+          AND COALESCE(raw->>'archived', 'false') <> 'true'
+          AND COALESCE(raw->>'isArchived', 'false') <> 'true'
           AND created_at BETWEEN $1 AND $2
       `, [startIso, endIso])
     : await sql.query(`
         SELECT COUNT(*) as total
         FROM "${schema}".orders
-        WHERE (status IS NULL OR UPPER(status) NOT IN ('CANCELED', 'CANCELLED'))
-          AND (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
+        WHERE (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
+          AND COALESCE(raw->>'archived', 'false') <> 'true'
+          AND COALESCE(raw->>'isArchived', 'false') <> 'true'
       `);
   const total = Number(countResult.rows[0]?.total || 0);
 
@@ -893,8 +755,9 @@ export async function listPaginatedOrdersForSite(
     ? await sql.query(`
         SELECT id, number, payment_status, status, created_at, paid_at, total, currency, customer_name, customer_email, source
         FROM "${schema}".orders
-        WHERE (status IS NULL OR UPPER(status) NOT IN ('CANCELED', 'CANCELLED'))
-          AND (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
+        WHERE (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
+          AND COALESCE(raw->>'archived', 'false') <> 'true'
+          AND COALESCE(raw->>'isArchived', 'false') <> 'true'
           AND created_at BETWEEN $1 AND $2
         ORDER BY created_at DESC NULLS LAST
         LIMIT $3 OFFSET $4
@@ -902,8 +765,9 @@ export async function listPaginatedOrdersForSite(
     : await sql.query(`
         SELECT id, number, payment_status, status, created_at, paid_at, total, currency, customer_name, customer_email, source
         FROM "${schema}".orders
-        WHERE (status IS NULL OR UPPER(status) NOT IN ('CANCELED', 'CANCELLED'))
-          AND (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
+        WHERE (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
+          AND COALESCE(raw->>'archived', 'false') <> 'true'
+          AND COALESCE(raw->>'isArchived', 'false') <> 'true'
         ORDER BY created_at DESC NULLS LAST
         LIMIT $1 OFFSET $2
       `, [limit, offset]);
@@ -915,12 +779,11 @@ export async function countOrdersForSite(siteId: string) {
   const schema = await getSchemaForSite(siteId);
   if (!schema) return 0;
 
-  // Filter: exclude archived and canceled orders (must match list functions)
+  // Filter: exclude only archived orders (show canceled orders)
   const result = await sql.query(`
     SELECT COUNT(*) as total
     FROM "${schema}".orders
     WHERE (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
-      AND (status IS NULL OR UPPER(status) NOT IN ('CANCELED', 'CANCELLED'))
       AND COALESCE(raw->>'archived', 'false') <> 'true'
       AND COALESCE(raw->>'isArchived', 'false') <> 'true'
   `);
@@ -936,12 +799,11 @@ export async function countOrdersForPeriodForSite(
   const schema = await getSchemaForSite(siteId);
   if (!schema) return 0;
 
-  // Filter: exclude archived and canceled orders (must match listRecentOrdersForPeriodForSite exactly)
+  // Filter: exclude only archived orders (show canceled orders)
   const result = await sql.query(`
     SELECT COUNT(*) as total
     FROM "${schema}".orders
     WHERE (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
-      AND (status IS NULL OR UPPER(status) NOT IN ('CANCELED', 'CANCELLED'))
       AND COALESCE(raw->>'archived', 'false') <> 'true'
       AND COALESCE(raw->>'isArchived', 'false') <> 'true'
       AND created_at BETWEEN $1 AND $2
@@ -950,44 +812,27 @@ export async function countOrdersForPeriodForSite(
   return Number(result.rows[0]?.total ?? 0);
 }
 
+// DEPRECATED: Business model no longer used - use tenant tables
 export async function listRecentOrdersForBusiness(
   businessId: string,
   limit = 10
 ) {
-  const result = await sql`
-    select id, number, payment_status, created_at, total, currency, source
-    from orders
-    where business_id = ${businessId}
-    order by created_at desc nulls last
-    limit ${limit};
-  `;
-  return result.rows;
+  console.warn("DEPRECATED: listRecentOrdersForBusiness called");
+  return [];
 }
 
+// DEPRECATED: Use listDetailedOrdersForSite instead
 export async function listDetailedOrders(limit = 50) {
-  const result = await sql`
-    select id,
-      number,
-      payment_status,
-      status,
-      created_at,
-      paid_at,
-      total,
-      currency,
-      customer_name,
-      customer_email,
-      raw,
-      source
-    from orders
-    order by created_at desc nulls last
-    limit ${limit};
-  `;
-  return result.rows;
+  console.warn("DEPRECATED: listDetailedOrders called - use listDetailedOrdersForSite");
+  return [];
 }
 
 export async function listDetailedOrdersForSite(siteId: string, limit = 50) {
-  const result = await sql`
-    select id,
+  const schema = await getSchemaForSite(siteId);
+  if (!schema) return [];
+
+  const result = await sql.query(`
+    SELECT id,
       number,
       payment_status,
       status,
@@ -999,37 +844,23 @@ export async function listDetailedOrdersForSite(siteId: string, limit = 50) {
       customer_email,
       raw,
       source
-    from orders
-    where site_id = ${siteId}
-    order by created_at desc nulls last
-    limit ${limit};
-  `;
+    FROM "${schema}".orders
+    WHERE (status IS NULL OR LOWER(status) NOT LIKE 'archiv%')
+      AND COALESCE(raw->>'archived', 'false') <> 'true'
+      AND COALESCE(raw->>'isArchived', 'false') <> 'true'
+    ORDER BY created_at DESC NULLS LAST
+    LIMIT $1
+  `, [limit]);
   return result.rows;
 }
 
+// DEPRECATED: Business model no longer used
 export async function listDetailedOrdersForBusiness(
   businessId: string,
   limit = 50
 ) {
-  const result = await sql`
-    select id,
-      number,
-      payment_status,
-      status,
-      created_at,
-      paid_at,
-      total,
-      currency,
-      customer_name,
-      customer_email,
-      raw,
-      source
-    from orders
-    where business_id = ${businessId}
-    order by created_at desc nulls last
-    limit ${limit};
-  `;
-  return result.rows;
+  console.warn("DEPRECATED: listDetailedOrdersForBusiness called");
+  return [];
 }
 
 export async function listAllDetailedOrders() {
@@ -1077,50 +908,19 @@ export async function listAllDetailedOrdersForSite(siteId: string, limit = 500) 
   return result.rows;
 }
 
+// DEPRECATED: Business model no longer used
 export async function listAllDetailedOrdersForBusiness(businessId: string) {
-  const result = await sql`
-    select id,
-      number,
-      payment_status,
-      status,
-      created_at,
-      paid_at,
-      total,
-      currency,
-      customer_name,
-      customer_email,
-      raw,
-      source
-    from orders
-    where business_id = ${businessId}
-    order by created_at desc nulls last;
-  `;
-  return result.rows;
+  console.warn("DEPRECATED: listAllDetailedOrdersForBusiness called");
+  return [];
 }
 
+// DEPRECATED: Use listDetailedOrdersForPeriodForSite instead
 export async function listDetailedOrdersForPeriod(
   startIso: string,
   endIso: string
 ) {
-  const result = await sql`
-    select id,
-      number,
-      payment_status,
-      status,
-      created_at,
-      paid_at,
-      total,
-      currency,
-      customer_name,
-      customer_email,
-      raw,
-      source
-    from orders
-    where (paid_at between ${startIso} and ${endIso})
-       or (paid_at is null and created_at between ${startIso} and ${endIso})
-    order by created_at desc nulls last;
-  `;
-  return result.rows;
+  console.warn("DEPRECATED: listDetailedOrdersForPeriod called - use listDetailedOrdersForPeriodForSite");
+  return [];
 }
 
 export async function listDetailedOrdersForPeriodForSite(
@@ -1180,15 +980,10 @@ export async function listDetailedOrdersForPeriodForBusiness(
   return result.rows;
 }
 
+// DEPRECATED: Use listOrdersForPeriodForSite instead
 export async function listOrdersForPeriod(startIso: string, endIso: string) {
-  const result = await sql`
-    select id, number, created_at, paid_at, total, currency, customer_name, customer_email, status, payment_status
-    from orders
-    where (paid_at between ${startIso} and ${endIso})
-       or (paid_at is null and created_at between ${startIso} and ${endIso})
-    order by created_at asc nulls last;
-  `;
-  return result.rows;
+  console.warn("DEPRECATED: listOrdersForPeriod called - use listOrdersForPeriodForSite");
+  return [];
 }
 
 export async function listOrdersForPeriodForSite(
@@ -1196,57 +991,33 @@ export async function listOrdersForPeriodForSite(
   endIso: string,
   siteId: string
 ) {
-  const result = await sql`
-    select id, number, created_at, paid_at, total, currency, customer_name, customer_email, status, payment_status
-    from orders
-    where site_id = ${siteId}
-      and ((paid_at between ${startIso} and ${endIso})
-        or (paid_at is null and created_at between ${startIso} and ${endIso}))
-    order by created_at asc nulls last;
-  `;
+  const schema = await getSchemaForSite(siteId);
+  if (!schema) return [];
+
+  const result = await sql.query(`
+    SELECT id, number, created_at, paid_at, total, currency, customer_name, customer_email, status, payment_status
+    FROM "${schema}".orders
+    WHERE ((paid_at BETWEEN $1 AND $2)
+        OR (paid_at IS NULL AND created_at BETWEEN $1 AND $2))
+    ORDER BY created_at ASC NULLS LAST
+  `, [startIso, endIso]);
   return result.rows;
 }
 
+// DEPRECATED: Business model no longer used
 export async function listOrdersForPeriodForBusiness(
   startIso: string,
   endIso: string,
   businessId: string
 ) {
-  const result = await sql`
-    select id, number, created_at, paid_at, total, currency, customer_name, customer_email
-    from orders
-    where business_id = ${businessId}
-      and ((paid_at between ${startIso} and ${endIso})
-        or (paid_at is null and created_at between ${startIso} and ${endIso}))
-    order by created_at asc nulls last;
-  `;
-  return result.rows;
+  console.warn("DEPRECATED: listOrdersForPeriodForBusiness called");
+  return [];
 }
 
+// DEPRECATED: Use getOrderByIdForSite instead
 export async function getOrderById(orderId: string) {
-  const result = await sql`
-    select id,
-      site_id,
-      number,
-      status,
-      payment_status,
-      created_at,
-      updated_at,
-      paid_at,
-      currency,
-      subtotal,
-      tax_total,
-      shipping_total,
-      discount_total,
-      total,
-      customer_email,
-      customer_name,
-      raw
-    from orders
-    where id = ${orderId}
-    limit 1;
-  `;
-  return result.rows[0] ?? null;
+  console.warn("DEPRECATED: getOrderById called - use getOrderByIdForSite");
+  return null;
 }
 
 export type TenantOrder = {
@@ -1311,34 +1082,13 @@ export async function getOrderByIdForSite(orderId: string, siteId: string): Prom
   return { ...row, site_id: siteId };
 }
 
+// DEPRECATED: Business model no longer used - use getOrderByIdForSite
 export async function getOrderByIdForBusiness(
   orderId: string,
   businessId: string
 ) {
-  const result = await sql`
-    select id,
-      site_id,
-      number,
-      status,
-      payment_status,
-      created_at,
-      updated_at,
-      paid_at,
-      currency,
-      subtotal,
-      tax_total,
-      shipping_total,
-      discount_total,
-      total,
-      customer_email,
-      customer_name,
-      raw
-    from orders
-    where id = ${orderId}
-      and business_id = ${businessId}
-    limit 1;
-  `;
-  return result.rows[0] ?? null;
+  console.warn("DEPRECATED: getOrderByIdForBusiness called - use getOrderByIdForSite");
+  return null;
 }
 
 export async function getCompanyBySite(siteId: string | null, instanceId?: string | null) {
@@ -1764,20 +1514,8 @@ export async function upsertStoreConnection(params: {
         instance_id = excluded.instance_id,
         connected_at = now();
     `;
-    await sql`
-      update orders
-      set business_id = ${params.businessId}
-      where site_id = ${params.siteId}
-        and business_id is null;
-    `;
-    await sql`
-      update receipts
-      set business_id = ${params.businessId}
-      where order_id in (
-        select id from orders where site_id = ${params.siteId}
-      )
-        and business_id is null;
-    `;
+    // NOTE: No longer updating public.orders and public.receipts
+    // Orders and receipts are now in tenant-specific schemas
     await sql`
       insert into business_profiles (
         business_id,
@@ -1866,27 +1604,42 @@ export async function getStoreConnectionsForBusiness(businessId: string) {
 }
 
 export async function getOrdersMissingTransactionRef(siteId: string | null, limit = 20) {
-  // Use coalesce pattern to handle null siteId - when siteId is null, match all sites
-  const siteFilter = siteId ?? '';
-  const result = await sql`
-    select id, number, payment_status, created_at
-    from orders
-    where (${siteFilter} = '' or site_id = ${siteFilter})
-      and payment_status = 'PAID'
-      and (transaction_ref is null or transaction_ref = '')
-    order by created_at desc
-    limit ${limit};
-  `;
+  if (!siteId) {
+    console.warn("getOrdersMissingTransactionRef requires siteId");
+    return [];
+  }
+  const schema = await getSchemaForSite(siteId);
+  if (!schema) return [];
+
+  const result = await sql.query(`
+    SELECT id, number, payment_status, created_at
+    FROM "${schema}".orders
+    WHERE payment_status = 'PAID'
+      AND (raw->'udito'->>'transactionRef' IS NULL OR raw->'udito'->>'transactionRef' = '')
+    ORDER BY created_at DESC
+    LIMIT $1
+  `, [limit]);
   return result.rows as Array<{ id: string; number: string; payment_status: string; created_at: string }>;
 }
 
-export async function updateOrderTransactionRef(orderId: string, transactionRef: string) {
-  await sql`
-    update orders
-    set transaction_ref = ${transactionRef},
-        updated_at = now()
-    where id = ${orderId};
-  `;
+export async function updateOrderTransactionRef(siteId: string, orderId: string, transactionRef: string) {
+  const schema = await getSchemaForSite(siteId);
+  if (!schema) {
+    console.warn("updateOrderTransactionRef: no schema for site", siteId);
+    return;
+  }
+
+  // Update the raw JSONB field with the transaction ref
+  await sql.query(`
+    UPDATE "${schema}".orders
+    SET raw = jsonb_set(
+      COALESCE(raw, '{}'::jsonb),
+      '{udito,transactionRef}',
+      to_jsonb($1::text)
+    ),
+    updated_at = NOW()
+    WHERE id = $2
+  `, [transactionRef, orderId]);
 }
 
 export async function updateReceiptSettings(

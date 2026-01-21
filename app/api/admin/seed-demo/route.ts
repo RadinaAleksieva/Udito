@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { initDb, upsertOrder } from "@/lib/db";
+import { initDb } from "@/lib/db";
+import { upsertTenantOrder, TenantOrder, tenantTablesExist, createTenantTables } from "@/lib/tenant-db";
 import { issueReceipt } from "@/lib/receipts";
 
 function requireSecret(request: Request) {
@@ -111,14 +112,41 @@ export async function POST(request: Request) {
     const now = Date.now();
     const inserted: string[] = [];
 
+    // Ensure tenant tables exist
+    const tablesExist = await tenantTablesExist(siteId);
+    if (!tablesExist) {
+      await createTenantTables(siteId);
+    }
+
     for (let i = 0; i < demoOrders.length; i += 1) {
       const orderId = `demo_${now + i}`;
       const createdAt = new Date(now - i * 3600_000).toISOString();
       const demo = demoOrders[i];
-      const payload = {
+      const raw = {
+        lineItems: demo.items,
+        priceSummary: {
+          subtotal: demo.subtotal,
+          shipping: "0.00",
+          tax: demo.tax,
+          discount: "0.00",
+          total: demo.total,
+        },
+        shippingAddress: {
+          addressLine1: "ул. Деспот Слав 13",
+          city: "София",
+          country: "България",
+          postalCode: "1618",
+        },
+        paymentMethod: {
+          name: "Visa",
+          cardProvider: "Visa",
+          cardLast4: "4832",
+          transactionId: "TRX-DEMO",
+        },
+        demo: true,
+      };
+      const tenantOrder: TenantOrder = {
         id: orderId,
-        businessId: null,
-        siteId,
         number: demo.number,
         status: "CREATED",
         paymentStatus: "PAID",
@@ -126,40 +154,18 @@ export async function POST(request: Request) {
         updatedAt: createdAt,
         paidAt: createdAt,
         currency: "BGN",
-        subtotal: demo.subtotal,
-        taxTotal: demo.tax,
-        shippingTotal: "0",
-        discountTotal: "0",
-        total: demo.total,
+        subtotal: parseFloat(demo.subtotal),
+        taxTotal: parseFloat(demo.tax),
+        shippingTotal: 0,
+        discountTotal: 0,
+        total: parseFloat(demo.total),
         customerEmail: "test@example.com",
         customerName: "Test Customer",
-        source: "backfill" as const,
-        raw: {
-          lineItems: demo.items,
-          priceSummary: {
-            subtotal: demo.subtotal,
-            shipping: "0.00",
-            tax: demo.tax,
-            discount: "0.00",
-            total: demo.total,
-          },
-          shippingAddress: {
-            addressLine1: "ул. Деспот Слав 13",
-            city: "София",
-            country: "България",
-            postalCode: "1618",
-          },
-          paymentMethod: {
-            name: "Visa",
-            cardProvider: "Visa",
-            cardLast4: "4832",
-            transactionId: "TRX-DEMO",
-          },
-          demo: true,
-        },
+        source: "backfill",
+        raw,
       };
-      await upsertOrder(payload);
-      await issueReceipt({ orderId, payload, businessId: null });
+      await upsertTenantOrder(siteId, tenantOrder);
+      await issueReceipt({ orderId, payload: { ...tenantOrder, siteId }, businessId: null });
       inserted.push(orderId);
     }
 

@@ -8,34 +8,6 @@ import { createTenantTables, tenantTablesExist, updateTenantCompany } from "@/li
 
 const WIX_API_BASE = process.env.WIX_API_BASE || "https://www.wixapis.com";
 
-async function fetchSiteInfo(accessToken: string, siteId: string | null): Promise<{ domain: string | null; name: string | null }> {
-  try {
-    const authHeader = accessToken.startsWith("Bearer ") ? accessToken : `Bearer ${accessToken}`;
-    const response = await fetch(`${WIX_API_BASE}/sites/v1/site`, {
-      method: "GET",
-      headers: {
-        Authorization: authHeader,
-        ...(siteId ? { "wix-site-id": siteId } : {}),
-      },
-    });
-
-    if (!response.ok) {
-      console.warn("Failed to fetch site info:", response.status);
-      return { domain: null, name: null };
-    }
-
-    const data = await response.json();
-    const site = data?.site ?? data?.data ?? data ?? {};
-    const domain = site?.displayUrl ?? site?.url ?? site?.siteDisplayUrl ?? site?.siteUrl ?? site?.domain ?? null;
-    const name = site?.displayName ?? site?.name ?? site?.siteName ?? null;
-    console.log("Fetched site info:", { domain, name });
-    return { domain, name };
-  } catch (error) {
-    console.error("Error fetching site info:", error);
-    return { domain: null, name: null };
-  }
-}
-
 async function registerWebhooks(accessToken: string, siteId: string, instanceId: string | null, appBaseUrl: string) {
   try {
     const authHeader = accessToken.startsWith("Bearer ")
@@ -208,6 +180,9 @@ export async function GET(request: Request) {
   });
 
   // ALWAYS try to get site details if we have an access token
+  // This also gives us the site URL (domain) and display name
+  let storeDomain: string | null = null;
+  let storeName: string | null = null;
   if (data.access_token) {
     try {
       const appInstance = await getAppInstanceDetails({
@@ -217,6 +192,10 @@ export async function GET(request: Request) {
       console.log("getAppInstanceDetails result:", appInstance);
       resolvedInstanceId = appInstance?.instanceId ?? resolvedInstanceId;
       resolvedSiteId = appInstance?.siteId ?? resolvedSiteId;
+      // Get domain and name from the same API call
+      storeDomain = appInstance?.siteUrl ?? null;
+      storeName = appInstance?.siteDisplayName ?? null;
+      console.log("OAuth callback - extracted site info:", { storeDomain, storeName });
     } catch (error) {
       console.error("Wix app instance lookup failed:", error);
     }
@@ -225,6 +204,8 @@ export async function GET(request: Request) {
   console.log("OAuth callback - resolved values:", {
     resolvedInstanceId,
     resolvedSiteId,
+    storeDomain,
+    storeName,
   });
 
   // If we still don't have site_id, this is a problem
@@ -240,15 +221,6 @@ export async function GET(request: Request) {
     refreshToken: data.refresh_token ?? null,
     expiresAt,
   });
-
-  // Fetch site info (domain/name) from Wix
-  let storeDomain: string | null = null;
-  let storeName: string | null = null;
-  if (resolvedSiteId && data.access_token) {
-    const siteInfo = await fetchSiteInfo(data.access_token, resolvedSiteId);
-    storeDomain = siteInfo.domain;
-    storeName = siteInfo.name;
-  }
 
   // Create tenant-specific tables if they don't exist
   if (resolvedSiteId) {

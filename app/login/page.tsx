@@ -221,7 +221,8 @@ function LoginForm() {
     setIsLoading("code");
 
     try {
-      const response = await fetch("/api/stores/join", {
+      // Use the new validate endpoint that doesn't require authentication
+      const response = await fetch("/api/access/validate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code: accessCode.trim().toUpperCase() }),
@@ -421,7 +422,7 @@ function LoginForm() {
               <button
                 type="submit"
                 className="login-btn login-btn--code"
-                disabled={isLoading !== null}
+                disabled={isLoading !== null || accessCode.length !== 6}
               >
                 {isLoading === "code" ? "Проверка..." : "Влез"}
               </button>
@@ -430,6 +431,7 @@ function LoginForm() {
                 className="login-access-back"
                 onClick={() => {
                   setShowAccessCode(false);
+                  setAccessCode("");
                   setStatus("");
                 }}
               >

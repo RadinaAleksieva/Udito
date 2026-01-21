@@ -1,0 +1,384 @@
+================================================================================
+                    UDITO - АНАЛИЗ НА РЕГИСТРАЦИЯ И ЛОГИН
+                         Senior Developer Code Review
+================================================================================
+
+ДАТА НА АНАЛИЗ: 2026-01-19
+ВЕРСИЯ НА ПРИЛОЖЕНИЕТО: Next.js 15 с App Router
+БАЗА ДАННИ: PostgreSQL (multi-tenant architecture)
+AUTHENTICATION: NextAuth.js v4 с credentials + Google OAuth
+
+================================================================================
+                         1. ОБЩ ПРЕГЛЕД НА АРХИТЕКТУРАТА
+================================================================================
+
+UDITO използва NextAuth.js за автентикация с две стратегии:
+  1. Credentials (email + password)
+  2. Google OAuth
+
+Multi-tenant архитектура:
+  - Всеки магазин (Wix site) има собствена PostgreSQL схема
+  - Споделени таблици в "public" схема: users, businesses, store_connections, wix_tokens
+  - Tenant-specific таблици: orders, receipts, company, audit_logs, etc.
+
+
+================================================================================
+                     2. ПОТОК НА РЕГИСТРАЦИЯ (СЦЕНАРИИ)
+================================================================================
+
+СЦЕНАРИЙ A: Нов потребител от Wix (първа инсталация)
+─────────────────────────────────────────────────────
+1. Потребител инсталира UDITO в Wix
+2. Wix изпраща към /api/oauth/callback с authorization code
+3. OAuth callback:
+   - Разменя code за access_token и refresh_token
+   - Взима instanceId и siteId от Wix API
+   - Създава tenant schema (site_{normalized_site_id})
+   - Записва tokens в wix_tokens
+   - Записва store_domain и store_name в companies таблицата
+   - Редиректва към /register?from=wix&store={siteId}
+4. Register страницата:
+   - Показва "Wix магазин свързан" badge
+   - Потребителят попълва email + password
+   - При submit: POST /api/auth/register
+5. Register API:
+   - Създава user в public.users
+   - Създава business в public.businesses (с 10-дневен trial)
+   - Свързва ги в business_users
+   - Ако fromWix=true: създава store_connection (site_id -> user_id)
+6. Auto-login след регистрация
+7. Редирект към /onboarding/company (за фирмени данни)
+
+
+СЦЕНАРИЙ B: Съществуващ потребител, НОВ магазин
+──────────────────────────────────────────────
+1. Потребител е логнат и инсталира UDITO на НОВ Wix сайт
+2. Middleware засича различен siteId от cookie-то:
+   - Редиректва към /add-store?store={newSiteId}
+3. Add-store страницата:
+   - Показва информация за магазина
+   - Показва предупреждение за сигурност
+   - Изисква EXPLICIT потвърждение ("Да, добави магазина")
+4. При потвърждение: POST /api/stores/link
+   - Проверява дали магазинът не е на друг user
+   - Създава store_connection
+
+
+СЦЕНАРИЙ C: Логин с email/password
+─────────────────────────────────
+1. /login страница
+2. Потребителят въвежда email и password
+3. Проверка дали email съществува (POST /api/auth/check-email)
+   - Ако НЕ: редирект към /register
+   - Ако ДА: signIn("credentials", {...})
+4. NextAuth validates credentials в lib/auth.ts
+5. При успех: редирект към /overview
+
+
+СЦЕНАРИЙ D: Логин с Google OAuth
+───────────────────────────────
+1. /login -> бутон "Продължи с Google"
+2. signIn("google", { callbackUrl })
+3. Google OAuth flow
+4. NextAuth callbacks:
+   - signIn: връща true (не auto-link stores)
+   - jwt: добавя user info към token
+   - session: експозира user info
+5. Редирект към callbackUrl
+
+
+СЦЕНАРИЙ E: Вход за счетоводители (access code)
+────────────────────────────────────────────
+1. /login -> "Вход за счетоводители"
+2. Въвеждане на 6-символен код (ABC123)
+3. POST /api/stores/join
+4. Валидация на кода:
+   - Проверка дали не е изтекъл
+   - Проверка дали не е използван
+5. Създава store_connection с role="accountant"
+6. Маркира кода като използван
+
+
+================================================================================
+                    3. КРИТИЧНИ ФАЙЛОВЕ И ОТГОВОРНОСТИ
+================================================================================
+
+/middleware.ts
+  - Защита на protected routes
+  - Детекция на нов Wix магазин (различен от cookie)
+  - Редирект към /add-store за explicit confirmation
+  - Декодиране на Wix JWT tokens
+
+/lib/auth.ts
+  - NextAuth configuration
+  - Credentials provider (email + password validation)
+  - Google OAuth provider
+  - JWT и session callbacks
+  - linkStoreToUser() функция
+
+/app/api/auth/register/route.ts
+  - POST handler за регистрация
+  - Създава user, business, business_users
+  - Създава store_connection при Wix регистрация
+
+/app/login/page.tsx
+  - UI за логин
+  - Email/password форма
+  - Google OAuth бутон
+  - Access code форма за счетоводители
+  - BroadcastChannel за cross-window комуникация (iframe support)
+
+/app/register/page.tsx
+  - UI за регистрация
+  - Различен UI при fromWix=true
+
+/app/add-store/page.tsx
+  - Confirmation страница за добавяне на нов магазин
+  - Security warning
+  - Explicit confirmation required
+
+/app/api/oauth/callback/route.ts
+  - Wix OAuth callback handler
+  - Token exchange
+  - Tenant schema creation
+  - Store domain/name fetching from Wix API
+  - Webhook registration
+
+/app/onboarding/*
+  - /onboarding/page.tsx - entry point, checks status
+  - /onboarding/connect/page.tsx - connect Wix store
+  - /onboarding/company/page.tsx - company details
+  - /onboarding/plan/page.tsx - select plan
+
+
+================================================================================
+               4. БАЗА ДАННИ - ТАБЛИЦИ ЗА АВТЕНТИКАЦИЯ
+================================================================================
+
+public.users
+  - id (uuid PRIMARY KEY)
+  - email (unique)
+  - name
+  - password_hash
+  - password_salt
+  - image
+  - email_verified
+  - created_at
+
+public.businesses
+  - id (uuid PRIMARY KEY)
+  - name
+  - subscription_status (trial, active, expired, cancelled)
+  - plan_id (starter, business, corporate)
+  - trial_ends_at
+  - onboarding_completed
+  - onboarding_step
+
+public.business_users
+  - business_id (FK -> businesses)
+  - user_id (FK -> users)
+  - role (owner, admin, member, accountant)
+
+public.store_connections
+  - id (bigserial)
+  - business_id (FK -> businesses)
+  - user_id (FK -> users)
+  - site_id (Wix site ID)
+  - instance_id (Wix instance ID)
+  - schema_name (tenant schema name)
+  - store_name
+  - store_domain
+  - role
+  - provider (wix)
+
+public.wix_tokens
+  - id (bigserial)
+  - business_id
+  - instance_id
+  - site_id
+  - access_token (encrypted?)
+  - refresh_token
+  - expires_at
+
+public.access_codes
+  - id (uuid)
+  - code (6-char unique)
+  - site_id
+  - role (accountant)
+  - expires_at
+  - used_at
+  - used_by
+
+
+================================================================================
+                         5. ГРЕШКИ И ПРОБЛЕМИ
+================================================================================
+
+КРИТИЧНИ ГРЕШКИ:
+────────────────
+
+1. [BUG] store_domain НЕ се записва в store_connections при регистрация
+   Файл: /app/api/auth/register/route.ts:136
+   Проблем: INSERT в store_connections НЕ включва store_domain и schema_name
+   Резултат: Показва се "Wix Store" вместо истинския домейн
+
+   РЕШЕНИЕ: При регистрация да се вземе домейна от:
+   - wix_tokens (ако има)
+   - companies таблицата (tenant schema)
+   - Или да се извика Wix API за site info
+
+2. [BUG] schema_name НЕ се записва в store_connections при регистрация
+   Файл: /app/api/auth/register/route.ts
+   Проблем: Липсва schema_name в INSERT
+   Резултат: getSchemaForSite() връща null -> поръчките са 0
+
+   РЕШЕНИЕ: Добави schema_name при създаване на store_connection
+
+3. [SECURITY] OAuth callback все още auto-link-ва в POST handler
+   Файл: /app/api/oauth/callback/route.ts:409-411
+   Проблем: POST handler извиква linkStoreToUser() без explicit confirmation
+   Резултат: Възможен auto-linking attack
+
+
+СРЕДНИ ГРЕШКИ:
+──────────────
+
+4. [BUG] "Wix Store" се записва като store_name по default
+   Файл: /app/api/auth/register/route.ts:66
+   Проблем: finalStoreName = storeName?.trim() || (fromWix ? "Wix Store" : null)
+
+   РЕШЕНИЕ: Вземи store name от wix_tokens/companies преди fallback
+
+5. [UX] Footer не е sticky на страници с малко съдържание
+   Файл: /app/globals.css
+   Проблем: Flexbox setup не работи правилно
+
+   РЕШЕНИЕ: Добави justify-content: flex-start на main
+
+6. [BUG] Logout бутон не работи (споменато от user)
+   Нужна е проверка на /api/auth/signout
+
+
+НИСКИ ГРЕШКИ:
+─────────────
+
+7. [PERF] Schema lookup не е оптимизиран
+   Файл: /lib/tenant-db.ts
+   Проблем: In-memory cache се губи при restart
+
+   РЕШЕНИЕ: Redis или по-дълготраен cache
+
+8. [CODE] Дублиран код за Wix params в много файлове
+   Проблем: instance, instanceId, instance_id, siteId, site_id
+
+   РЕШЕНИЕ: Създай utility функция за нормализация
+
+
+================================================================================
+             6. ДОБАВЯНЕ НА НОВА ПЛАТФОРМА (НЕ WIX)
+================================================================================
+
+За добавяне на друга платформа (напр. Shopify, WooCommerce):
+
+1. OAUTH CALLBACK
+   Създай: /app/api/oauth/{platform}/callback/route.ts
+   - Размени auth code за tokens
+   - Вземи store info (domain, name)
+   - Създай tenant schema
+   - Запиши tokens в {platform}_tokens таблица
+
+2. DATABASE
+   Създай: public.{platform}_tokens таблица
+   Добави: provider колона в store_connections
+
+3. MIDDLEWARE
+   Добави: проверка за {platform} params/cookies
+   Пример: shopify_shop, woocommerce_store_url
+
+4. WEBHOOKS
+   Създай: /app/api/webhooks/{platform}/orders/route.ts
+   - Валидирай webhook signature
+   - Нормализирай order формата
+
+5. SYNC
+   Създай: /lib/{platform}.ts
+   - fetchOrders()
+   - fetchSiteInfo()
+   - refreshToken()
+
+6. UI
+   Добави: бутон за свързване в /onboarding/connect
+
+
+================================================================================
+                     7. ПРЕПОРЪЧАНА АРХИТЕКТУРА
+================================================================================
+
+ТЕКУЩА:
+  Wix -> OAuth callback -> Register -> Onboarding
+
+ПРЕПОРЪЧАНА:
+  1. Унифициран OAuth handler за всички платформи
+  2. Platform adapter pattern:
+
+     interface PlatformAdapter {
+       exchangeToken(code: string): Promise<TokenData>
+       getSiteInfo(token: string): Promise<SiteInfo>
+       registerWebhooks(token: string, siteId: string): Promise<void>
+       fetchOrders(token: string, options: FetchOptions): Promise<Order[]>
+     }
+
+  3. Factory pattern за създаване на adapters:
+
+     const adapter = PlatformFactory.create('wix');
+     const adapter = PlatformFactory.create('shopify');
+
+
+================================================================================
+                           8. ОЦЕНКА НА РИСКА
+================================================================================
+
+СИГУРНОСТ: 7/10 (добра, но има room for improvement)
+  + Middleware защитава routes
+  + Explicit confirmation за нов магазин
+  + Password hashing с bcrypt
+  - POST handler в OAuth callback auto-links
+  - Wix tokens може да не са encrypted
+
+СТАБИЛНОСТ: 6/10
+  - store_connections липсва schema_name/store_domain
+  - getSchemaForSite() връща null -> 0 поръчки
+  - Footer positioning issues
+
+MAINTAINABILITY: 7/10
+  + Добре структурирани файлове
+  + TypeScript
+  - Дублиран код за Wix params
+  - Няма unit tests за auth flows
+
+SCALABILITY: 8/10
+  + Multi-tenant architecture
+  + Separate schemas per store
+  - In-memory schema cache се губи
+
+
+================================================================================
+                            9. ЗАКЛЮЧЕНИЕ
+================================================================================
+
+UDITO има солидна база за автентикация, но има критични бъгове които
+трябва да се оправят:
+
+1. СПЕШНО: Оправи store_connections да записва schema_name и store_domain
+2. СПЕШНО: Премахни auto-linking от OAuth POST handler
+3. СРЕДНО: Оправи "Wix Store" default name
+4. НИСКО: Рефакторирай Wix params handling
+
+Препоръчвам създаване на /api/admin/fix-stores endpoint който:
+- Намира store_connections без schema_name
+- Попълва ги от companies таблицата или по site_id pattern
+
+
+================================================================================
+                         КРАЙ НА ФАЙЛ 1
+================================================================================

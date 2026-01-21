@@ -22,6 +22,7 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
+    // Get basic business data first
     const result = await sql`
       SELECT
         b.id,
@@ -34,16 +35,6 @@ export async function GET() {
         b.onboarding_step,
         b.created_at,
         b.updated_at,
-        (SELECT COUNT(*) FROM receipts r
-         JOIN companies c ON r.site_id = c.site_id
-         WHERE c.business_id = b.id) as total_receipts,
-        (SELECT COUNT(*) FROM receipts r
-         JOIN companies c ON r.site_id = c.site_id
-         WHERE c.business_id = b.id
-         AND r.created_at >= date_trunc('month', CURRENT_DATE)) as receipts_this_month,
-        (SELECT COUNT(*) FROM orders o
-         JOIN companies c ON o.site_id = c.site_id
-         WHERE c.business_id = b.id) as total_orders,
         (SELECT string_agg(DISTINCT u.email, ', ')
          FROM business_users bu
          JOIN users u ON u.id = bu.user_id
@@ -55,7 +46,38 @@ export async function GET() {
       ORDER BY b.created_at DESC
     `;
 
-    return NextResponse.json({ businesses: result.rows });
+    // Now get order/receipt counts from tenant schemas
+    const businesses = await Promise.all(result.rows.map(async (biz) => {
+      let total_orders = 0;
+      let total_receipts = 0;
+      let receipts_this_month = 0;
+
+      if (biz.site_id) {
+        const schemaName = biz.site_id.replace(/-/g, "_");
+        try {
+          const counts = await sql.query(`
+            SELECT
+              (SELECT COUNT(*) FROM "${schemaName}".orders) as order_count,
+              (SELECT COUNT(*) FROM "${schemaName}".receipts) as receipt_count,
+              (SELECT COUNT(*) FROM "${schemaName}".receipts WHERE created_at >= date_trunc('month', CURRENT_DATE)) as receipts_month
+          `);
+          total_orders = parseInt(counts.rows[0]?.order_count || "0");
+          total_receipts = parseInt(counts.rows[0]?.receipt_count || "0");
+          receipts_this_month = parseInt(counts.rows[0]?.receipts_month || "0");
+        } catch {
+          // Schema doesn't exist
+        }
+      }
+
+      return {
+        ...biz,
+        total_orders,
+        total_receipts,
+        receipts_this_month,
+      };
+    }));
+
+    return NextResponse.json({ businesses });
   } catch (error) {
     console.error("Admin businesses error:", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
