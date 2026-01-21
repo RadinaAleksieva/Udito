@@ -221,19 +221,32 @@ async function handleOrderEvent(event: any) {
     // ALWAYS fetch for:
     // 1. payment_status_updated events (when order becomes paid)
     // 2. order.created events where order is already PAID (card payment completed at checkout)
+    // 3. order.updated events where order is PAID but has no payment data
+    // 4. ANY event where order is PAID but we don't have transactionRef yet
     const isPaymentStatusUpdate = event?.metadata?.eventType?.includes('payment_status');
     const isOrderCreated = event?.metadata?.eventType?.includes('created') || event?.metadata?.eventType === 'order.created';
+    const isOrderUpdated = event?.metadata?.eventType?.includes('updated') || event?.metadata?.eventType === 'order.updated';
     const orderIsPaid = (base.paymentStatus || '').toUpperCase() === 'PAID';
     const hasEmptyPayments = !orderRaw?.orderTransactions?.payments?.length;
+    const hasNoTransactionRef = !transactionRef && !orderRaw?.udito?.transactionRef;
 
     // For card payments, when order.created fires, the order is already PAID
     // We MUST fetch the payment data immediately
+    // CRITICAL: Also fetch for order.updated if we're missing payment data!
     const needsOrderTransactions = !orderRaw?.orderTransactions ||
                                     isPaymentStatusUpdate ||
-                                    (isOrderCreated && orderIsPaid && hasEmptyPayments);
+                                    (isOrderCreated && orderIsPaid && hasEmptyPayments) ||
+                                    (isOrderUpdated && orderIsPaid && hasEmptyPayments) ||
+                                    (orderIsPaid && hasNoTransactionRef);
 
     if (isOrderCreated && orderIsPaid) {
       console.log(`💳 Order ${base.number} created as PAID - this is a card payment, fetching payment data...`);
+    }
+    if (isOrderUpdated && orderIsPaid && (hasEmptyPayments || hasNoTransactionRef)) {
+      console.log(`💳 Order ${base.number} updated as PAID but missing payment data - fetching now...`);
+    }
+    if (orderIsPaid && hasNoTransactionRef) {
+      console.log(`⚠️ Order ${base.number} is PAID but has NO transactionRef - MUST fetch payment data!`);
     }
 
     if (needsOrderTransactions) {
@@ -258,13 +271,15 @@ async function handleOrderEvent(event: any) {
         }
 
         // If no payments and we haven't exhausted retries, wait and try again
-        // Wix often needs a few seconds to process payment data
-        if (attempt < 3) {
-          const delayMs = attempt * 2000; // 2s, 4s delays
-          console.log(`⏳ No payment data on attempt ${attempt}, waiting ${delayMs}ms before retry...`);
+        // Wix often needs several seconds to process payment data
+        // Increased to 5 attempts with longer delays for reliability
+        if (attempt < 5) {
+          const delayMs = attempt * 3000; // 3s, 6s, 9s, 12s delays (total ~30s max)
+          console.log(`⏳ No payment data on attempt ${attempt}/5, waiting ${delayMs}ms before retry...`);
           await new Promise(resolve => setTimeout(resolve, delayMs));
           return fetchWithRetry(attempt + 1);
         }
+        console.log(`❌ Payment data fetch failed after ${attempt} attempts for order ${orderId}`);
 
         return orderTx; // Return whatever we have after all retries
       };
@@ -575,13 +590,32 @@ async function handleOrderEvent(event: any) {
     usingDatabaseRaw: savedOrder !== null,
   });
 
-  // Extract transaction ref from database order (has enriched data)
+  // Extract transaction ref - try multiple sources
+  // 1. From saved database order (has enriched data from previous webhooks/syncs)
+  // 2. From current webhook's orderRaw (freshly enriched with payment data)
+  // 3. For COD - generate from order ID
   let receiptTxRef = extractTransactionRef(savedRaw);
+
+  // Fallback: try from current webhook's orderRaw (in case it has newer data)
+  if (!receiptTxRef) {
+    receiptTxRef = extractTransactionRef(orderRaw);
+    if (receiptTxRef) {
+      console.log(`💳 Got transactionRef from webhook orderRaw: ${receiptTxRef}`);
+    }
+  }
 
   // For COD orders, generate transaction ref from order ID if not available
   if (!receiptTxRef && isCOD && mapped.id) {
     receiptTxRef = `COD-${mapped.id}`;
     console.log(`💰 Generated COD transaction ref: ${receiptTxRef}`);
+  }
+
+  // Log if we still don't have transactionRef for a PAID order
+  const orderIsPaidCheck = (savedOrder?.payment_status || mapped.paymentStatus || "").toUpperCase() === "PAID";
+  if (!receiptTxRef && orderIsPaidCheck && !isCOD) {
+    console.log(`⚠️ CRITICAL: Order ${mapped.number} is PAID but we have NO transactionRef!`);
+    console.log(`⚠️ savedRaw.udito:`, JSON.stringify(savedRaw?.udito ?? {}, null, 2));
+    console.log(`⚠️ orderRaw.udito:`, JSON.stringify(orderRaw?.udito ?? {}, null, 2));
   }
 
   // STRICT CHECK: Only issue receipts for orders paid on or after the receipts start date
