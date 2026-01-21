@@ -62,10 +62,23 @@ ssh root@78.47.173.82 "cd /var/www/udito-app && npm run build"
 ssh root@78.47.173.82 "pm2 restart udito"
 ```
 
-### Всичко в една команда:
+### Използвай deploy.sh скрипта (препоръчително):
+```bash
+bash deploy.sh
+```
+
+Скриптът автоматично:
+1. Sync-ва кода (без node_modules, .next, .git, .env.local, public/uploads)
+2. Build-ва на сървъра
+3. Restart-ва PM2 процеса
+
+### Или ръчно всичко в една команда:
 ```bash
 rsync -avz --exclude 'node_modules' --exclude '.next' --exclude '.git' /Users/mac/udito-app/ root@78.47.173.82:/var/www/udito-app/ && ssh root@78.47.173.82 "cd /var/www/udito-app && npm run build && pm2 restart udito"
 ```
+
+### ВАЖНО: НЕ деплойваме през GitHub!
+Деплойментът е **САМО** през SSH с `bash deploy.sh`.
 
 ## Logs
 
